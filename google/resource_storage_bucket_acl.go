@@ -198,32 +198,17 @@ func resourceStorageBucketAclRead(d *schema.ResourceData, meta interface{}) erro
 
 	bucket := d.Get("bucket").(string)
 
-	// The API offers no way to retrieve predefined ACLs,
-	// and we can't tell which access controls were created
-	// by the predefined roles, so...
-	//
-	// This is, needless to say, a bad state of affairs and
-	// should be fixed.
-	if _, ok := d.GetOk("role_entity"); ok {
-		res, err := config.clientStorage.BucketAccessControls.List(bucket).Do()
-
-		if err != nil {
-			return handleNotFoundError(err, d, fmt.Sprintf("Storage Bucket ACL for bucket %q", d.Get("bucket").(string)))
-		}
-		entities := make([]string, 0, len(res.Items))
-		for _, item := range res.Items {
-			entities = append(entities, item.Role+":"+item.Entity)
-		}
-
-		d.Set("role_entity", entities)
-	} else {
-		// if we don't set `role_entity` to nil (effectively setting it
-		// to empty in Terraform state), because it's computed now,
-		// Terraform will think it's missing from state, is supposed
-		// to be there, and throw up a diff for role_entity.#. So it
-		// must always be set in state.
-		d.Set("role_entity", nil)
+	res, err := config.clientStorage.BucketAccessControls.List(bucket).Do()
+	if err != nil {
+		return handleNotFoundError(err, d, fmt.Sprintf("Storage Bucket ACL for bucket %q", d.Get("bucket").(string)))
 	}
+
+	entities := make([]string, 0, len(res.Items))
+	for _, item := range res.Items {
+		entities = append(entities, item.Role+":"+item.Entity)
+	}
+
+	d.Set("role_entity", entities)
 
 	return nil
 }
