@@ -25,14 +25,10 @@ require (
 	github.com/sirupsen/logrus v1.2.0 // indirect
 	github.com/spf13/afero v1.2.2 // indirect
 	github.com/spf13/pflag v1.0.3 // indirect
-	github.com/stoewer/go-strcase v1.0.2
 	github.com/zclconf/go-cty v1.5.1 // indirect
-	golang.org/x/lint v0.0.0-20201208152925-83fdc39ff7b5 // indirect
-	golang.org/x/mod v0.4.1 // indirect
-	golang.org/x/net v0.0.0-20201031054903-ff519b6c9102
-	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58
-	golang.org/x/tools v0.1.0 // indirect
-	google.golang.org/api v0.36.0
+	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b
+	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
+	google.golang.org/api v0.102.0
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
 
