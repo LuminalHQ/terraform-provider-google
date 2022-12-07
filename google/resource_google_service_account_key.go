@@ -180,6 +180,12 @@ func resourceGoogleServiceAccountKeyRead(d *schema.ResourceData, meta interface{
 	if err := d.Set("public_key", sak.PublicKeyData); err != nil {
 		return fmt.Errorf("Error setting public_key: %s", err)
 	}
+	if err := d.Set("valid_before", sak.ValidBeforeTime); err != nil {
+		return fmt.Errorf("Error setting valid_before: %s", err)
+	}
+	if err := d.Set("valid_after", sak.ValidAfterTime); err != nil {
+		return fmt.Errorf("Error setting valid_after: %s", err)
+	}
 	return nil
 }
 
