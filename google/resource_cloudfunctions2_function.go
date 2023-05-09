@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceCloudfunctions2function() *schema.Resource {
+func ResourceCloudfunctions2function() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudfunctions2functionCreate,
 		Read:   resourceCloudfunctions2functionRead,
@@ -118,14 +122,14 @@ function, optional when updating an existing function.`,
 												"invert_regex": {
 													Type:     schema.TypeBool,
 													Optional: true,
-													Description: `Only trigger a build if the revision regex does 
+													Description: `Only trigger a build if the revision regex does
 NOT match the revision regex.`,
 												},
 												"project_id": {
 													Type:     schema.TypeString,
 													Optional: true,
 													ForceNew: true,
-													Description: `ID of the project that owns the Cloud Source Repository. If omitted, the 
+													Description: `ID of the project that owns the Cloud Source Repository. If omitted, the
 project ID requesting the build is assumed.`,
 												},
 												"repo_name": {
@@ -158,7 +162,7 @@ project ID requesting the build is assumed.`,
 												"generation": {
 													Type:     schema.TypeInt,
 													Optional: true,
-													Description: `Google Cloud Storage generation for the object. If the generation 
+													Description: `Google Cloud Storage generation for the object. If the generation
 is omitted, the latest generation will be used.`,
 												},
 												"object": {
@@ -222,7 +226,7 @@ as the transport topic for the event delivery.`,
 						"retry_policy": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"RETRY_POLICY_UNSPECIFIED", "RETRY_POLICY_DO_NOT_RETRY", "RETRY_POLICY_RETRY", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"RETRY_POLICY_UNSPECIFIED", "RETRY_POLICY_DO_NOT_RETRY", "RETRY_POLICY_RETRY", ""}),
 							Description: `Describes the retry policy in case of function's execution failure.
 Retried execution is charged as any other execution. Possible values: ["RETRY_POLICY_UNSPECIFIED", "RETRY_POLICY_DO_NOT_RETRY", "RETRY_POLICY_RETRY"]`,
 						},
@@ -243,7 +247,7 @@ region. If not provided, defaults to the same region as the function.`,
 						"trigger": {
 							Type:        schema.TypeString,
 							Computed:    true,
-							Description: `The resource name of the Eventarc trigger.`,
+							Description: `Output only. The resource name of the Eventarc trigger.`,
 						},
 					},
 				},
@@ -273,6 +277,12 @@ region. If not provided, defaults to the same region as the function.`,
 							Description: `Whether 100% of traffic is routed to the latest revision. Defaults to true.`,
 							Default:     true,
 						},
+						"available_cpu": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Optional:    true,
+							Description: `The number of CPUs used in a single container instance. Default value is calculated from available memory.`,
+						},
 						"available_memory": {
 							Type:     schema.TypeString,
 							Optional: true,
@@ -289,7 +299,7 @@ supplied the value is interpreted as bytes.`,
 						"ingress_settings": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"ALLOW_ALL", "ALLOW_INTERNAL_ONLY", "ALLOW_INTERNAL_AND_GCLB", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"ALLOW_ALL", "ALLOW_INTERNAL_ONLY", "ALLOW_INTERNAL_AND_GCLB", ""}),
 							Description:  `Available ingress settings. Defaults to "ALLOW_ALL" if unspecified. Default value: "ALLOW_ALL" Possible values: ["ALLOW_ALL", "ALLOW_INTERNAL_ONLY", "ALLOW_INTERNAL_AND_GCLB"]`,
 							Default:      "ALLOW_ALL",
 						},
@@ -299,11 +309,90 @@ supplied the value is interpreted as bytes.`,
 							Description: `The limit on the maximum number of function instances that may coexist at a
 given time.`,
 						},
+						"max_instance_request_concurrency": {
+							Type:        schema.TypeInt,
+							Computed:    true,
+							Optional:    true,
+							Description: `Sets the maximum number of concurrent requests that each instance can receive. Defaults to 1.`,
+						},
 						"min_instance_count": {
 							Type:     schema.TypeInt,
 							Optional: true,
 							Description: `The limit on the minimum number of function instances that may coexist at a
 given time.`,
+						},
+						"secret_environment_variables": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: `Secret environment variables configuration.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"key": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `Name of the environment variable.`,
+									},
+									"project_id": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `Project identifier (preferrably project number but can also be the project ID) of the project that contains the secret. If not set, it will be populated with the function's project assuming that the secret exists in the same project as of the function.`,
+									},
+									"secret": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `Name of the secret in secret manager (not the full resource name).`,
+									},
+									"version": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `Version of the secret (version number or the string 'latest'). It is recommended to use a numeric version for secret environment variables as any updates to the secret value is not reflected until new instances start.`,
+									},
+								},
+							},
+						},
+						"secret_volumes": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: `Secret volumes configuration.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"mount_path": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `The path within the container to mount the secret volume. For example, setting the mountPath as /etc/secrets would mount the secret value files under the /etc/secrets directory. This directory will also be completely shadowed and unavailable to mount any other secrets. Recommended mount path: /etc/secrets`,
+									},
+									"project_id": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `Project identifier (preferrably project number but can also be the project ID) of the project that contains the secret. If not set, it will be populated with the function's project assuming that the secret exists in the same project as of the function.`,
+									},
+									"secret": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `Name of the secret in secret manager (not the full resource name).`,
+									},
+									"versions": {
+										Type:        schema.TypeList,
+										Computed:    true,
+										Optional:    true,
+										Description: `List of secret versions to mount for this secret. If empty, the latest version of the secret will be made available in a file named after the secret under the mount point.'`,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"path": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: `Relative path of the file under the mount path where the secret value for this version will be fetched and made available. For example, setting the mountPath as '/etc/secrets' and path as secret_foo would mount the secret value file at /etc/secrets/secret_foo.`,
+												},
+												"version": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: `Version of the secret (version number or the string 'latest'). It is preferable to use latest version with secret volumes as secret value changes are reflected immediately.`,
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 						"service": {
 							Type:        schema.TypeString,
@@ -332,7 +421,7 @@ timeout period. Defaults to 60 seconds.`,
 						"vpc_connector_egress_settings": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"VPC_CONNECTOR_EGRESS_SETTINGS_UNSPECIFIED", "PRIVATE_RANGES_ONLY", "ALL_TRAFFIC", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"VPC_CONNECTOR_EGRESS_SETTINGS_UNSPECIFIED", "PRIVATE_RANGES_ONLY", "ALL_TRAFFIC", ""}),
 							Description:  `Available egress settings. Possible values: ["VPC_CONNECTOR_EGRESS_SETTINGS_UNSPECIFIED", "PRIVATE_RANGES_ONLY", "ALL_TRAFFIC"]`,
 						},
 						"gcf_uri": {
@@ -404,8 +493,8 @@ The only allowed value is 'match-path-pattern'.
 }
 
 func resourceCloudfunctions2functionCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -448,7 +537,7 @@ func resourceCloudfunctions2functionCreate(d *schema.ResourceData, meta interfac
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions?functionId={{name}}")
+	url, err := ReplaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions?functionId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -467,13 +556,13 @@ func resourceCloudfunctions2functionCreate(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating function: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -482,12 +571,13 @@ func resourceCloudfunctions2functionCreate(d *schema.ResourceData, meta interfac
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = cloudfunctions2OperationWaitTimeWithResponse(
+	err = Cloudfunctions2OperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating function", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create function: %s", err)
 	}
 
@@ -496,7 +586,7 @@ func resourceCloudfunctions2functionCreate(d *schema.ResourceData, meta interfac
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -508,13 +598,13 @@ func resourceCloudfunctions2functionCreate(d *schema.ResourceData, meta interfac
 }
 
 func resourceCloudfunctions2functionRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -532,9 +622,9 @@ func resourceCloudfunctions2functionRead(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Cloudfunctions2function %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Cloudfunctions2function %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -573,8 +663,8 @@ func resourceCloudfunctions2functionRead(d *schema.ResourceData, meta interface{
 }
 
 func resourceCloudfunctions2functionUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -619,7 +709,7 @@ func resourceCloudfunctions2functionUpdate(d *schema.ResourceData, meta interfac
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -646,9 +736,9 @@ func resourceCloudfunctions2functionUpdate(d *schema.ResourceData, meta interfac
 	if d.HasChange("labels") {
 		updateMask = append(updateMask, "labels")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -658,7 +748,7 @@ func resourceCloudfunctions2functionUpdate(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating function %q: %s", d.Id(), err)
@@ -666,7 +756,7 @@ func resourceCloudfunctions2functionUpdate(d *schema.ResourceData, meta interfac
 		log.Printf("[DEBUG] Finished updating function %q: %#v", d.Id(), res)
 	}
 
-	err = cloudfunctions2OperationWaitTime(
+	err = Cloudfunctions2OperationWaitTime(
 		config, res, project, "Updating function", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -678,8 +768,8 @@ func resourceCloudfunctions2functionUpdate(d *schema.ResourceData, meta interfac
 }
 
 func resourceCloudfunctions2functionDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -692,7 +782,7 @@ func resourceCloudfunctions2functionDelete(d *schema.ResourceData, meta interfac
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -705,12 +795,12 @@ func resourceCloudfunctions2functionDelete(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "function")
+		return transport_tpg.HandleNotFoundError(err, d, "function")
 	}
 
-	err = cloudfunctions2OperationWaitTime(
+	err = Cloudfunctions2OperationWaitTime(
 		config, res, project, "Deleting function", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -723,8 +813,8 @@ func resourceCloudfunctions2functionDelete(d *schema.ResourceData, meta interfac
 }
 
 func resourceCloudfunctions2functionImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/functions/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -733,7 +823,7 @@ func resourceCloudfunctions2functionImport(d *schema.ResourceData, meta interfac
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -742,26 +832,26 @@ func resourceCloudfunctions2functionImport(d *schema.ResourceData, meta interfac
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCloudfunctions2functionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenCloudfunctions2functionDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEnvironment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEnvironment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -786,19 +876,19 @@ func flattenCloudfunctions2functionBuildConfig(v interface{}, d *schema.Resource
 		flattenCloudfunctions2functionBuildConfigDockerRepository(original["dockerRepository"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudfunctions2functionBuildConfigBuild(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigBuild(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigRuntime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigRuntime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigEntryPoint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigEntryPoint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSource(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSource(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -813,7 +903,7 @@ func flattenCloudfunctions2functionBuildConfigSource(v interface{}, d *schema.Re
 		flattenCloudfunctions2functionBuildConfigSourceRepoSource(original["repoSource"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudfunctions2functionBuildConfigSourceStorageSource(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceStorageSource(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -831,18 +921,44 @@ func flattenCloudfunctions2functionBuildConfigSourceStorageSource(v interface{},
 	return []interface{}{transformed}
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceStorageSourceBucket(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return d.Get("build_config.0.source.0.storage_source.0.bucket")
+func flattenCloudfunctions2functionBuildConfigSourceStorageSourceBucket(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// This flatten function is shared between the resource and the datasource.
+	// TF Input format: {bucket-name}
+	// GET Response format: gcf-v2-sources-{Project-number}-{location}
+	// As TF Input and GET response values have different format,
+	// we will return TF Input value to prevent state drift.
+
+	if bVal, ok := d.GetOk("build_config.0.source.0.storage_source.0.bucket"); ok {
+		return bVal
+	}
+
+	// For the datasource, there is no prior TF Input for this attribute.
+	// Hence, GET Response value is returned.
+
+	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceStorageSourceObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return d.Get("build_config.0.source.0.storage_source.0.object")
+func flattenCloudfunctions2functionBuildConfigSourceStorageSourceObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// This flatten function is shared between the resource and the datasource.
+	// TF Input format: {object-name}
+	// GET Response format: {function-name}/{object-name}
+	// As TF Input and GET response values have different format,
+	// we will return TF Input value to prevent state drift.
+
+	if ObjVal, ok := d.GetOk("build_config.0.source.0.storage_source.0.object"); ok {
+		return ObjVal
+	}
+
+	// For the datasource, there is no prior TF Input for this attribute.
+	// Hence, GET Response value is returned.
+
+	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceStorageSourceGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceStorageSourceGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -856,7 +972,7 @@ func flattenCloudfunctions2functionBuildConfigSourceStorageSourceGeneration(v in
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSource(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSource(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -881,47 +997,47 @@ func flattenCloudfunctions2functionBuildConfigSourceRepoSource(v interface{}, d 
 		flattenCloudfunctions2functionBuildConfigSourceRepoSourceInvertRegex(original["invertRegex"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceProjectId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceProjectId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceRepoName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceRepoName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceBranchName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceBranchName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceTagName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceTagName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceCommitSha(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceCommitSha(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceDir(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceDir(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigSourceRepoSourceInvertRegex(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigSourceRepoSourceInvertRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigWorkerPool(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigWorkerPool(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigEnvironmentVariables(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigEnvironmentVariables(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionBuildConfigDockerRepository(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionBuildConfigDockerRepository(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -936,6 +1052,10 @@ func flattenCloudfunctions2functionServiceConfig(v interface{}, d *schema.Resour
 		flattenCloudfunctions2functionServiceConfigTimeoutSeconds(original["timeoutSeconds"], d, config)
 	transformed["available_memory"] =
 		flattenCloudfunctions2functionServiceConfigAvailableMemory(original["availableMemory"], d, config)
+	transformed["max_instance_request_concurrency"] =
+		flattenCloudfunctions2functionServiceConfigMaxInstanceRequestConcurrency(original["maxInstanceRequestConcurrency"], d, config)
+	transformed["available_cpu"] =
+		flattenCloudfunctions2functionServiceConfigAvailableCpu(original["availableCpu"], d, config)
 	transformed["environment_variables"] =
 		flattenCloudfunctions2functionServiceConfigEnvironmentVariables(original["environmentVariables"], d, config)
 	transformed["max_instance_count"] =
@@ -943,9 +1063,9 @@ func flattenCloudfunctions2functionServiceConfig(v interface{}, d *schema.Resour
 	transformed["min_instance_count"] =
 		flattenCloudfunctions2functionServiceConfigMinInstanceCount(original["minInstanceCount"], d, config)
 	transformed["vpc_connector"] =
-		flattenCloudfunctions2functionServiceConfigVPCConnector(original["vpcConnector"], d, config)
+		flattenCloudfunctions2functionServiceConfigVpcConnector(original["vpcConnector"], d, config)
 	transformed["vpc_connector_egress_settings"] =
-		flattenCloudfunctions2functionServiceConfigVPCConnectorEgressSettings(original["vpcConnectorEgressSettings"], d, config)
+		flattenCloudfunctions2functionServiceConfigVpcConnectorEgressSettings(original["vpcConnectorEgressSettings"], d, config)
 	transformed["ingress_settings"] =
 		flattenCloudfunctions2functionServiceConfigIngressSettings(original["ingressSettings"], d, config)
 	transformed["uri"] =
@@ -956,16 +1076,20 @@ func flattenCloudfunctions2functionServiceConfig(v interface{}, d *schema.Resour
 		flattenCloudfunctions2functionServiceConfigServiceAccountEmail(original["serviceAccountEmail"], d, config)
 	transformed["all_traffic_on_latest_revision"] =
 		flattenCloudfunctions2functionServiceConfigAllTrafficOnLatestRevision(original["allTrafficOnLatestRevision"], d, config)
+	transformed["secret_environment_variables"] =
+		flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariables(original["secretEnvironmentVariables"], d, config)
+	transformed["secret_volumes"] =
+		flattenCloudfunctions2functionServiceConfigSecretVolumes(original["secretVolumes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudfunctions2functionServiceConfigService(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigTimeoutSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigTimeoutSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -979,18 +1103,14 @@ func flattenCloudfunctions2functionServiceConfigTimeoutSeconds(v interface{}, d 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudfunctions2functionServiceConfigAvailableMemory(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigAvailableMemory(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigEnvironmentVariables(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return v
-}
-
-func flattenCloudfunctions2functionServiceConfigMaxInstanceCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigMaxInstanceRequestConcurrency(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1004,10 +1124,18 @@ func flattenCloudfunctions2functionServiceConfigMaxInstanceCount(v interface{}, 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudfunctions2functionServiceConfigMinInstanceCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigAvailableCpu(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigEnvironmentVariables(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigMaxInstanceCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1021,35 +1149,149 @@ func flattenCloudfunctions2functionServiceConfigMinInstanceCount(v interface{}, 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudfunctions2functionServiceConfigVPCConnector(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigMinInstanceCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudfunctions2functionServiceConfigVpcConnector(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigVPCConnectorEgressSettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigVpcConnectorEgressSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigIngressSettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigIngressSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigUri(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigUri(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigGcfUri(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigGcfUri(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigServiceAccountEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigServiceAccountEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionServiceConfigAllTrafficOnLatestRevision(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigAllTrafficOnLatestRevision(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTrigger(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariables(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"key":        flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesKey(original["key"], d, config),
+			"project_id": flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesProjectId(original["projectId"], d, config),
+			"secret":     flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesSecret(original["secret"], d, config),
+			"version":    flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesVersion(original["version"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesProjectId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesSecret(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretEnvironmentVariablesVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretVolumes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"mount_path": flattenCloudfunctions2functionServiceConfigSecretVolumesMountPath(original["mountPath"], d, config),
+			"project_id": flattenCloudfunctions2functionServiceConfigSecretVolumesProjectId(original["projectId"], d, config),
+			"secret":     flattenCloudfunctions2functionServiceConfigSecretVolumesSecret(original["secret"], d, config),
+			"versions":   flattenCloudfunctions2functionServiceConfigSecretVolumesVersions(original["versions"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenCloudfunctions2functionServiceConfigSecretVolumesMountPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretVolumesProjectId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretVolumesSecret(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretVolumesVersions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"version": flattenCloudfunctions2functionServiceConfigSecretVolumesVersionsVersion(original["version"], d, config),
+			"path":    flattenCloudfunctions2functionServiceConfigSecretVolumesVersionsPath(original["path"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenCloudfunctions2functionServiceConfigSecretVolumesVersionsVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionServiceConfigSecretVolumesVersionsPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudfunctions2functionEventTrigger(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1074,19 +1316,19 @@ func flattenCloudfunctions2functionEventTrigger(v interface{}, d *schema.Resourc
 		flattenCloudfunctions2functionEventTriggerRetryPolicy(original["retryPolicy"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudfunctions2functionEventTriggerTrigger(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerTrigger(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerTriggerRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerTriggerRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerEventType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerEventType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerEventFilters(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerEventFilters(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1106,47 +1348,47 @@ func flattenCloudfunctions2functionEventTriggerEventFilters(v interface{}, d *sc
 	}
 	return transformed
 }
-func flattenCloudfunctions2functionEventTriggerEventFiltersAttribute(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerEventFiltersAttribute(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerEventFiltersValue(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerEventFiltersValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerEventFiltersOperator(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerEventFiltersOperator(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerPubsubTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerPubsubTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerServiceAccountEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerServiceAccountEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionEventTriggerRetryPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionEventTriggerRetryPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudfunctions2functionLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudfunctions2functionLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCloudfunctions2functionName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return replaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
+func expandCloudfunctions2functionName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/functions/{{name}}")
 }
 
-func expandCloudfunctions2functionDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1207,19 +1449,19 @@ func expandCloudfunctions2functionBuildConfig(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandCloudfunctions2functionBuildConfigBuild(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigBuild(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigRuntime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigRuntime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigEntryPoint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigEntryPoint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSource(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSource(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1245,7 +1487,7 @@ func expandCloudfunctions2functionBuildConfigSource(v interface{}, d TerraformRe
 	return transformed, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceStorageSource(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceStorageSource(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1278,19 +1520,19 @@ func expandCloudfunctions2functionBuildConfigSourceStorageSource(v interface{}, 
 	return transformed, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceStorageSourceBucket(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceStorageSourceBucket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceStorageSourceObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceStorageSourceObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceStorageSourceGeneration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceStorageSourceGeneration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSource(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSource(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1351,39 +1593,39 @@ func expandCloudfunctions2functionBuildConfigSourceRepoSource(v interface{}, d T
 	return transformed, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceProjectId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceProjectId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceRepoName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceRepoName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceBranchName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceBranchName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceTagName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceTagName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceCommitSha(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceCommitSha(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceDir(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceDir(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigSourceRepoSourceInvertRegex(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigSourceRepoSourceInvertRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigWorkerPool(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigWorkerPool(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionBuildConfigEnvironmentVariables(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudfunctions2functionBuildConfigEnvironmentVariables(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1394,11 +1636,11 @@ func expandCloudfunctions2functionBuildConfigEnvironmentVariables(v interface{},
 	return m, nil
 }
 
-func expandCloudfunctions2functionBuildConfigDockerRepository(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionBuildConfigDockerRepository(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1428,6 +1670,20 @@ func expandCloudfunctions2functionServiceConfig(v interface{}, d TerraformResour
 		transformed["availableMemory"] = transformedAvailableMemory
 	}
 
+	transformedMaxInstanceRequestConcurrency, err := expandCloudfunctions2functionServiceConfigMaxInstanceRequestConcurrency(original["max_instance_request_concurrency"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedMaxInstanceRequestConcurrency); val.IsValid() && !isEmptyValue(val) {
+		transformed["maxInstanceRequestConcurrency"] = transformedMaxInstanceRequestConcurrency
+	}
+
+	transformedAvailableCpu, err := expandCloudfunctions2functionServiceConfigAvailableCpu(original["available_cpu"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedAvailableCpu); val.IsValid() && !isEmptyValue(val) {
+		transformed["availableCpu"] = transformedAvailableCpu
+	}
+
 	transformedEnvironmentVariables, err := expandCloudfunctions2functionServiceConfigEnvironmentVariables(original["environment_variables"], d, config)
 	if err != nil {
 		return nil, err
@@ -1449,18 +1705,18 @@ func expandCloudfunctions2functionServiceConfig(v interface{}, d TerraformResour
 		transformed["minInstanceCount"] = transformedMinInstanceCount
 	}
 
-	transformedVPCConnector, err := expandCloudfunctions2functionServiceConfigVPCConnector(original["vpc_connector"], d, config)
+	transformedVpcConnector, err := expandCloudfunctions2functionServiceConfigVpcConnector(original["vpc_connector"], d, config)
 	if err != nil {
 		return nil, err
-	} else if val := reflect.ValueOf(transformedVPCConnector); val.IsValid() && !isEmptyValue(val) {
-		transformed["vpcConnector"] = transformedVPCConnector
+	} else if val := reflect.ValueOf(transformedVpcConnector); val.IsValid() && !isEmptyValue(val) {
+		transformed["vpcConnector"] = transformedVpcConnector
 	}
 
-	transformedVPCConnectorEgressSettings, err := expandCloudfunctions2functionServiceConfigVPCConnectorEgressSettings(original["vpc_connector_egress_settings"], d, config)
+	transformedVpcConnectorEgressSettings, err := expandCloudfunctions2functionServiceConfigVpcConnectorEgressSettings(original["vpc_connector_egress_settings"], d, config)
 	if err != nil {
 		return nil, err
-	} else if val := reflect.ValueOf(transformedVPCConnectorEgressSettings); val.IsValid() && !isEmptyValue(val) {
-		transformed["vpcConnectorEgressSettings"] = transformedVPCConnectorEgressSettings
+	} else if val := reflect.ValueOf(transformedVpcConnectorEgressSettings); val.IsValid() && !isEmptyValue(val) {
+		transformed["vpcConnectorEgressSettings"] = transformedVpcConnectorEgressSettings
 	}
 
 	transformedIngressSettings, err := expandCloudfunctions2functionServiceConfigIngressSettings(original["ingress_settings"], d, config)
@@ -1498,22 +1754,44 @@ func expandCloudfunctions2functionServiceConfig(v interface{}, d TerraformResour
 		transformed["allTrafficOnLatestRevision"] = transformedAllTrafficOnLatestRevision
 	}
 
+	transformedSecretEnvironmentVariables, err := expandCloudfunctions2functionServiceConfigSecretEnvironmentVariables(original["secret_environment_variables"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedSecretEnvironmentVariables); val.IsValid() && !isEmptyValue(val) {
+		transformed["secretEnvironmentVariables"] = transformedSecretEnvironmentVariables
+	}
+
+	transformedSecretVolumes, err := expandCloudfunctions2functionServiceConfigSecretVolumes(original["secret_volumes"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedSecretVolumes); val.IsValid() && !isEmptyValue(val) {
+		transformed["secretVolumes"] = transformedSecretVolumes
+	}
+
 	return transformed, nil
 }
 
-func expandCloudfunctions2functionServiceConfigService(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigTimeoutSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigTimeoutSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigAvailableMemory(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigAvailableMemory(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigEnvironmentVariables(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudfunctions2functionServiceConfigMaxInstanceRequestConcurrency(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigAvailableCpu(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigEnvironmentVariables(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1524,43 +1802,194 @@ func expandCloudfunctions2functionServiceConfigEnvironmentVariables(v interface{
 	return m, nil
 }
 
-func expandCloudfunctions2functionServiceConfigMaxInstanceCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigMaxInstanceCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigMinInstanceCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigMinInstanceCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigVPCConnector(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigVpcConnector(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigVPCConnectorEgressSettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigVpcConnectorEgressSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigIngressSettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigIngressSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigUri(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigUri(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigGcfUri(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigGcfUri(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigServiceAccountEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigServiceAccountEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionServiceConfigAllTrafficOnLatestRevision(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigAllTrafficOnLatestRevision(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTrigger(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionServiceConfigSecretEnvironmentVariables(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedKey, err := expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesKey(original["key"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedKey); val.IsValid() && !isEmptyValue(val) {
+			transformed["key"] = transformedKey
+		}
+
+		transformedProjectId, err := expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesProjectId(original["project_id"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedProjectId); val.IsValid() && !isEmptyValue(val) {
+			transformed["projectId"] = transformedProjectId
+		}
+
+		transformedSecret, err := expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesSecret(original["secret"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedSecret); val.IsValid() && !isEmptyValue(val) {
+			transformed["secret"] = transformedSecret
+		}
+
+		transformedVersion, err := expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesVersion(original["version"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+			transformed["version"] = transformedVersion
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesProjectId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretEnvironmentVariablesVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedMountPath, err := expandCloudfunctions2functionServiceConfigSecretVolumesMountPath(original["mount_path"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedMountPath); val.IsValid() && !isEmptyValue(val) {
+			transformed["mountPath"] = transformedMountPath
+		}
+
+		transformedProjectId, err := expandCloudfunctions2functionServiceConfigSecretVolumesProjectId(original["project_id"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedProjectId); val.IsValid() && !isEmptyValue(val) {
+			transformed["projectId"] = transformedProjectId
+		}
+
+		transformedSecret, err := expandCloudfunctions2functionServiceConfigSecretVolumesSecret(original["secret"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedSecret); val.IsValid() && !isEmptyValue(val) {
+			transformed["secret"] = transformedSecret
+		}
+
+		transformedVersions, err := expandCloudfunctions2functionServiceConfigSecretVolumesVersions(original["versions"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedVersions); val.IsValid() && !isEmptyValue(val) {
+			transformed["versions"] = transformedVersions
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumesMountPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumesProjectId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumesSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumesVersions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedVersion, err := expandCloudfunctions2functionServiceConfigSecretVolumesVersionsVersion(original["version"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+			transformed["version"] = transformedVersion
+		}
+
+		transformedPath, err := expandCloudfunctions2functionServiceConfigSecretVolumesVersionsPath(original["path"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedPath); val.IsValid() && !isEmptyValue(val) {
+			transformed["path"] = transformedPath
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumesVersionsVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionServiceConfigSecretVolumesVersionsPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudfunctions2functionEventTrigger(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1621,19 +2050,19 @@ func expandCloudfunctions2functionEventTrigger(v interface{}, d TerraformResourc
 	return transformed, nil
 }
 
-func expandCloudfunctions2functionEventTriggerTrigger(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerTrigger(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerTriggerRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerTriggerRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerEventType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerEventType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerEventFilters(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerEventFilters(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -1670,31 +2099,31 @@ func expandCloudfunctions2functionEventTriggerEventFilters(v interface{}, d Terr
 	return req, nil
 }
 
-func expandCloudfunctions2functionEventTriggerEventFiltersAttribute(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerEventFiltersAttribute(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerEventFiltersValue(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerEventFiltersValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerEventFiltersOperator(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerEventFiltersOperator(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerPubsubTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerPubsubTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerServiceAccountEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerServiceAccountEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionEventTriggerRetryPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudfunctions2functionEventTriggerRetryPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudfunctions2functionLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudfunctions2functionLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}

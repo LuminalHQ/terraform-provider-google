@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	containeraws "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/containeraws"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceContainerAwsNodePool() *schema.Resource {
+func ResourceContainerAwsNodePool() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceContainerAwsNodePoolCreate,
 		Read:   resourceContainerAwsNodePoolRead,
@@ -195,6 +197,14 @@ func ContainerAwsNodePoolConfigSchema() *schema.Resource {
 				Description: "The name of the AWS IAM role assigned to nodes in the pool.",
 			},
 
+			"autoscaling_metrics_collection": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Optional. Configuration related to CloudWatch metrics collection on the Auto Scaling group of the node pool. When unspecified, metrics collection is disabled.",
+				MaxItems:    1,
+				Elem:        ContainerAwsNodePoolConfigAutoscalingMetricsCollectionSchema(),
+			},
+
 			"instance_type": {
 				Type:        schema.TypeString,
 				Computed:    true,
@@ -207,7 +217,7 @@ func ContainerAwsNodePoolConfigSchema() *schema.Resource {
 				Type:        schema.TypeMap,
 				Optional:    true,
 				ForceNew:    true,
-				Description: "Optional. The initial labels assigned to nodes of this node pool. An object containing a list of \"key\": value pairs. Example { \"name\": \"wrench\", \"mass\": \"1.3kg\", \"count\": \"3\" }.",
+				Description: "Optional. The initial labels assigned to nodes of this node pool. An object containing a list of \"key\": value pairs. Example: { \"name\": \"wrench\", \"mass\": \"1.3kg\", \"count\": \"3\" }.",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 
@@ -246,7 +256,6 @@ func ContainerAwsNodePoolConfigSchema() *schema.Resource {
 			"tags": {
 				Type:        schema.TypeMap,
 				Optional:    true,
-				ForceNew:    true,
 				Description: "Optional. Key/value metadata to assign to each underlying AWS resource. Specify at most 50 pairs containing alphanumerics, spaces, and symbols (.+-=_:@/). Keys can be up to 127 Unicode characters. Values can be up to 255 Unicode characters.",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
@@ -269,6 +278,25 @@ func ContainerAwsNodePoolConfigConfigEncryptionSchema() *schema.Resource {
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "The ARN of the AWS KMS key used to encrypt node pool configuration.",
+			},
+		},
+	}
+}
+
+func ContainerAwsNodePoolConfigAutoscalingMetricsCollectionSchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"granularity": {
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "The frequency at which EC2 Auto Scaling sends aggregated data to AWS CloudWatch. The only valid value is \"1Minute\".",
+			},
+
+			"metrics": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "The metrics to enable. For a list of valid metrics, see https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_EnableMetricsCollection.html. If you specify granularity and don't specify any metrics, all metrics are enabled.",
+				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 		},
 	}
@@ -378,7 +406,7 @@ func ContainerAwsNodePoolMaxPodsConstraintSchema() *schema.Resource {
 }
 
 func resourceContainerAwsNodePoolCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -403,7 +431,7 @@ func resourceContainerAwsNodePoolCreate(d *schema.ResourceData, meta interface{}
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -412,8 +440,8 @@ func resourceContainerAwsNodePoolCreate(d *schema.ResourceData, meta interface{}
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -435,7 +463,7 @@ func resourceContainerAwsNodePoolCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceContainerAwsNodePoolRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -454,7 +482,7 @@ func resourceContainerAwsNodePoolRead(d *schema.ResourceData, meta interface{}) 
 		Project:           dcl.String(project),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -463,8 +491,8 @@ func resourceContainerAwsNodePoolRead(d *schema.ResourceData, meta interface{}) 
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -528,7 +556,7 @@ func resourceContainerAwsNodePoolRead(d *schema.ResourceData, meta interface{}) 
 	return nil
 }
 func resourceContainerAwsNodePoolUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -547,7 +575,7 @@ func resourceContainerAwsNodePoolUpdate(d *schema.ResourceData, meta interface{}
 		Project:           dcl.String(project),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -557,8 +585,8 @@ func resourceContainerAwsNodePoolUpdate(d *schema.ResourceData, meta interface{}
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -580,7 +608,7 @@ func resourceContainerAwsNodePoolUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceContainerAwsNodePoolDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -600,7 +628,7 @@ func resourceContainerAwsNodePoolDelete(d *schema.ResourceData, meta interface{}
 	}
 
 	log.Printf("[DEBUG] Deleting NodePool %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -609,8 +637,8 @@ func resourceContainerAwsNodePoolDelete(d *schema.ResourceData, meta interface{}
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLContainerAwsClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -625,9 +653,9 @@ func resourceContainerAwsNodePoolDelete(d *schema.ResourceData, meta interface{}
 }
 
 func resourceContainerAwsNodePoolImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/awsClusters/(?P<cluster>[^/]+)/awsNodePools/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<cluster>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<cluster>[^/]+)/(?P<name>[^/]+)",
@@ -683,16 +711,17 @@ func expandContainerAwsNodePoolConfig(o interface{}) *containeraws.NodePoolConfi
 	}
 	obj := objArr[0].(map[string]interface{})
 	return &containeraws.NodePoolConfig{
-		ConfigEncryption:   expandContainerAwsNodePoolConfigConfigEncryption(obj["config_encryption"]),
-		IamInstanceProfile: dcl.String(obj["iam_instance_profile"].(string)),
-		InstanceType:       dcl.StringOrNil(obj["instance_type"].(string)),
-		Labels:             checkStringMap(obj["labels"]),
-		ProxyConfig:        expandContainerAwsNodePoolConfigProxyConfig(obj["proxy_config"]),
-		RootVolume:         expandContainerAwsNodePoolConfigRootVolume(obj["root_volume"]),
-		SecurityGroupIds:   expandStringArray(obj["security_group_ids"]),
-		SshConfig:          expandContainerAwsNodePoolConfigSshConfig(obj["ssh_config"]),
-		Tags:               checkStringMap(obj["tags"]),
-		Taints:             expandContainerAwsNodePoolConfigTaintsArray(obj["taints"]),
+		ConfigEncryption:             expandContainerAwsNodePoolConfigConfigEncryption(obj["config_encryption"]),
+		IamInstanceProfile:           dcl.String(obj["iam_instance_profile"].(string)),
+		AutoscalingMetricsCollection: expandContainerAwsNodePoolConfigAutoscalingMetricsCollection(obj["autoscaling_metrics_collection"]),
+		InstanceType:                 dcl.StringOrNil(obj["instance_type"].(string)),
+		Labels:                       checkStringMap(obj["labels"]),
+		ProxyConfig:                  expandContainerAwsNodePoolConfigProxyConfig(obj["proxy_config"]),
+		RootVolume:                   expandContainerAwsNodePoolConfigRootVolume(obj["root_volume"]),
+		SecurityGroupIds:             expandStringArray(obj["security_group_ids"]),
+		SshConfig:                    expandContainerAwsNodePoolConfigSshConfig(obj["ssh_config"]),
+		Tags:                         checkStringMap(obj["tags"]),
+		Taints:                       expandContainerAwsNodePoolConfigTaintsArray(obj["taints"]),
 	}
 }
 
@@ -701,16 +730,17 @@ func flattenContainerAwsNodePoolConfig(obj *containeraws.NodePoolConfig) interfa
 		return nil
 	}
 	transformed := map[string]interface{}{
-		"config_encryption":    flattenContainerAwsNodePoolConfigConfigEncryption(obj.ConfigEncryption),
-		"iam_instance_profile": obj.IamInstanceProfile,
-		"instance_type":        obj.InstanceType,
-		"labels":               obj.Labels,
-		"proxy_config":         flattenContainerAwsNodePoolConfigProxyConfig(obj.ProxyConfig),
-		"root_volume":          flattenContainerAwsNodePoolConfigRootVolume(obj.RootVolume),
-		"security_group_ids":   obj.SecurityGroupIds,
-		"ssh_config":           flattenContainerAwsNodePoolConfigSshConfig(obj.SshConfig),
-		"tags":                 obj.Tags,
-		"taints":               flattenContainerAwsNodePoolConfigTaintsArray(obj.Taints),
+		"config_encryption":              flattenContainerAwsNodePoolConfigConfigEncryption(obj.ConfigEncryption),
+		"iam_instance_profile":           obj.IamInstanceProfile,
+		"autoscaling_metrics_collection": flattenContainerAwsNodePoolConfigAutoscalingMetricsCollection(obj.AutoscalingMetricsCollection),
+		"instance_type":                  obj.InstanceType,
+		"labels":                         obj.Labels,
+		"proxy_config":                   flattenContainerAwsNodePoolConfigProxyConfig(obj.ProxyConfig),
+		"root_volume":                    flattenContainerAwsNodePoolConfigRootVolume(obj.RootVolume),
+		"security_group_ids":             obj.SecurityGroupIds,
+		"ssh_config":                     flattenContainerAwsNodePoolConfigSshConfig(obj.SshConfig),
+		"tags":                           obj.Tags,
+		"taints":                         flattenContainerAwsNodePoolConfigTaintsArray(obj.Taints),
 	}
 
 	return []interface{}{transformed}
@@ -737,6 +767,34 @@ func flattenContainerAwsNodePoolConfigConfigEncryption(obj *containeraws.NodePoo
 	}
 	transformed := map[string]interface{}{
 		"kms_key_arn": obj.KmsKeyArn,
+	}
+
+	return []interface{}{transformed}
+
+}
+
+func expandContainerAwsNodePoolConfigAutoscalingMetricsCollection(o interface{}) *containeraws.NodePoolConfigAutoscalingMetricsCollection {
+	if o == nil {
+		return containeraws.EmptyNodePoolConfigAutoscalingMetricsCollection
+	}
+	objArr := o.([]interface{})
+	if len(objArr) == 0 || objArr[0] == nil {
+		return containeraws.EmptyNodePoolConfigAutoscalingMetricsCollection
+	}
+	obj := objArr[0].(map[string]interface{})
+	return &containeraws.NodePoolConfigAutoscalingMetricsCollection{
+		Granularity: dcl.String(obj["granularity"].(string)),
+		Metrics:     expandStringArray(obj["metrics"]),
+	}
+}
+
+func flattenContainerAwsNodePoolConfigAutoscalingMetricsCollection(obj *containeraws.NodePoolConfigAutoscalingMetricsCollection) interface{} {
+	if obj == nil || obj.Empty() {
+		return nil
+	}
+	transformed := map[string]interface{}{
+		"granularity": obj.Granularity,
+		"metrics":     obj.Metrics,
 	}
 
 	return []interface{}{transformed}

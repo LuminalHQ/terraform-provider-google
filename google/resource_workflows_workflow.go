@@ -24,9 +24,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceWorkflowsWorkflow() *schema.Resource {
+func ResourceWorkflowsWorkflow() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceWorkflowsWorkflowCreate,
 		Read:   resourceWorkflowsWorkflowRead,
@@ -43,12 +46,19 @@ func resourceWorkflowsWorkflow() *schema.Resource {
 		StateUpgraders: []schema.StateUpgrader{
 			{
 				Type:    resourceWorkflowsWorkflowResourceV0().CoreConfigSchema().ImpliedType(),
-				Upgrade: resourceWorkflowsWorkflowUpgradeV0,
+				Upgrade: ResourceWorkflowsWorkflowUpgradeV0,
 				Version: 0,
 			},
 		},
 
 		Schema: map[string]*schema.Schema{
+			"crypto_key_name": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Description: `The KMS key used to encrypt workflow and execution data.
+
+Format: projects/{project}/locations/{location}/keyRings/{keyRing}/cryptoKeys/{cryptoKey}`,
+			},
 			"description": {
 				Type:        schema.TypeString,
 				Computed:    true,
@@ -78,11 +88,14 @@ func resourceWorkflowsWorkflow() *schema.Resource {
 				Type:             schema.TypeString,
 				Computed:         true,
 				Optional:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `Name of the service account associated with the latest workflow version. This service
 account represents the identity of the workflow and determines what permissions the workflow has.
-
-Format: projects/{project}/serviceAccounts/{account}.`,
+Format: projects/{project}/serviceAccounts/{account} or {account}.
+Using - as a wildcard for the {project} or not providing one at all will infer the project from the account.
+The {account} value can be the email address or the unique_id of the service account.
+If not provided, workflow will use the project's default service account.
+Modifying this field for an existing workflow results in a new workflow revision.`,
 			},
 			"source_contents": {
 				Type:        schema.TypeString,
@@ -128,8 +141,8 @@ Format: projects/{project}/serviceAccounts/{account}.`,
 }
 
 func resourceWorkflowsWorkflowCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -165,13 +178,19 @@ func resourceWorkflowsWorkflowCreate(d *schema.ResourceData, meta interface{}) e
 	} else if v, ok := d.GetOkExists("source_contents"); !isEmptyValue(reflect.ValueOf(sourceContentsProp)) && (ok || !reflect.DeepEqual(v, sourceContentsProp)) {
 		obj["sourceContents"] = sourceContentsProp
 	}
+	cryptoKeyNameProp, err := expandWorkflowsWorkflowCryptoKeyName(d.Get("crypto_key_name"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("crypto_key_name"); !isEmptyValue(reflect.ValueOf(cryptoKeyNameProp)) && (ok || !reflect.DeepEqual(v, cryptoKeyNameProp)) {
+		obj["cryptoKeyName"] = cryptoKeyNameProp
+	}
 
 	obj, err = resourceWorkflowsWorkflowEncoder(d, meta, obj)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows?workflowId={{name}}")
+	url, err := ReplaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows?workflowId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -190,13 +209,13 @@ func resourceWorkflowsWorkflowCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Workflow: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/workflows/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/workflows/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -205,12 +224,13 @@ func resourceWorkflowsWorkflowCreate(d *schema.ResourceData, meta interface{}) e
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = workflowsOperationWaitTimeWithResponse(
+	err = WorkflowsOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Workflow", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Workflow: %s", err)
 	}
 
@@ -219,7 +239,7 @@ func resourceWorkflowsWorkflowCreate(d *schema.ResourceData, meta interface{}) e
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{region}}/workflows/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/workflows/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -231,13 +251,13 @@ func resourceWorkflowsWorkflowCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceWorkflowsWorkflowRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows/{{name}}")
+	url, err := ReplaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -255,9 +275,9 @@ func resourceWorkflowsWorkflowRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("WorkflowsWorkflow %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("WorkflowsWorkflow %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -291,13 +311,16 @@ func resourceWorkflowsWorkflowRead(d *schema.ResourceData, meta interface{}) err
 	if err := d.Set("revision_id", flattenWorkflowsWorkflowRevisionId(res["revisionId"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Workflow: %s", err)
 	}
+	if err := d.Set("crypto_key_name", flattenWorkflowsWorkflowCryptoKeyName(res["cryptoKeyName"], d, config)); err != nil {
+		return fmt.Errorf("Error reading Workflow: %s", err)
+	}
 
 	return nil
 }
 
 func resourceWorkflowsWorkflowUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -335,13 +358,19 @@ func resourceWorkflowsWorkflowUpdate(d *schema.ResourceData, meta interface{}) e
 	} else if v, ok := d.GetOkExists("source_contents"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, sourceContentsProp)) {
 		obj["sourceContents"] = sourceContentsProp
 	}
+	cryptoKeyNameProp, err := expandWorkflowsWorkflowCryptoKeyName(d.Get("crypto_key_name"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("crypto_key_name"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, cryptoKeyNameProp)) {
+		obj["cryptoKeyName"] = cryptoKeyNameProp
+	}
 
 	obj, err = resourceWorkflowsWorkflowEncoder(d, meta, obj)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows/{{name}}")
+	url, err := ReplaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -364,9 +393,13 @@ func resourceWorkflowsWorkflowUpdate(d *schema.ResourceData, meta interface{}) e
 	if d.HasChange("source_contents") {
 		updateMask = append(updateMask, "sourceContents")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+
+	if d.HasChange("crypto_key_name") {
+		updateMask = append(updateMask, "cryptoKeyName")
+	}
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -376,7 +409,7 @@ func resourceWorkflowsWorkflowUpdate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Workflow %q: %s", d.Id(), err)
@@ -384,7 +417,7 @@ func resourceWorkflowsWorkflowUpdate(d *schema.ResourceData, meta interface{}) e
 		log.Printf("[DEBUG] Finished updating Workflow %q: %#v", d.Id(), res)
 	}
 
-	err = workflowsOperationWaitTime(
+	err = WorkflowsOperationWaitTime(
 		config, res, project, "Updating Workflow", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -396,8 +429,8 @@ func resourceWorkflowsWorkflowUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceWorkflowsWorkflowDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -410,7 +443,7 @@ func resourceWorkflowsWorkflowDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows/{{name}}")
+	url, err := ReplaceVars(d, config, "{{WorkflowsBasePath}}projects/{{project}}/locations/{{region}}/workflows/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -423,12 +456,12 @@ func resourceWorkflowsWorkflowDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Workflow")
+		return transport_tpg.HandleNotFoundError(err, d, "Workflow")
 	}
 
-	err = workflowsOperationWaitTime(
+	err = WorkflowsOperationWaitTime(
 		config, res, project, "Deleting Workflow", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -440,54 +473,58 @@ func resourceWorkflowsWorkflowDelete(d *schema.ResourceData, meta interface{}) e
 	return nil
 }
 
-func flattenWorkflowsWorkflowName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenWorkflowsWorkflowDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowServiceAccount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowServiceAccount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowSourceContents(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowSourceContents(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenWorkflowsWorkflowRevisionId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenWorkflowsWorkflowRevisionId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandWorkflowsWorkflowName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func flattenWorkflowsWorkflowCryptoKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func expandWorkflowsWorkflowName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandWorkflowsWorkflowDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandWorkflowsWorkflowDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandWorkflowsWorkflowLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandWorkflowsWorkflowLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -498,11 +535,15 @@ func expandWorkflowsWorkflowLabels(v interface{}, d TerraformResourceData, confi
 	return m, nil
 }
 
-func expandWorkflowsWorkflowServiceAccount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandWorkflowsWorkflowServiceAccount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandWorkflowsWorkflowSourceContents(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandWorkflowsWorkflowSourceContents(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandWorkflowsWorkflowCryptoKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
@@ -605,10 +646,10 @@ Format: projects/{project}/serviceAccounts/{account}.`,
 	}
 }
 
-func resourceWorkflowsWorkflowUpgradeV0(_ context.Context, rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
+func ResourceWorkflowsWorkflowUpgradeV0(_ context.Context, rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
 	log.Printf("[DEBUG] Attributes before migration: %#v", rawState)
 
-	rawState["name"] = GetResourceNameFromSelfLink(rawState["name"].(string))
+	rawState["name"] = tpgresource.GetResourceNameFromSelfLink(rawState["name"].(string))
 
 	log.Printf("[DEBUG] Attributes after migration: %#v", rawState)
 	return rawState, nil

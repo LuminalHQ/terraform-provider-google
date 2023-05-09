@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceAppEngineServiceNetworkSettings() *schema.Resource {
+func ResourceAppEngineServiceNetworkSettings() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAppEngineServiceNetworkSettingsCreate,
 		Read:   resourceAppEngineServiceNetworkSettingsRead,
@@ -52,7 +55,7 @@ func resourceAppEngineServiceNetworkSettings() *schema.Resource {
 						"ingress_traffic_allowed": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"INGRESS_TRAFFIC_ALLOWED_UNSPECIFIED", "INGRESS_TRAFFIC_ALLOWED_ALL", "INGRESS_TRAFFIC_ALLOWED_INTERNAL_ONLY", "INGRESS_TRAFFIC_ALLOWED_INTERNAL_AND_LB", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"INGRESS_TRAFFIC_ALLOWED_UNSPECIFIED", "INGRESS_TRAFFIC_ALLOWED_ALL", "INGRESS_TRAFFIC_ALLOWED_INTERNAL_ONLY", "INGRESS_TRAFFIC_ALLOWED_INTERNAL_AND_LB", ""}),
 							Description:  `The ingress settings for version or service. Default value: "INGRESS_TRAFFIC_ALLOWED_UNSPECIFIED" Possible values: ["INGRESS_TRAFFIC_ALLOWED_UNSPECIFIED", "INGRESS_TRAFFIC_ALLOWED_ALL", "INGRESS_TRAFFIC_ALLOWED_INTERNAL_ONLY", "INGRESS_TRAFFIC_ALLOWED_INTERNAL_AND_LB"]`,
 							Default:      "INGRESS_TRAFFIC_ALLOWED_UNSPECIFIED",
 						},
@@ -76,8 +79,8 @@ func resourceAppEngineServiceNetworkSettings() *schema.Resource {
 }
 
 func resourceAppEngineServiceNetworkSettingsCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -96,14 +99,14 @@ func resourceAppEngineServiceNetworkSettingsCreate(d *schema.ResourceData, meta 
 		obj["networkSettings"] = networkSettingsProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}?updateMask=networkSettings")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}?updateMask=networkSettings")
 	if err != nil {
 		return err
 	}
@@ -122,19 +125,19 @@ func resourceAppEngineServiceNetworkSettingsCreate(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating ServiceNetworkSettings: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "apps/{{project}}/services/{{service}}")
+	id, err := ReplaceVars(d, config, "apps/{{project}}/services/{{service}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Creating ServiceNetworkSettings", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -150,13 +153,13 @@ func resourceAppEngineServiceNetworkSettingsCreate(d *schema.ResourceData, meta 
 }
 
 func resourceAppEngineServiceNetworkSettingsRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}")
 	if err != nil {
 		return err
 	}
@@ -174,9 +177,9 @@ func resourceAppEngineServiceNetworkSettingsRead(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AppEngineServiceNetworkSettings %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AppEngineServiceNetworkSettings %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -194,8 +197,8 @@ func resourceAppEngineServiceNetworkSettingsRead(d *schema.ResourceData, meta in
 }
 
 func resourceAppEngineServiceNetworkSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -222,14 +225,14 @@ func resourceAppEngineServiceNetworkSettingsUpdate(d *schema.ResourceData, meta 
 		obj["networkSettings"] = networkSettingsProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}")
 	if err != nil {
 		return err
 	}
@@ -244,9 +247,9 @@ func resourceAppEngineServiceNetworkSettingsUpdate(d *schema.ResourceData, meta 
 	if d.HasChange("network_settings") {
 		updateMask = append(updateMask, "networkSettings")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -256,7 +259,7 @@ func resourceAppEngineServiceNetworkSettingsUpdate(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating ServiceNetworkSettings %q: %s", d.Id(), err)
@@ -264,7 +267,7 @@ func resourceAppEngineServiceNetworkSettingsUpdate(d *schema.ResourceData, meta 
 		log.Printf("[DEBUG] Finished updating ServiceNetworkSettings %q: %#v", d.Id(), res)
 	}
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Updating ServiceNetworkSettings", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -285,8 +288,8 @@ func resourceAppEngineServiceNetworkSettingsDelete(d *schema.ResourceData, meta 
 }
 
 func resourceAppEngineServiceNetworkSettingsImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"apps/(?P<project>[^/]+)/services/(?P<service>[^/]+)",
 		"(?P<project>[^/]+)/(?P<service>[^/]+)",
 		"(?P<service>[^/]+)",
@@ -295,7 +298,7 @@ func resourceAppEngineServiceNetworkSettingsImport(d *schema.ResourceData, meta 
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "apps/{{project}}/services/{{service}}")
+	id, err := ReplaceVars(d, config, "apps/{{project}}/services/{{service}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -304,11 +307,11 @@ func resourceAppEngineServiceNetworkSettingsImport(d *schema.ResourceData, meta 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAppEngineServiceNetworkSettingsService(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineServiceNetworkSettingsService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineServiceNetworkSettingsNetworkSettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineServiceNetworkSettingsNetworkSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -321,15 +324,15 @@ func flattenAppEngineServiceNetworkSettingsNetworkSettings(v interface{}, d *sch
 		flattenAppEngineServiceNetworkSettingsNetworkSettingsIngressTrafficAllowed(original["ingressTrafficAllowed"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineServiceNetworkSettingsNetworkSettingsIngressTrafficAllowed(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineServiceNetworkSettingsNetworkSettingsIngressTrafficAllowed(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAppEngineServiceNetworkSettingsService(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineServiceNetworkSettingsService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineServiceNetworkSettingsNetworkSettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineServiceNetworkSettingsNetworkSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -348,6 +351,6 @@ func expandAppEngineServiceNetworkSettingsNetworkSettings(v interface{}, d Terra
 	return transformed, nil
 }
 
-func expandAppEngineServiceNetworkSettingsNetworkSettingsIngressTrafficAllowed(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineServiceNetworkSettingsNetworkSettingsIngressTrafficAllowed(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

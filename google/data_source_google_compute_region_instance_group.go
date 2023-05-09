@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -10,7 +11,7 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-func dataSourceGoogleComputeRegionInstanceGroup() *schema.Resource {
+func DataSourceGoogleComputeRegionInstanceGroup() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceComputeRegionInstanceGroupRead,
 		Schema: map[string]*schema.Schema{
@@ -86,8 +87,8 @@ func dataSourceGoogleComputeRegionInstanceGroup() *schema.Resource {
 }
 
 func dataSourceComputeRegionInstanceGroupRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -100,7 +101,7 @@ func dataSourceComputeRegionInstanceGroupRead(d *schema.ResourceData, meta inter
 	instanceGroup, err := config.NewComputeClient(userAgent).RegionInstanceGroups.Get(
 		project, region, name).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Region Instance Group %q", name))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Region Instance Group %q", name))
 	}
 
 	members, err := config.NewComputeClient(userAgent).RegionInstanceGroups.ListInstances(

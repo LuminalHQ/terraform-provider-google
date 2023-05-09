@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceAppEngineStandardAppVersion() *schema.Resource {
+func ResourceAppEngineStandardAppVersion() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAppEngineStandardAppVersionCreate,
 		Read:   resourceAppEngineStandardAppVersionRead,
@@ -238,19 +241,19 @@ The first matching URL handles the request and other request handlers are not at
 						"auth_fail_action": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"AUTH_FAIL_ACTION_REDIRECT", "AUTH_FAIL_ACTION_UNAUTHORIZED", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"AUTH_FAIL_ACTION_REDIRECT", "AUTH_FAIL_ACTION_UNAUTHORIZED", ""}),
 							Description:  `Actions to take when the user is not logged in. Possible values: ["AUTH_FAIL_ACTION_REDIRECT", "AUTH_FAIL_ACTION_UNAUTHORIZED"]`,
 						},
 						"login": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"LOGIN_OPTIONAL", "LOGIN_ADMIN", "LOGIN_REQUIRED", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"LOGIN_OPTIONAL", "LOGIN_ADMIN", "LOGIN_REQUIRED", ""}),
 							Description:  `Methods to restrict access to a URL based on login status. Possible values: ["LOGIN_OPTIONAL", "LOGIN_ADMIN", "LOGIN_REQUIRED"]`,
 						},
 						"redirect_http_response_code": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"REDIRECT_HTTP_RESPONSE_CODE_301", "REDIRECT_HTTP_RESPONSE_CODE_302", "REDIRECT_HTTP_RESPONSE_CODE_303", "REDIRECT_HTTP_RESPONSE_CODE_307", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"REDIRECT_HTTP_RESPONSE_CODE_301", "REDIRECT_HTTP_RESPONSE_CODE_302", "REDIRECT_HTTP_RESPONSE_CODE_303", "REDIRECT_HTTP_RESPONSE_CODE_307", ""}),
 							Description:  `30x code to use when performing redirects for the secure field. Possible values: ["REDIRECT_HTTP_RESPONSE_CODE_301", "REDIRECT_HTTP_RESPONSE_CODE_302", "REDIRECT_HTTP_RESPONSE_CODE_303", "REDIRECT_HTTP_RESPONSE_CODE_307"]`,
 						},
 						"script": {
@@ -272,7 +275,7 @@ Only the auto value is supported for Node.js in the App Engine standard environm
 						"security_level": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"SECURE_DEFAULT", "SECURE_NEVER", "SECURE_OPTIONAL", "SECURE_ALWAYS", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"SECURE_DEFAULT", "SECURE_NEVER", "SECURE_OPTIONAL", "SECURE_ALWAYS", ""}),
 							Description:  `Security (HTTPS) enforcement for this URL. Possible values: ["SECURE_DEFAULT", "SECURE_NEVER", "SECURE_OPTIONAL", "SECURE_ALWAYS"]`,
 						},
 						"static_files": {
@@ -341,7 +344,7 @@ All URLs that begin with this prefix are handled by this handler, using the port
 				Description: `A list of the types of messages that this application is able to receive. Possible values: ["INBOUND_SERVICE_MAIL", "INBOUND_SERVICE_MAIL_BOUNCE", "INBOUND_SERVICE_XMPP_ERROR", "INBOUND_SERVICE_XMPP_MESSAGE", "INBOUND_SERVICE_XMPP_SUBSCRIBE", "INBOUND_SERVICE_XMPP_PRESENCE", "INBOUND_SERVICE_CHANNEL_PRESENCE", "INBOUND_SERVICE_WARMUP"]`,
 				Elem: &schema.Schema{
 					Type:         schema.TypeString,
-					ValidateFunc: validateEnum([]string{"INBOUND_SERVICE_MAIL", "INBOUND_SERVICE_MAIL_BOUNCE", "INBOUND_SERVICE_XMPP_ERROR", "INBOUND_SERVICE_XMPP_MESSAGE", "INBOUND_SERVICE_XMPP_SUBSCRIBE", "INBOUND_SERVICE_XMPP_PRESENCE", "INBOUND_SERVICE_CHANNEL_PRESENCE", "INBOUND_SERVICE_WARMUP"}),
+					ValidateFunc: verify.ValidateEnum([]string{"INBOUND_SERVICE_MAIL", "INBOUND_SERVICE_MAIL_BOUNCE", "INBOUND_SERVICE_XMPP_ERROR", "INBOUND_SERVICE_XMPP_MESSAGE", "INBOUND_SERVICE_XMPP_SUBSCRIBE", "INBOUND_SERVICE_XMPP_PRESENCE", "INBOUND_SERVICE_CHANNEL_PRESENCE", "INBOUND_SERVICE_WARMUP"}),
 				},
 				Set: schema.HashString,
 			},
@@ -399,6 +402,12 @@ Modules API set_num_instances() you must use 'lifecycle.ignore_changes = ["manua
 Please see the app.yaml reference for valid values at 'https://cloud.google.com/appengine/docs/standard/<language>/config/appref'\
 Substitute '<language>' with 'python', 'java', 'php', 'ruby', 'go' or 'nodejs'.`,
 			},
+			"service_account": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Optional:    true,
+				Description: `The identity that the deployed version will run as. Admin API will use the App Engine Appspot service account as default if this field is neither provided in app.yaml file nor through CLI flag.`,
+			},
 			"threadsafe": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -422,6 +431,11 @@ Substitute '<language>' with 'python', 'java', 'php', 'ruby', 'go' or 'nodejs'.`
 							Required:    true,
 							Description: `Full Serverless VPC Access Connector name e.g. /projects/my-project/locations/us-central1/connectors/c1.`,
 						},
+						"egress_setting": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: `The egress setting for the connector, controlling what traffic is diverted through it.`,
+						},
 					},
 				},
 			},
@@ -431,14 +445,16 @@ Substitute '<language>' with 'python', 'java', 'php', 'ruby', 'go' or 'nodejs'.`
 				Description: `Full path to the Version resource in the API. Example, "v1".`,
 			},
 			"noop_on_destroy": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: `If set to 'true', the application version will not be deleted.`,
 			},
 			"delete_service_on_destroy": {
-				Type:     schema.TypeBool,
-				Optional: true,
-				Default:  false,
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: `If set to 'true', the service will be deleted if it is the last version.`,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -452,8 +468,8 @@ Substitute '<language>' with 'python', 'java', 'php', 'ruby', 'go' or 'nodejs'.`
 }
 
 func resourceAppEngineStandardAppVersionCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -470,6 +486,12 @@ func resourceAppEngineStandardAppVersionCreate(d *schema.ResourceData, meta inte
 		return err
 	} else if v, ok := d.GetOkExists("runtime"); !isEmptyValue(reflect.ValueOf(runtimeProp)) && (ok || !reflect.DeepEqual(v, runtimeProp)) {
 		obj["runtime"] = runtimeProp
+	}
+	serviceAccountProp, err := expandAppEngineStandardAppVersionServiceAccount(d.Get("service_account"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("service_account"); !isEmptyValue(reflect.ValueOf(serviceAccountProp)) && (ok || !reflect.DeepEqual(v, serviceAccountProp)) {
+		obj["serviceAccount"] = serviceAccountProp
 	}
 	threadsafeProp, err := expandAppEngineStandardAppVersionThreadsafe(d.Get("threadsafe"), d, config)
 	if err != nil {
@@ -519,7 +541,7 @@ func resourceAppEngineStandardAppVersionCreate(d *schema.ResourceData, meta inte
 	} else if v, ok := d.GetOkExists("entrypoint"); !isEmptyValue(reflect.ValueOf(entrypointProp)) && (ok || !reflect.DeepEqual(v, entrypointProp)) {
 		obj["entrypoint"] = entrypointProp
 	}
-	vpcAccessConnectorProp, err := expandAppEngineStandardAppVersionVPCAccessConnector(d.Get("vpc_access_connector"), d, config)
+	vpcAccessConnectorProp, err := expandAppEngineStandardAppVersionVpcAccessConnector(d.Get("vpc_access_connector"), d, config)
 	if err != nil {
 		return err
 	} else if v, ok := d.GetOkExists("vpc_access_connector"); !isEmptyValue(reflect.ValueOf(vpcAccessConnectorProp)) && (ok || !reflect.DeepEqual(v, vpcAccessConnectorProp)) {
@@ -556,14 +578,14 @@ func resourceAppEngineStandardAppVersionCreate(d *schema.ResourceData, meta inte
 		obj["manualScaling"] = manualScalingProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions")
 	if err != nil {
 		return err
 	}
@@ -582,19 +604,19 @@ func resourceAppEngineStandardAppVersionCreate(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsAppEngineRetryableError)
 	if err != nil {
 		return fmt.Errorf("Error creating StandardAppVersion: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "apps/{{project}}/services/{{service}}/versions/{{version_id}}")
+	id, err := ReplaceVars(d, config, "apps/{{project}}/services/{{service}}/versions/{{version_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Creating StandardAppVersion", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -610,13 +632,13 @@ func resourceAppEngineStandardAppVersionCreate(d *schema.ResourceData, meta inte
 }
 
 func resourceAppEngineStandardAppVersionRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions/{{version_id}}?view=FULL")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions/{{version_id}}?view=FULL")
 	if err != nil {
 		return err
 	}
@@ -634,9 +656,9 @@ func resourceAppEngineStandardAppVersionRead(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsAppEngineRetryableError)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AppEngineStandardAppVersion %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AppEngineStandardAppVersion %q", d.Id()))
 	}
 
 	// Explicitly set virtual fields to default values if unset
@@ -663,6 +685,9 @@ func resourceAppEngineStandardAppVersionRead(d *schema.ResourceData, meta interf
 	if err := d.Set("runtime", flattenAppEngineStandardAppVersionRuntime(res["runtime"], d, config)); err != nil {
 		return fmt.Errorf("Error reading StandardAppVersion: %s", err)
 	}
+	if err := d.Set("service_account", flattenAppEngineStandardAppVersionServiceAccount(res["serviceAccount"], d, config)); err != nil {
+		return fmt.Errorf("Error reading StandardAppVersion: %s", err)
+	}
 	if err := d.Set("app_engine_apis", flattenAppEngineStandardAppVersionAppEngineApis(res["appEngineApis"], d, config)); err != nil {
 		return fmt.Errorf("Error reading StandardAppVersion: %s", err)
 	}
@@ -675,7 +700,7 @@ func resourceAppEngineStandardAppVersionRead(d *schema.ResourceData, meta interf
 	if err := d.Set("libraries", flattenAppEngineStandardAppVersionLibraries(res["libraries"], d, config)); err != nil {
 		return fmt.Errorf("Error reading StandardAppVersion: %s", err)
 	}
-	if err := d.Set("vpc_access_connector", flattenAppEngineStandardAppVersionVPCAccessConnector(res["vpcAccessConnector"], d, config)); err != nil {
+	if err := d.Set("vpc_access_connector", flattenAppEngineStandardAppVersionVpcAccessConnector(res["vpcAccessConnector"], d, config)); err != nil {
 		return fmt.Errorf("Error reading StandardAppVersion: %s", err)
 	}
 	if err := d.Set("inbound_services", flattenAppEngineStandardAppVersionInboundServices(res["inboundServices"], d, config)); err != nil {
@@ -698,8 +723,8 @@ func resourceAppEngineStandardAppVersionRead(d *schema.ResourceData, meta interf
 }
 
 func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -724,6 +749,12 @@ func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta inte
 		return err
 	} else if v, ok := d.GetOkExists("runtime"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, runtimeProp)) {
 		obj["runtime"] = runtimeProp
+	}
+	serviceAccountProp, err := expandAppEngineStandardAppVersionServiceAccount(d.Get("service_account"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("service_account"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, serviceAccountProp)) {
+		obj["serviceAccount"] = serviceAccountProp
 	}
 	threadsafeProp, err := expandAppEngineStandardAppVersionThreadsafe(d.Get("threadsafe"), d, config)
 	if err != nil {
@@ -773,7 +804,7 @@ func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta inte
 	} else if v, ok := d.GetOkExists("entrypoint"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, entrypointProp)) {
 		obj["entrypoint"] = entrypointProp
 	}
-	vpcAccessConnectorProp, err := expandAppEngineStandardAppVersionVPCAccessConnector(d.Get("vpc_access_connector"), d, config)
+	vpcAccessConnectorProp, err := expandAppEngineStandardAppVersionVpcAccessConnector(d.Get("vpc_access_connector"), d, config)
 	if err != nil {
 		return err
 	} else if v, ok := d.GetOkExists("vpc_access_connector"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, vpcAccessConnectorProp)) {
@@ -810,14 +841,14 @@ func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta inte
 		obj["manualScaling"] = manualScalingProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions")
 	if err != nil {
 		return err
 	}
@@ -829,7 +860,7 @@ func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.IsAppEngineRetryableError)
 
 	if err != nil {
 		return fmt.Errorf("Error updating StandardAppVersion %q: %s", d.Id(), err)
@@ -837,7 +868,7 @@ func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta inte
 		log.Printf("[DEBUG] Finished updating StandardAppVersion %q: %#v", d.Id(), res)
 	}
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Updating StandardAppVersion", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -849,8 +880,8 @@ func resourceAppEngineStandardAppVersionUpdate(d *schema.ResourceData, meta inte
 }
 
 func resourceAppEngineStandardAppVersionDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -865,25 +896,25 @@ func resourceAppEngineStandardAppVersionDelete(d *schema.ResourceData, meta inte
 		return err
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}/services/{{service}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}/services/{{service}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
 	if d.Get("delete_service_on_destroy") == true {
-		url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}")
+		url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}")
 		if err != nil {
 			return err
 		}
 		var obj map[string]interface{}
 		log.Printf("[DEBUG] Deleting Service %q", d.Id())
-		res, err := sendRequestWithTimeout(config, "DELETE", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isAppEngineRetryableError)
+		res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsAppEngineRetryableError)
 		if err != nil {
-			return handleNotFoundError(err, d, "Service")
+			return transport_tpg.HandleNotFoundError(err, d, "Service")
 		}
-		err = appEngineOperationWaitTime(
+		err = AppEngineOperationWaitTime(
 			config, res, project, "Deleting Service", userAgent,
 			d.Timeout(schema.TimeoutDelete))
 
@@ -893,17 +924,17 @@ func resourceAppEngineStandardAppVersionDelete(d *schema.ResourceData, meta inte
 		log.Printf("[DEBUG] Finished deleting Service %q: %#v", d.Id(), res)
 		return nil
 	} else {
-		url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions/{{version_id}}")
+		url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/services/{{service}}/versions/{{version_id}}")
 		if err != nil {
 			return err
 		}
 		var obj map[string]interface{}
 		log.Printf("[DEBUG] Deleting AppVersion %q", d.Id())
-		res, err := sendRequestWithTimeout(config, "DELETE", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isAppEngineRetryableError)
+		res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsAppEngineRetryableError)
 		if err != nil {
-			return handleNotFoundError(err, d, "AppVersion")
+			return transport_tpg.HandleNotFoundError(err, d, "AppVersion")
 		}
-		err = appEngineOperationWaitTime(
+		err = AppEngineOperationWaitTime(
 			config, res, project, "Deleting AppVersion", userAgent,
 			d.Timeout(schema.TimeoutDelete))
 
@@ -917,8 +948,8 @@ func resourceAppEngineStandardAppVersionDelete(d *schema.ResourceData, meta inte
 }
 
 func resourceAppEngineStandardAppVersionImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"apps/(?P<project>[^/]+)/services/(?P<service>[^/]+)/versions/(?P<version_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<service>[^/]+)/(?P<version_id>[^/]+)",
 		"(?P<service>[^/]+)/(?P<version_id>[^/]+)",
@@ -927,7 +958,7 @@ func resourceAppEngineStandardAppVersionImport(d *schema.ResourceData, meta inte
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "apps/{{project}}/services/{{service}}/versions/{{version_id}}")
+	id, err := ReplaceVars(d, config, "apps/{{project}}/services/{{service}}/versions/{{version_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -944,27 +975,31 @@ func resourceAppEngineStandardAppVersionImport(d *schema.ResourceData, meta inte
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAppEngineStandardAppVersionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionVersionId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionVersionId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionRuntime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionRuntime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionAppEngineApis(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionServiceAccount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionRuntimeApiVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAppEngineApis(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionRuntimeApiVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenAppEngineStandardAppVersionHandlers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -988,27 +1023,27 @@ func flattenAppEngineStandardAppVersionHandlers(v interface{}, d *schema.Resourc
 	}
 	return transformed
 }
-func flattenAppEngineStandardAppVersionHandlersUrlRegex(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersUrlRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersSecurityLevel(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersSecurityLevel(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersLogin(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersLogin(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersAuthFailAction(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersAuthFailAction(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersRedirectHttpResponseCode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersRedirectHttpResponseCode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersScript(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersScript(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1021,11 +1056,11 @@ func flattenAppEngineStandardAppVersionHandlersScript(v interface{}, d *schema.R
 		flattenAppEngineStandardAppVersionHandlersScriptScriptPath(original["scriptPath"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionHandlersScriptScriptPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersScriptScriptPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFiles(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFiles(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1050,35 +1085,35 @@ func flattenAppEngineStandardAppVersionHandlersStaticFiles(v interface{}, d *sch
 		flattenAppEngineStandardAppVersionHandlersStaticFilesApplicationReadable(original["applicationReadable"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionHandlersStaticFilesPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFilesUploadPathRegex(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesUploadPathRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFilesHttpHeaders(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesHttpHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFilesMimeType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesMimeType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFilesExpiration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesExpiration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFilesRequireMatchingFile(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesRequireMatchingFile(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionHandlersStaticFilesApplicationReadable(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionHandlersStaticFilesApplicationReadable(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionLibraries(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionLibraries(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1097,15 +1132,15 @@ func flattenAppEngineStandardAppVersionLibraries(v interface{}, d *schema.Resour
 	}
 	return transformed
 }
-func flattenAppEngineStandardAppVersionLibrariesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionLibrariesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionLibrariesVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionLibrariesVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionVPCAccessConnector(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionVpcAccessConnector(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1115,25 +1150,31 @@ func flattenAppEngineStandardAppVersionVPCAccessConnector(v interface{}, d *sche
 	}
 	transformed := make(map[string]interface{})
 	transformed["name"] =
-		flattenAppEngineStandardAppVersionVPCAccessConnectorName(original["name"], d, config)
+		flattenAppEngineStandardAppVersionVpcAccessConnectorName(original["name"], d, config)
+	transformed["egress_setting"] =
+		flattenAppEngineStandardAppVersionVpcAccessConnectorEgressSetting(original["egressSetting"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionVPCAccessConnectorName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionVpcAccessConnectorName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionInboundServices(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionVpcAccessConnectorEgressSetting(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenAppEngineStandardAppVersionInboundServices(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenAppEngineStandardAppVersionInstanceClass(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionInstanceClass(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScaling(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScaling(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1156,10 +1197,10 @@ func flattenAppEngineStandardAppVersionAutomaticScaling(v interface{}, d *schema
 		flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings(original["standardSchedulerSettings"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionAutomaticScalingMaxConcurrentRequests(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingMaxConcurrentRequests(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1173,10 +1214,10 @@ func flattenAppEngineStandardAppVersionAutomaticScalingMaxConcurrentRequests(v i
 	return v // let terraform core handle it otherwise
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingMaxIdleInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingMaxIdleInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1190,14 +1231,14 @@ func flattenAppEngineStandardAppVersionAutomaticScalingMaxIdleInstances(v interf
 	return v // let terraform core handle it otherwise
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingMaxPendingLatency(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingMaxPendingLatency(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingMinIdleInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingMinIdleInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1211,11 +1252,11 @@ func flattenAppEngineStandardAppVersionAutomaticScalingMinIdleInstances(v interf
 	return v // let terraform core handle it otherwise
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingMinPendingLatency(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingMinPendingLatency(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1234,18 +1275,18 @@ func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings
 		flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMaxInstances(original["maxInstances"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetCpuUtilization(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetCpuUtilization(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetThroughputUtilization(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetThroughputUtilization(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMinInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMinInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1259,10 +1300,10 @@ func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings
 	return v // let terraform core handle it otherwise
 }
 
-func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMaxInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMaxInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1276,7 +1317,7 @@ func flattenAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings
 	return v // let terraform core handle it otherwise
 }
 
-func flattenAppEngineStandardAppVersionBasicScaling(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionBasicScaling(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1291,14 +1332,14 @@ func flattenAppEngineStandardAppVersionBasicScaling(v interface{}, d *schema.Res
 		flattenAppEngineStandardAppVersionBasicScalingMaxInstances(original["maxInstances"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionBasicScalingIdleTimeout(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionBasicScalingIdleTimeout(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineStandardAppVersionBasicScalingMaxInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionBasicScalingMaxInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1312,7 +1353,7 @@ func flattenAppEngineStandardAppVersionBasicScalingMaxInstances(v interface{}, d
 	return v // let terraform core handle it otherwise
 }
 
-func flattenAppEngineStandardAppVersionManualScaling(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionManualScaling(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1325,10 +1366,10 @@ func flattenAppEngineStandardAppVersionManualScaling(v interface{}, d *schema.Re
 		flattenAppEngineStandardAppVersionManualScalingInstances(original["instances"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineStandardAppVersionManualScalingInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineStandardAppVersionManualScalingInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1342,27 +1383,31 @@ func flattenAppEngineStandardAppVersionManualScalingInstances(v interface{}, d *
 	return v // let terraform core handle it otherwise
 }
 
-func expandAppEngineStandardAppVersionVersionId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionVersionId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionRuntime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionRuntime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionThreadsafe(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionServiceAccount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAppEngineApis(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionThreadsafe(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionRuntimeApiVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAppEngineApis(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlers(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionRuntimeApiVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandAppEngineStandardAppVersionHandlers(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1426,27 +1471,27 @@ func expandAppEngineStandardAppVersionHandlers(v interface{}, d TerraformResourc
 	return req, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersUrlRegex(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersUrlRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersSecurityLevel(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersSecurityLevel(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersLogin(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersLogin(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersAuthFailAction(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersAuthFailAction(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersRedirectHttpResponseCode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersRedirectHttpResponseCode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersScript(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersScript(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1465,11 +1510,11 @@ func expandAppEngineStandardAppVersionHandlersScript(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersScriptScriptPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersScriptScriptPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFiles(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFiles(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1530,15 +1575,15 @@ func expandAppEngineStandardAppVersionHandlersStaticFiles(v interface{}, d Terra
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesUploadPathRegex(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesUploadPathRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesHttpHeaders(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesHttpHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1549,23 +1594,23 @@ func expandAppEngineStandardAppVersionHandlersStaticFilesHttpHeaders(v interface
 	return m, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesMimeType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesMimeType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesExpiration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesExpiration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesRequireMatchingFile(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesRequireMatchingFile(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionHandlersStaticFilesApplicationReadable(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionHandlersStaticFilesApplicationReadable(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionLibraries(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionLibraries(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1594,15 +1639,15 @@ func expandAppEngineStandardAppVersionLibraries(v interface{}, d TerraformResour
 	return req, nil
 }
 
-func expandAppEngineStandardAppVersionLibrariesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionLibrariesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionLibrariesVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionLibrariesVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionEnvVariables(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandAppEngineStandardAppVersionEnvVariables(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1613,7 +1658,7 @@ func expandAppEngineStandardAppVersionEnvVariables(v interface{}, d TerraformRes
 	return m, nil
 }
 
-func expandAppEngineStandardAppVersionDeployment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionDeployment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1639,7 +1684,7 @@ func expandAppEngineStandardAppVersionDeployment(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionDeploymentZip(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionDeploymentZip(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1665,15 +1710,15 @@ func expandAppEngineStandardAppVersionDeploymentZip(v interface{}, d TerraformRe
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionDeploymentZipSourceUrl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionDeploymentZipSourceUrl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionDeploymentZipFilesCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionDeploymentZipFilesCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionDeploymentFiles(v interface{}, d TerraformResourceData, config *Config) (map[string]interface{}, error) {
+func expandAppEngineStandardAppVersionDeploymentFiles(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]interface{}, error) {
 	if v == nil {
 		return map[string]interface{}{}, nil
 	}
@@ -1705,15 +1750,15 @@ func expandAppEngineStandardAppVersionDeploymentFiles(v interface{}, d Terraform
 	return m, nil
 }
 
-func expandAppEngineStandardAppVersionDeploymentFilesSha1Sum(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionDeploymentFilesSha1Sum(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionDeploymentFilesSourceUrl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionDeploymentFilesSourceUrl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionEntrypoint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionEntrypoint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1732,11 +1777,11 @@ func expandAppEngineStandardAppVersionEntrypoint(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionEntrypointShell(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionEntrypointShell(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionVPCAccessConnector(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionVpcAccessConnector(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1745,30 +1790,41 @@ func expandAppEngineStandardAppVersionVPCAccessConnector(v interface{}, d Terraf
 	original := raw.(map[string]interface{})
 	transformed := make(map[string]interface{})
 
-	transformedName, err := expandAppEngineStandardAppVersionVPCAccessConnectorName(original["name"], d, config)
+	transformedName, err := expandAppEngineStandardAppVersionVpcAccessConnectorName(original["name"], d, config)
 	if err != nil {
 		return nil, err
 	} else if val := reflect.ValueOf(transformedName); val.IsValid() && !isEmptyValue(val) {
 		transformed["name"] = transformedName
 	}
 
+	transformedEgressSetting, err := expandAppEngineStandardAppVersionVpcAccessConnectorEgressSetting(original["egress_setting"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedEgressSetting); val.IsValid() && !isEmptyValue(val) {
+		transformed["egressSetting"] = transformedEgressSetting
+	}
+
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionVPCAccessConnectorName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionVpcAccessConnectorName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionInboundServices(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionVpcAccessConnectorEgressSetting(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandAppEngineStandardAppVersionInboundServices(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionInstanceClass(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionInstanceClass(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScaling(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScaling(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1822,27 +1878,27 @@ func expandAppEngineStandardAppVersionAutomaticScaling(v interface{}, d Terrafor
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingMaxConcurrentRequests(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingMaxConcurrentRequests(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingMaxIdleInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingMaxIdleInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingMaxPendingLatency(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingMaxPendingLatency(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingMinIdleInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingMinIdleInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingMinPendingLatency(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingMinPendingLatency(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1882,23 +1938,23 @@ func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettings(
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetCpuUtilization(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetCpuUtilization(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetThroughputUtilization(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsTargetThroughputUtilization(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMinInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMinInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMaxInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionAutomaticScalingStandardSchedulerSettingsMaxInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionBasicScaling(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionBasicScaling(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1924,15 +1980,15 @@ func expandAppEngineStandardAppVersionBasicScaling(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionBasicScalingIdleTimeout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionBasicScalingIdleTimeout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionBasicScalingMaxInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionBasicScalingMaxInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineStandardAppVersionManualScaling(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionManualScaling(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1951,6 +2007,6 @@ func expandAppEngineStandardAppVersionManualScaling(v interface{}, d TerraformRe
 	return transformed, nil
 }
 
-func expandAppEngineStandardAppVersionManualScalingInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineStandardAppVersionManualScalingInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

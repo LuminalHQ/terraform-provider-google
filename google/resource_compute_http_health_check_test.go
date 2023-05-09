@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -15,12 +16,12 @@ func TestAccComputeHttpHealthCheck_update(t *testing.T) {
 
 	var healthCheck compute.HttpHealthCheck
 
-	hhckName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	hhckName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeHttpHealthCheckDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeHttpHealthCheckDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeHttpHealthCheck_update1(hhckName),
@@ -59,9 +60,9 @@ func testAccCheckComputeHttpHealthCheckExists(t *testing.T, n string, healthChec
 			return fmt.Errorf("No name is set")
 		}
 
-		config := googleProviderConfig(t)
+		config := GoogleProviderConfig(t)
 
-		found, err := config.NewComputeClient(config.userAgent).HttpHealthChecks.Get(
+		found, err := config.NewComputeClient(config.UserAgent).HttpHealthChecks.Get(
 			config.Project, rs.Primary.Attributes["name"]).Do()
 		if err != nil {
 			return err

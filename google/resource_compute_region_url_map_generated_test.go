@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccComputeRegionUrlMap_regionUrlMapBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeRegionUrlMapDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeRegionUrlMapDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeRegionUrlMap_regionUrlMapBasicExample(context),
@@ -121,17 +124,216 @@ resource "google_compute_region_health_check" "default" {
 `, context)
 }
 
+func TestAccComputeRegionUrlMap_regionUrlMapDefaultRouteActionExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeRegionUrlMapDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeRegionUrlMap_regionUrlMapDefaultRouteActionExample(context),
+			},
+			{
+				ResourceName:            "google_compute_region_url_map.regionurlmap",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"default_service", "region"},
+			},
+		},
+	})
+}
+
+func testAccComputeRegionUrlMap_regionUrlMapDefaultRouteActionExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_compute_region_url_map" "regionurlmap" {
+  region = "us-central1"
+
+  name        = "regionurlmap%{random_suffix}"
+  description = "a description"
+
+  default_route_action {
+    retry_policy {
+      retry_conditions = [
+        "5xx",
+        "gateway-error",
+      ]
+      num_retries = 3
+      per_try_timeout {
+        seconds = 0
+        nanos = 500
+      }
+    }
+    request_mirror_policy {
+      backend_service = google_compute_region_backend_service.home.id
+    }
+    weighted_backend_services {
+      backend_service = google_compute_region_backend_service.login.id
+      weight = 200
+      header_action {
+        request_headers_to_add {
+          header_name = "foo-request-1"
+          header_value = "bar"
+          replace = true
+        }
+        request_headers_to_remove = ["fizz"]
+        response_headers_to_add {
+          header_name = "foo-response-1"
+          header_value = "bar"
+          replace = true
+        }
+        response_headers_to_remove = ["buzz"]
+      }
+    }
+    weighted_backend_services {
+      backend_service = google_compute_region_backend_service.home.id
+      weight = 100
+      header_action {
+        request_headers_to_add {
+          header_name = "foo-request-1"
+          header_value = "bar"
+          replace = true
+        }
+        request_headers_to_add {
+          header_name = "foo-request-2"
+          header_value = "bar"
+          replace = true
+        }
+        request_headers_to_remove = ["fizz"]
+        response_headers_to_add {
+          header_name = "foo-response-2"
+          header_value = "bar"
+          replace = true
+        }
+        response_headers_to_add {
+          header_name = "foo-response-1"
+          header_value = "bar"
+          replace = true
+        }
+        response_headers_to_remove = ["buzz"]
+      }
+    }
+    url_rewrite {
+      host_rewrite = "dev.example.com"
+      path_prefix_rewrite = "/v1/api/"
+    }
+  
+    cors_policy {
+      disabled = false
+      allow_credentials = true
+      allow_headers = [
+        "foobar"
+      ]
+      allow_methods = [
+        "GET",
+        "POST",
+      ]
+      allow_origins = [
+        "example.com"
+      ]
+      expose_headers = [
+        "foobar"
+      ]
+      max_age = 60
+    }
+    fault_injection_policy {
+      delay {
+        fixed_delay {
+          seconds = 0
+          nanos = 500
+        }
+        percentage = 0.5
+      }
+      abort {
+        http_status = 500
+        percentage = 0.5
+      }
+    }
+    timeout {
+      seconds = 0
+      nanos = 500
+    }
+  }
+
+  host_rule {
+    hosts        = ["mysite.com"]
+    path_matcher = "allpaths"
+  }
+
+  path_matcher {
+    name            = "allpaths"
+    default_service = google_compute_region_backend_service.home.id
+
+    path_rule {
+      paths   = ["/home"]
+      service = google_compute_region_backend_service.home.id
+    }
+
+    path_rule {
+      paths   = ["/login"]
+      service = google_compute_region_backend_service.login.id
+    }
+  }
+
+  test {
+    service = google_compute_region_backend_service.home.id
+    host    = "hi.com"
+    path    = "/home"
+  }
+}
+
+resource "google_compute_region_backend_service" "login" {
+  region = "us-central1"
+
+  name        = "login%{random_suffix}"
+  protocol    = "HTTP"
+  load_balancing_scheme = "INTERNAL_MANAGED"
+  timeout_sec = 10
+
+  health_checks = [google_compute_region_health_check.default.id]
+}
+
+resource "google_compute_region_backend_service" "home" {
+  region = "us-central1"
+
+  name        = "home%{random_suffix}"
+  protocol    = "HTTP"
+  load_balancing_scheme = "INTERNAL_MANAGED"
+  timeout_sec = 10
+
+  health_checks = [google_compute_region_health_check.default.id]
+}
+
+resource "google_compute_region_health_check" "default" {
+  region = "us-central1"
+
+  name               = "tf-test-health-check%{random_suffix}"
+  check_interval_sec = 1
+  timeout_sec        = 1
+  http_health_check {
+    port         = 80
+    request_path = "/"
+  }
+}
+`, context)
+}
+
 func TestAccComputeRegionUrlMap_regionUrlMapL7IlbPathExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeRegionUrlMapDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeRegionUrlMapDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeRegionUrlMap_regionUrlMapL7IlbPathExample(context),
@@ -202,8 +404,8 @@ resource "google_compute_region_url_map" "regionurlmap" {
           nanos = 750000000
         }
         url_rewrite {
-          host_rewrite = "A replacement header"
-          path_prefix_rewrite = "A replacement path"
+          host_rewrite = "dev.example.com"
+          path_prefix_rewrite = "/v1/api/"
         }
         weighted_backend_services {
           backend_service = google_compute_region_backend_service.home.id
@@ -256,13 +458,13 @@ func TestAccComputeRegionUrlMap_regionUrlMapL7IlbPathPartialExample(t *testing.T
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeRegionUrlMapDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeRegionUrlMapDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeRegionUrlMap_regionUrlMapL7IlbPathPartialExample(context),
@@ -308,8 +510,8 @@ resource "google_compute_region_url_map" "regionurlmap" {
           nanos = 750000000
         }
         url_rewrite {
-          host_rewrite = "A replacement header"
-          path_prefix_rewrite = "A replacement path"
+          host_rewrite = "dev.example.com"
+          path_prefix_rewrite = "/v1/api/"
         }
         weighted_backend_services {
           backend_service = google_compute_region_backend_service.home.id
@@ -355,13 +557,13 @@ func TestAccComputeRegionUrlMap_regionUrlMapL7IlbRouteExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeRegionUrlMapDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeRegionUrlMapDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeRegionUrlMap_regionUrlMapL7IlbRouteExample(context),
@@ -467,13 +669,13 @@ func TestAccComputeRegionUrlMap_regionUrlMapL7IlbRoutePartialExample(t *testing.
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeRegionUrlMapDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeRegionUrlMapDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeRegionUrlMap_regionUrlMapL7IlbRoutePartialExample(context),
@@ -560,9 +762,9 @@ func testAccCheckComputeRegionUrlMapDestroyProducer(t *testing.T) func(s *terraf
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/urlMaps/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/urlMaps/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -573,7 +775,7 @@ func testAccCheckComputeRegionUrlMapDestroyProducer(t *testing.T) func(s *terraf
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("ComputeRegionUrlMap still exists at %s", url)
 			}

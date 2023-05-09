@@ -24,20 +24,23 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccFirebaserulesRelease_BasicRelease(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_name":  getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckFirebaserulesReleaseDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckFirebaserulesReleaseDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccFirebaserulesRelease_BasicRelease(context),
@@ -62,14 +65,14 @@ func TestAccFirebaserulesRelease_MinimalRelease(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_name":  getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckFirebaserulesReleaseDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckFirebaserulesReleaseDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccFirebaserulesRelease_MinimalRelease(context),
@@ -190,7 +193,7 @@ func testAccCheckFirebaserulesReleaseDestroyProducer(t *testing.T) func(s *terra
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
 			billingProject := ""
 			if config.BillingProject != "" {
@@ -206,7 +209,7 @@ func testAccCheckFirebaserulesReleaseDestroyProducer(t *testing.T) func(s *terra
 				UpdateTime:  dcl.StringOrNil(rs.Primary.Attributes["update_time"]),
 			}
 
-			client := NewDCLFirebaserulesClient(config, config.userAgent, billingProject, 0)
+			client := transport_tpg.NewDCLFirebaserulesClient(config, config.UserAgent, billingProject, 0)
 			_, err := client.GetRelease(context.Background(), obj)
 			if err == nil {
 				return fmt.Errorf("google_firebaserules_release still exists %v", obj)

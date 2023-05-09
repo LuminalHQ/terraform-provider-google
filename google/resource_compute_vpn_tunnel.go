@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 // validatePeerAddr returns false if a tunnel's peer_ip property
@@ -112,7 +115,7 @@ var invalidPeerAddrs = []struct {
 	},
 }
 
-func getVpnTunnelLink(config *Config, project, region, tunnel, userAgent string) (string, error) {
+func getVpnTunnelLink(config *transport_tpg.Config, project, region, tunnel, userAgent string) (string, error) {
 	if !strings.Contains(tunnel, "/") {
 		// Tunnel value provided is just the name, lookup the tunnel SelfLink
 		tunnelData, err := config.NewComputeClient(userAgent).VpnTunnels.Get(
@@ -127,7 +130,7 @@ func getVpnTunnelLink(config *Config, project, region, tunnel, userAgent string)
 
 }
 
-func resourceComputeVpnTunnel() *schema.Resource {
+func ResourceComputeVpnTunnel() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeVpnTunnelCreate,
 		Read:   resourceComputeVpnTunnelRead,
@@ -313,8 +316,8 @@ This field must reference a 'google_compute_ha_vpn_gateway' resource.`,
 }
 
 func resourceComputeVpnTunnelCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -416,7 +419,7 @@ func resourceComputeVpnTunnelCreate(d *schema.ResourceData, meta interface{}) er
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/vpnTunnels")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/vpnTunnels")
 	if err != nil {
 		return err
 	}
@@ -435,19 +438,19 @@ func resourceComputeVpnTunnelCreate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating VpnTunnel: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating VpnTunnel", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -463,13 +466,13 @@ func resourceComputeVpnTunnelCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeVpnTunnelRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -487,9 +490,9 @@ func resourceComputeVpnTunnelRead(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeVpnTunnel %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeVpnTunnel %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -550,7 +553,7 @@ func resourceComputeVpnTunnelRead(d *schema.ResourceData, meta interface{}) erro
 	if err := d.Set("region", flattenComputeVpnTunnelRegion(res["region"], d, config)); err != nil {
 		return fmt.Errorf("Error reading VpnTunnel: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading VpnTunnel: %s", err)
 	}
 
@@ -558,8 +561,8 @@ func resourceComputeVpnTunnelRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceComputeVpnTunnelDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -572,7 +575,7 @@ func resourceComputeVpnTunnelDelete(d *schema.ResourceData, meta interface{}) er
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -585,12 +588,12 @@ func resourceComputeVpnTunnelDelete(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "VpnTunnel")
+		return transport_tpg.HandleNotFoundError(err, d, "VpnTunnel")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting VpnTunnel", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -603,8 +606,8 @@ func resourceComputeVpnTunnelDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeVpnTunnelImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/vpnTunnels/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -614,7 +617,7 @@ func resourceComputeVpnTunnelImport(d *schema.ResourceData, meta interface{}) ([
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/vpnTunnels/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -623,40 +626,40 @@ func resourceComputeVpnTunnelImport(d *schema.ResourceData, meta interface{}) ([
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeVpnTunnelTunnelId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelTunnelId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelTargetVpnGateway(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelTargetVpnGateway(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeVpnTunnelVpnGateway(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelVpnGateway(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeVpnTunnelVpnGatewayInterface(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelVpnGatewayInterface(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -670,17 +673,17 @@ func flattenComputeVpnTunnelVpnGatewayInterface(v interface{}, d *schema.Resourc
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeVpnTunnelPeerExternalGateway(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelPeerExternalGateway(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeVpnTunnelPeerExternalGatewayInterface(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelPeerExternalGatewayInterface(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -694,32 +697,32 @@ func flattenComputeVpnTunnelPeerExternalGatewayInterface(v interface{}, d *schem
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeVpnTunnelPeerGcpGateway(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelPeerGcpGateway(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeVpnTunnelRouter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelRouter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeVpnTunnelPeerIp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelPeerIp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelSharedSecretHash(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelSharedSecretHash(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelIkeVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelIkeVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -733,40 +736,40 @@ func flattenComputeVpnTunnelIkeVersion(v interface{}, d *schema.ResourceData, co
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeVpnTunnelLocalTrafficSelector(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelLocalTrafficSelector(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeVpnTunnelRemoteTrafficSelector(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelRemoteTrafficSelector(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeVpnTunnelDetailedStatus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelDetailedStatus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeVpnTunnelRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeVpnTunnelRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandComputeVpnTunnelName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelTargetVpnGateway(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelTargetVpnGateway(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("targetVpnGateways", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for target_vpn_gateway: %s", err)
@@ -774,7 +777,7 @@ func expandComputeVpnTunnelTargetVpnGateway(v interface{}, d TerraformResourceDa
 	return f.RelativeLink(), nil
 }
 
-func expandComputeVpnTunnelVpnGateway(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelVpnGateway(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("vpnGateways", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for vpn_gateway: %s", err)
@@ -782,11 +785,11 @@ func expandComputeVpnTunnelVpnGateway(v interface{}, d TerraformResourceData, co
 	return f.RelativeLink(), nil
 }
 
-func expandComputeVpnTunnelVpnGatewayInterface(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelVpnGatewayInterface(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelPeerExternalGateway(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelPeerExternalGateway(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("externalVpnGateways", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for peer_external_gateway: %s", err)
@@ -794,11 +797,11 @@ func expandComputeVpnTunnelPeerExternalGateway(v interface{}, d TerraformResourc
 	return f.RelativeLink(), nil
 }
 
-func expandComputeVpnTunnelPeerExternalGatewayInterface(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelPeerExternalGatewayInterface(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelPeerGcpGateway(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelPeerGcpGateway(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("vpnGateways", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for peer_gcp_gateway: %s", err)
@@ -806,7 +809,7 @@ func expandComputeVpnTunnelPeerGcpGateway(v interface{}, d TerraformResourceData
 	return f.RelativeLink(), nil
 }
 
-func expandComputeVpnTunnelRouter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelRouter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil || v.(string) == "" {
 		return "", nil
 	}
@@ -815,7 +818,7 @@ func expandComputeVpnTunnelRouter(v interface{}, d TerraformResourceData, config
 		return nil, fmt.Errorf("Invalid value for router: %s", err)
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}"+f.RelativeLink())
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}"+f.RelativeLink())
 	if err != nil {
 		return nil, err
 	}
@@ -823,29 +826,29 @@ func expandComputeVpnTunnelRouter(v interface{}, d TerraformResourceData, config
 	return url, nil
 }
 
-func expandComputeVpnTunnelPeerIp(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelPeerIp(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelSharedSecret(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelSharedSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelIkeVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelIkeVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeVpnTunnelLocalTrafficSelector(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelLocalTrafficSelector(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeVpnTunnelRemoteTrafficSelector(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelRemoteTrafficSelector(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeVpnTunnelRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeVpnTunnelRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for region: %s", err)
@@ -854,7 +857,7 @@ func expandComputeVpnTunnelRegion(v interface{}, d TerraformResourceData, config
 }
 
 func resourceComputeVpnTunnelEncoder(d *schema.ResourceData, meta interface{}, obj map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	f, err := parseRegionalFieldValue("targetVpnGateways", d.Get("target_vpn_gateway").(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, err

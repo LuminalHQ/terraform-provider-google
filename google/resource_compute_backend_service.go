@@ -24,6 +24,11 @@ import (
 
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
+
 	"google.golang.org/api/googleapi"
 )
 
@@ -60,7 +65,7 @@ func resourceGoogleComputeBackendServiceBackendHash(v interface{}) int {
 	m := v.(map[string]interface{})
 	log.Printf("[DEBUG] hashing %v", m)
 
-	if group, err := getRelativePath(m["group"].(string)); err != nil {
+	if group, err := tpgresource.GetRelativePath(m["group"].(string)); err != nil {
 		log.Printf("[WARN] Error on retrieving relative path of instance group: %s", err)
 		buf.WriteString(fmt.Sprintf("%s-", m["group"].(string)))
 	} else {
@@ -170,11 +175,11 @@ func resourceGoogleComputeBackendServiceBackendHash(v interface{}) int {
 		buf.WriteString(fmt.Sprintf("%v-", v.(bool)))
 	}
 
-	log.Printf("[DEBUG] computed hash value of %v from %v", hashcode(buf.String()), buf.String())
-	return hashcode(buf.String())
+	log.Printf("[DEBUG] computed hash value of %v from %v", tpgresource.Hashcode(buf.String()), buf.String())
+	return tpgresource.Hashcode(buf.String())
 }
 
-func resourceComputeBackendService() *schema.Resource {
+func ResourceComputeBackendService() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeBackendServiceCreate,
 		Read:   resourceComputeBackendServiceRead,
@@ -231,6 +236,21 @@ When the load balancing scheme is INTERNAL, this field is not used.`,
 				MaxItems:    1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
+						"bypass_cache_on_request_headers": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Description: `Bypass the cache when the specified request headers are matched - e.g. Pragma or Authorization headers. Up to 5 headers can be specified.
+The cache is bypassed for all cdnPolicy.cacheMode settings.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"header_name": {
+										Type:        schema.TypeString,
+										Required:    true,
+										Description: `The header field name to match on when bypassing cache. Values are case-insensitive.`,
+									},
+								},
+							},
+						},
 						"cache_key_policy": {
 							Type:        schema.TypeList,
 							Optional:    true,
@@ -242,7 +262,17 @@ When the load balancing scheme is INTERNAL, this field is not used.`,
 										Type:         schema.TypeBool,
 										Optional:     true,
 										Description:  `If true requests to different hosts will be cached separately.`,
-										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+									},
+									"include_http_headers": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Description: `Allows HTTP request headers (by name) to be used in the
+cache key.`,
+										Elem: &schema.Schema{
+											Type: schema.TypeString,
+										},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
 									},
 									"include_named_cookies": {
 										Type:        schema.TypeList,
@@ -251,13 +281,13 @@ When the load balancing scheme is INTERNAL, this field is not used.`,
 										Elem: &schema.Schema{
 											Type: schema.TypeString,
 										},
-										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
 									},
 									"include_protocol": {
 										Type:         schema.TypeBool,
 										Optional:     true,
 										Description:  `If true, http and https requests will be cached separately.`,
-										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
 									},
 									"include_query_string": {
 										Type:     schema.TypeBool,
@@ -269,7 +299,7 @@ string will be included.
 
 If false, the query string will be excluded from the cache
 key entirely.`,
-										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
 									},
 									"query_string_blacklist": {
 										Type:     schema.TypeSet,
@@ -284,7 +314,7 @@ delimiters.`,
 											Type: schema.TypeString,
 										},
 										Set:          schema.HashString,
-										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
 									},
 									"query_string_whitelist": {
 										Type:     schema.TypeSet,
@@ -299,7 +329,7 @@ delimiters.`,
 											Type: schema.TypeString,
 										},
 										Set:          schema.HashString,
-										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
+										AtLeastOneOf: []string{"cdn_policy.0.cache_key_policy.0.include_host", "cdn_policy.0.cache_key_policy.0.include_protocol", "cdn_policy.0.cache_key_policy.0.include_query_string", "cdn_policy.0.cache_key_policy.0.query_string_blacklist", "cdn_policy.0.cache_key_policy.0.query_string_whitelist", "cdn_policy.0.cache_key_policy.0.include_http_headers", "cdn_policy.0.cache_key_policy.0.include_named_cookies"},
 									},
 								},
 							},
@@ -309,7 +339,7 @@ delimiters.`,
 							Type:         schema.TypeString,
 							Computed:     true,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"USE_ORIGIN_HEADERS", "FORCE_CACHE_ALL", "CACHE_ALL_STATIC", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"USE_ORIGIN_HEADERS", "FORCE_CACHE_ALL", "CACHE_ALL_STATIC", ""}),
 							Description: `Specifies the cache setting for all responses from this backend.
 The possible values are: USE_ORIGIN_HEADERS, FORCE_CACHE_ALL and CACHE_ALL_STATIC Possible values: ["USE_ORIGIN_HEADERS", "FORCE_CACHE_ALL", "CACHE_ALL_STATIC"]`,
 						},
@@ -437,6 +467,12 @@ Defaults to 3.`,
 					},
 				},
 			},
+			"compression_mode": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ValidateFunc: verify.ValidateEnum([]string{"AUTOMATIC", "DISABLED", ""}),
+				Description:  `Compress text responses using Brotli or gzip compression, based on the client's Accept-Encoding header. Possible values: ["AUTOMATIC", "DISABLED"]`,
+			},
 			"connection_draining_timeout_sec": {
 				Type:     schema.TypeInt,
 				Optional: true,
@@ -557,6 +593,12 @@ responses.`,
 				Optional:    true,
 				Description: `An optional description of this resource.`,
 			},
+			"edge_security_policy": {
+				Type:             schema.TypeString,
+				Optional:         true,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
+				Description:      `The resource URL for the edge security policy associated with this backend service.`,
+			},
 			"enable_cdn": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -578,7 +620,7 @@ For internal load balancing, a URL to a HealthCheck resource must be specified i
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
-				Set: selfLinkRelativePathHash,
+				Set: tpgresource.SelfLinkRelativePathHash,
 			},
 			"iap": {
 				Type:        schema.TypeList,
@@ -611,17 +653,114 @@ For internal load balancing, a URL to a HealthCheck resource must be specified i
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"EXTERNAL", "INTERNAL_SELF_MANAGED", "EXTERNAL_MANAGED", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"EXTERNAL", "INTERNAL_SELF_MANAGED", "EXTERNAL_MANAGED", ""}),
 				Description: `Indicates whether the backend service will be used with internal or
 external load balancing. A backend service created for one type of
 load balancing cannot be used with the other. For more information, refer to
 [Choosing a load balancer](https://cloud.google.com/load-balancing/docs/backend-service). Default value: "EXTERNAL" Possible values: ["EXTERNAL", "INTERNAL_SELF_MANAGED", "EXTERNAL_MANAGED"]`,
 				Default: "EXTERNAL",
 			},
+			"locality_lb_policies": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Description: `A list of locality load balancing policies to be used in order of
+preference. Either the policy or the customPolicy field should be set.
+Overrides any value set in the localityLbPolicy field.
+
+localityLbPolicies is only supported when the BackendService is referenced
+by a URL Map that is referenced by a target gRPC proxy that has the
+validateForProxyless field set to true.`,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"custom_policy": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Description: `The configuration for a custom policy implemented by the user and
+deployed with the client.`,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:     schema.TypeString,
+										Required: true,
+										Description: `Identifies the custom policy.
+
+The value should match the type the custom implementation is registered
+with on the gRPC clients. It should follow protocol buffer
+message naming conventions and include the full path (e.g.
+myorg.CustomLbPolicy). The maximum length is 256 characters.
+
+Note that specifying the same custom policy more than once for a
+backend is not a valid configuration and will be rejected.`,
+									},
+									"data": {
+										Type:     schema.TypeString,
+										Optional: true,
+										Description: `An optional, arbitrary JSON object with configuration data, understood
+by a locally installed custom policy implementation.`,
+									},
+								},
+							},
+							ExactlyOneOf: []string{},
+						},
+						"policy": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: `The configuration for a built-in load balancing policy.`,
+							MaxItems:    1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:         schema.TypeString,
+										Required:     true,
+										ValidateFunc: verify.ValidateEnum([]string{"ROUND_ROBIN", "LEAST_REQUEST", "RING_HASH", "RANDOM", "ORIGINAL_DESTINATION", "MAGLEV"}),
+										Description: `The name of a locality load balancer policy to be used. The value
+should be one of the predefined ones as supported by localityLbPolicy,
+although at the moment only ROUND_ROBIN is supported.
+
+This field should only be populated when the customPolicy field is not
+used.
+
+Note that specifying the same policy more than once for a backend is
+not a valid configuration and will be rejected.
+
+The possible values are:
+
+* 'ROUND_ROBIN': This is a simple policy in which each healthy backend
+                is selected in round robin order.
+
+* 'LEAST_REQUEST': An O(1) algorithm which selects two random healthy
+                  hosts and picks the host which has fewer active requests.
+
+* 'RING_HASH': The ring/modulo hash load balancer implements consistent
+              hashing to backends. The algorithm has the property that the
+              addition/removal of a host from a set of N hosts only affects
+              1/N of the requests.
+
+* 'RANDOM': The load balancer selects a random healthy host.
+
+* 'ORIGINAL_DESTINATION': Backend host is selected based on the client
+                          connection metadata, i.e., connections are opened
+                          to the same address as the destination address of
+                          the incoming connection before the connection
+                          was redirected to the load balancer.
+
+* 'MAGLEV': used as a drop in replacement for the ring hash load balancer.
+            Maglev is not as stable as ring hash but has faster table lookup
+            build times and host selection times. For more information about
+            Maglev, refer to https://ai.google/research/pubs/pub44824 Possible values: ["ROUND_ROBIN", "LEAST_REQUEST", "RING_HASH", "RANDOM", "ORIGINAL_DESTINATION", "MAGLEV"]`,
+									},
+								},
+							},
+							ExactlyOneOf: []string{},
+						},
+					},
+				},
+			},
 			"locality_lb_policy": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"ROUND_ROBIN", "LEAST_REQUEST", "RING_HASH", "RANDOM", "ORIGINAL_DESTINATION", "MAGLEV", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ROUND_ROBIN", "LEAST_REQUEST", "RING_HASH", "RANDOM", "ORIGINAL_DESTINATION", "MAGLEV", "WEIGHTED_MAGLEV", ""}),
 				Description: `The load balancing algorithm used within the scope of the locality.
 The possible values are:
 
@@ -649,20 +788,36 @@ The possible values are:
             build times and host selection times. For more information about
             Maglev, refer to https://ai.google/research/pubs/pub44824
 
+* 'WEIGHTED_MAGLEV': Per-instance weighted Load Balancing via health check
+                     reported weights. If set, the Backend Service must
+                     configure a non legacy HTTP-based Health Check, and
+                     health check replies are expected to contain
+                     non-standard HTTP response header field
+                     X-Load-Balancing-Endpoint-Weight to specify the
+                     per-instance weights. If set, Load Balancing is weight
+                     based on the per-instance weights reported in the last
+                     processed health check replies, as long as every
+                     instance either reported a valid weight or had
+                     UNAVAILABLE_WEIGHT. Otherwise, Load Balancing remains
+                     equal-weight.
+
 
 This field is applicable to either:
 
 * A regional backend service with the service_protocol set to HTTP, HTTPS, or HTTP2,
   and loadBalancingScheme set to INTERNAL_MANAGED.
 * A global backend service with the load_balancing_scheme set to INTERNAL_SELF_MANAGED.
+* A regional backend service with loadBalancingScheme set to EXTERNAL (External Network
+  Load Balancing). Only MAGLEV and WEIGHTED_MAGLEV values are possible for External
+  Network Load Balancing. The default is MAGLEV.
 
 
-If session_affinity is not NONE, and this field is not set to MAGLEV or RING_HASH,
-session affinity settings will not take effect.
+If session_affinity is not NONE, and this field is not set to MAGLEV, WEIGHTED_MAGLEV,
+or RING_HASH, session affinity settings will not take effect.
 
 Only ROUND_ROBIN and RING_HASH are supported when the backend service is referenced
 by a URL map that is bound to target gRPC proxy that has validate_for_proxyless
-field set to true. Possible values: ["ROUND_ROBIN", "LEAST_REQUEST", "RING_HASH", "RANDOM", "ORIGINAL_DESTINATION", "MAGLEV"]`,
+field set to true. Possible values: ["ROUND_ROBIN", "LEAST_REQUEST", "RING_HASH", "RANDOM", "ORIGINAL_DESTINATION", "MAGLEV", "WEIGHTED_MAGLEV"]`,
 			},
 			"log_config": {
 				Type:     schema.TypeList,
@@ -853,7 +1008,7 @@ scheme is EXTERNAL.`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"HTTP", "HTTPS", "HTTP2", "TCP", "SSL", "GRPC", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"HTTP", "HTTPS", "HTTP2", "TCP", "SSL", "GRPC", ""}),
 				Description: `The protocol this BackendService uses to communicate with backends.
 The default is HTTP. **NOTE**: HTTP2 is only valid for beta HTTP/2 load balancer
 types and may result in errors if used with the GA API. Possible values: ["HTTP", "HTTPS", "HTTP2", "TCP", "SSL", "GRPC"]`,
@@ -861,7 +1016,7 @@ types and may result in errors if used with the GA API. Possible values: ["HTTP"
 			"security_policy": {
 				Type:             schema.TypeString,
 				Optional:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `The security policy associated with this backend service.`,
 			},
 			"security_settings": {
@@ -899,7 +1054,7 @@ alt name matches one of the specified values.`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"NONE", "CLIENT_IP", "CLIENT_IP_PORT_PROTO", "CLIENT_IP_PROTO", "GENERATED_COOKIE", "HEADER_FIELD", "HTTP_COOKIE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NONE", "CLIENT_IP", "CLIENT_IP_PORT_PROTO", "CLIENT_IP_PROTO", "GENERATED_COOKIE", "HEADER_FIELD", "HTTP_COOKIE", ""}),
 				Description: `Type of session affinity to use. The default is NONE. Session affinity is
 not applicable if the protocol is UDP. Possible values: ["NONE", "CLIENT_IP", "CLIENT_IP_PORT_PROTO", "CLIENT_IP_PROTO", "GENERATED_COOKIE", "HEADER_FIELD", "HTTP_COOKIE"]`,
 			},
@@ -920,6 +1075,11 @@ failed request. Default is 30 seconds. Valid range is [1, 86400].`,
 				Computed: true,
 				Description: `Fingerprint of this resource. A hash of the contents stored in this
 object. This field is used in optimistic locking.`,
+			},
+			"generated_id": {
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: `The unique identifier for the resource. This identifier is defined by the server.`,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -942,7 +1102,7 @@ func computeBackendServiceBackendSchema() *schema.Resource {
 			"group": {
 				Type:             schema.TypeString,
 				Required:         true,
-				DiffSuppressFunc: compareSelfLinkRelativePaths,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 				Description: `The fully-qualified URL of an Instance Group or Network Endpoint
 Group resource. In case of instance group this defines the list
 of instances that serve traffic. Member virtual machine
@@ -964,7 +1124,7 @@ partial URL.`,
 			"balancing_mode": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"UTILIZATION", "RATE", "CONNECTION", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"UTILIZATION", "RATE", "CONNECTION", ""}),
 				Description: `Specifies the balancing mode for this backend.
 
 For global HTTP(S) or TCP/SSL load balancing, the default is
@@ -1069,8 +1229,8 @@ CPU utilization target for the group. Valid range is [0.0, 1.0].`,
 }
 
 func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1093,6 +1253,12 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 		return err
 	} else if v, ok := d.GetOkExists("circuit_breakers"); !isEmptyValue(reflect.ValueOf(circuitBreakersProp)) && (ok || !reflect.DeepEqual(v, circuitBreakersProp)) {
 		obj["circuitBreakers"] = circuitBreakersProp
+	}
+	compressionModeProp, err := expandComputeBackendServiceCompressionMode(d.Get("compression_mode"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("compression_mode"); !isEmptyValue(reflect.ValueOf(compressionModeProp)) && (ok || !reflect.DeepEqual(v, compressionModeProp)) {
+		obj["compressionMode"] = compressionModeProp
 	}
 	consistentHashProp, err := expandComputeBackendServiceConsistentHash(d.Get("consistent_hash"), d, config)
 	if err != nil {
@@ -1166,6 +1332,12 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 	} else if v, ok := d.GetOkExists("locality_lb_policy"); !isEmptyValue(reflect.ValueOf(localityLbPolicyProp)) && (ok || !reflect.DeepEqual(v, localityLbPolicyProp)) {
 		obj["localityLbPolicy"] = localityLbPolicyProp
 	}
+	localityLbPoliciesProp, err := expandComputeBackendServiceLocalityLbPolicies(d.Get("locality_lb_policies"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("locality_lb_policies"); !isEmptyValue(reflect.ValueOf(localityLbPoliciesProp)) && (ok || !reflect.DeepEqual(v, localityLbPoliciesProp)) {
+		obj["localityLbPolicies"] = localityLbPoliciesProp
+	}
 	nameProp, err := expandComputeBackendServiceName(d.Get("name"), d, config)
 	if err != nil {
 		return err
@@ -1195,6 +1367,12 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 		return err
 	} else if v, ok := d.GetOkExists("security_policy"); !isEmptyValue(reflect.ValueOf(securityPolicyProp)) && (ok || !reflect.DeepEqual(v, securityPolicyProp)) {
 		obj["securityPolicy"] = securityPolicyProp
+	}
+	edgeSecurityPolicyProp, err := expandComputeBackendServiceEdgeSecurityPolicy(d.Get("edge_security_policy"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("edge_security_policy"); !isEmptyValue(reflect.ValueOf(edgeSecurityPolicyProp)) && (ok || !reflect.DeepEqual(v, edgeSecurityPolicyProp)) {
+		obj["edgeSecurityPolicy"] = edgeSecurityPolicyProp
 	}
 	securitySettingsProp, err := expandComputeBackendServiceSecuritySettings(d.Get("security_settings"), d, config)
 	if err != nil {
@@ -1226,7 +1404,7 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices")
 	if err != nil {
 		return err
 	}
@@ -1245,19 +1423,19 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating BackendService: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/backendServices/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/backendServices/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating BackendService", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -1281,7 +1459,26 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 			return errwrap.Wrapf("Error setting Backend Service security policy: {{err}}", err)
 		}
 		// This uses the create timeout for simplicity, though technically this code appears in both create and update
-		waitErr := computeOperationWaitTime(config, op, project, "Setting Backend Service Security Policy", userAgent, d.Timeout(schema.TimeoutCreate))
+		waitErr := ComputeOperationWaitTime(config, op, project, "Setting Backend Service Security Policy", userAgent, d.Timeout(schema.TimeoutCreate))
+		if waitErr != nil {
+			return waitErr
+		}
+	}
+	// edge security_policy isn't set by Create / Update
+	if o, n := d.GetChange("edge_security_policy"); o.(string) != n.(string) {
+		pol, err := ParseSecurityPolicyFieldValue(n.(string), d, config)
+		if err != nil {
+			return errwrap.Wrapf("Error parsing Backend Service edge security policy: {{err}}", err)
+		}
+
+		spr := emptySecurityPolicyReference()
+		spr.SecurityPolicy = pol.RelativeLink()
+		op, err := config.NewComputeClient(userAgent).BackendServices.SetEdgeSecurityPolicy(project, obj["name"].(string), spr).Do()
+		if err != nil {
+			return errwrap.Wrapf("Error setting Backend Service edge security policy: {{err}}", err)
+		}
+		// This uses the create timeout for simplicity, though technically this code appears in both create and update
+		waitErr := ComputeOperationWaitTime(config, op, project, "Setting Backend Service Edge Security Policy", userAgent, d.Timeout(schema.TimeoutCreate))
 		if waitErr != nil {
 			return waitErr
 		}
@@ -1293,13 +1490,13 @@ func resourceComputeBackendServiceCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1317,9 +1514,9 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeBackendService %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeBackendService %q", d.Id()))
 	}
 
 	res, err = resourceComputeBackendServiceDecoder(d, meta, res)
@@ -1345,6 +1542,9 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
 	if err := d.Set("circuit_breakers", flattenComputeBackendServiceCircuitBreakers(res["circuitBreakers"], d, config)); err != nil {
+		return fmt.Errorf("Error reading BackendService: %s", err)
+	}
+	if err := d.Set("compression_mode", flattenComputeBackendServiceCompressionMode(res["compressionMode"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
 	if err := d.Set("consistent_hash", flattenComputeBackendServiceConsistentHash(res["consistentHash"], d, config)); err != nil {
@@ -1389,6 +1589,9 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("health_checks", flattenComputeBackendServiceHealthChecks(res["healthChecks"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
+	if err := d.Set("generated_id", flattenComputeBackendServiceGeneratedId(res["id"], d, config)); err != nil {
+		return fmt.Errorf("Error reading BackendService: %s", err)
+	}
 	if err := d.Set("iap", flattenComputeBackendServiceIap(res["iap"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
@@ -1396,6 +1599,9 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
 	if err := d.Set("locality_lb_policy", flattenComputeBackendServiceLocalityLbPolicy(res["localityLbPolicy"], d, config)); err != nil {
+		return fmt.Errorf("Error reading BackendService: %s", err)
+	}
+	if err := d.Set("locality_lb_policies", flattenComputeBackendServiceLocalityLbPolicies(res["localityLbPolicies"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
 	if err := d.Set("name", flattenComputeBackendServiceName(res["name"], d, config)); err != nil {
@@ -1413,6 +1619,9 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("security_policy", flattenComputeBackendServiceSecurityPolicy(res["securityPolicy"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
+	if err := d.Set("edge_security_policy", flattenComputeBackendServiceEdgeSecurityPolicy(res["edgeSecurityPolicy"], d, config)); err != nil {
+		return fmt.Errorf("Error reading BackendService: %s", err)
+	}
 	if err := d.Set("security_settings", flattenComputeBackendServiceSecuritySettings(res["securitySettings"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
@@ -1425,7 +1634,7 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("log_config", flattenComputeBackendServiceLogConfig(res["logConfig"], d, config)); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading BackendService: %s", err)
 	}
 
@@ -1433,8 +1642,8 @@ func resourceComputeBackendServiceRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1465,6 +1674,12 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 		return err
 	} else if v, ok := d.GetOkExists("circuit_breakers"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, circuitBreakersProp)) {
 		obj["circuitBreakers"] = circuitBreakersProp
+	}
+	compressionModeProp, err := expandComputeBackendServiceCompressionMode(d.Get("compression_mode"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("compression_mode"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, compressionModeProp)) {
+		obj["compressionMode"] = compressionModeProp
 	}
 	consistentHashProp, err := expandComputeBackendServiceConsistentHash(d.Get("consistent_hash"), d, config)
 	if err != nil {
@@ -1538,6 +1753,12 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 	} else if v, ok := d.GetOkExists("locality_lb_policy"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, localityLbPolicyProp)) {
 		obj["localityLbPolicy"] = localityLbPolicyProp
 	}
+	localityLbPoliciesProp, err := expandComputeBackendServiceLocalityLbPolicies(d.Get("locality_lb_policies"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("locality_lb_policies"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, localityLbPoliciesProp)) {
+		obj["localityLbPolicies"] = localityLbPoliciesProp
+	}
 	nameProp, err := expandComputeBackendServiceName(d.Get("name"), d, config)
 	if err != nil {
 		return err
@@ -1567,6 +1788,12 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 		return err
 	} else if v, ok := d.GetOkExists("security_policy"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, securityPolicyProp)) {
 		obj["securityPolicy"] = securityPolicyProp
+	}
+	edgeSecurityPolicyProp, err := expandComputeBackendServiceEdgeSecurityPolicy(d.Get("edge_security_policy"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("edge_security_policy"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, edgeSecurityPolicyProp)) {
+		obj["edgeSecurityPolicy"] = edgeSecurityPolicyProp
 	}
 	securitySettingsProp, err := expandComputeBackendServiceSecuritySettings(d.Get("security_settings"), d, config)
 	if err != nil {
@@ -1598,7 +1825,7 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1610,7 +1837,7 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating BackendService %q: %s", d.Id(), err)
@@ -1618,7 +1845,7 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 		log.Printf("[DEBUG] Finished updating BackendService %q: %#v", d.Id(), res)
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Updating BackendService", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -1640,7 +1867,26 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 			return errwrap.Wrapf("Error setting Backend Service security policy: {{err}}", err)
 		}
 		// This uses the create timeout for simplicity, though technically this code appears in both create and update
-		waitErr := computeOperationWaitTime(config, op, project, "Setting Backend Service Security Policy", userAgent, d.Timeout(schema.TimeoutCreate))
+		waitErr := ComputeOperationWaitTime(config, op, project, "Setting Backend Service Security Policy", userAgent, d.Timeout(schema.TimeoutCreate))
+		if waitErr != nil {
+			return waitErr
+		}
+	}
+	// edge security_policy isn't set by Create / Update
+	if o, n := d.GetChange("edge_security_policy"); o.(string) != n.(string) {
+		pol, err := ParseSecurityPolicyFieldValue(n.(string), d, config)
+		if err != nil {
+			return errwrap.Wrapf("Error parsing Backend Service edge security policy: {{err}}", err)
+		}
+
+		spr := emptySecurityPolicyReference()
+		spr.SecurityPolicy = pol.RelativeLink()
+		op, err := config.NewComputeClient(userAgent).BackendServices.SetEdgeSecurityPolicy(project, obj["name"].(string), spr).Do()
+		if err != nil {
+			return errwrap.Wrapf("Error setting Backend Service edge security policy: {{err}}", err)
+		}
+		// This uses the create timeout for simplicity, though technically this code appears in both create and update
+		waitErr := ComputeOperationWaitTime(config, op, project, "Setting Backend Service Edge Security Policy", userAgent, d.Timeout(schema.TimeoutCreate))
 		if waitErr != nil {
 			return waitErr
 		}
@@ -1649,8 +1895,8 @@ func resourceComputeBackendServiceUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeBackendServiceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1663,7 +1909,7 @@ func resourceComputeBackendServiceDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/backendServices/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1676,12 +1922,12 @@ func resourceComputeBackendServiceDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "BackendService")
+		return transport_tpg.HandleNotFoundError(err, d, "BackendService")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting BackendService", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -1694,8 +1940,8 @@ func resourceComputeBackendServiceDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeBackendServiceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/backendServices/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -1704,7 +1950,7 @@ func resourceComputeBackendServiceImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/backendServices/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/backendServices/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -1713,10 +1959,10 @@ func resourceComputeBackendServiceImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeBackendServiceAffinityCookieTtlSec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceAffinityCookieTtlSec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1730,7 +1976,7 @@ func flattenComputeBackendServiceAffinityCookieTtlSec(v interface{}, d *schema.R
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceBackend(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackend(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1758,29 +2004,29 @@ func flattenComputeBackendServiceBackend(v interface{}, d *schema.ResourceData, 
 	}
 	return transformed
 }
-func flattenComputeBackendServiceBackendBalancingMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendBalancingMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceBackendCapacityScaler(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendCapacityScaler(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceBackendDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceBackendGroup(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendGroup(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeBackendServiceBackendMaxConnections(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxConnections(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1794,10 +2040,10 @@ func flattenComputeBackendServiceBackendMaxConnections(v interface{}, d *schema.
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceBackendMaxConnectionsPerInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxConnectionsPerInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1811,10 +2057,10 @@ func flattenComputeBackendServiceBackendMaxConnectionsPerInstance(v interface{},
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceBackendMaxConnectionsPerEndpoint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxConnectionsPerEndpoint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1828,10 +2074,10 @@ func flattenComputeBackendServiceBackendMaxConnectionsPerEndpoint(v interface{},
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceBackendMaxRate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxRate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1845,19 +2091,19 @@ func flattenComputeBackendServiceBackendMaxRate(v interface{}, d *schema.Resourc
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceBackendMaxRatePerInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxRatePerInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceBackendMaxRatePerEndpoint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxRatePerEndpoint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceBackendMaxUtilization(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceBackendMaxUtilization(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCircuitBreakers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCircuitBreakers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1878,10 +2124,10 @@ func flattenComputeBackendServiceCircuitBreakers(v interface{}, d *schema.Resour
 		flattenComputeBackendServiceCircuitBreakersMaxRetries(original["maxRetries"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceCircuitBreakersMaxRequestsPerConnection(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCircuitBreakersMaxRequestsPerConnection(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1895,10 +2141,10 @@ func flattenComputeBackendServiceCircuitBreakersMaxRequestsPerConnection(v inter
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCircuitBreakersMaxConnections(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCircuitBreakersMaxConnections(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1912,10 +2158,10 @@ func flattenComputeBackendServiceCircuitBreakersMaxConnections(v interface{}, d 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCircuitBreakersMaxPendingRequests(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCircuitBreakersMaxPendingRequests(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1929,10 +2175,10 @@ func flattenComputeBackendServiceCircuitBreakersMaxPendingRequests(v interface{}
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCircuitBreakersMaxRequests(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCircuitBreakersMaxRequests(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1946,10 +2192,10 @@ func flattenComputeBackendServiceCircuitBreakersMaxRequests(v interface{}, d *sc
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCircuitBreakersMaxRetries(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCircuitBreakersMaxRetries(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1963,7 +2209,11 @@ func flattenComputeBackendServiceCircuitBreakersMaxRetries(v interface{}, d *sch
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceConsistentHash(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCompressionMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceConsistentHash(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1980,7 +2230,7 @@ func flattenComputeBackendServiceConsistentHash(v interface{}, d *schema.Resourc
 		flattenComputeBackendServiceConsistentHashMinimumRingSize(original["minimumRingSize"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceConsistentHashHttpCookie(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpCookie(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1997,7 +2247,7 @@ func flattenComputeBackendServiceConsistentHashHttpCookie(v interface{}, d *sche
 		flattenComputeBackendServiceConsistentHashHttpCookiePath(original["path"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceConsistentHashHttpCookieTtl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpCookieTtl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2012,10 +2262,10 @@ func flattenComputeBackendServiceConsistentHashHttpCookieTtl(v interface{}, d *s
 		flattenComputeBackendServiceConsistentHashHttpCookieTtlNanos(original["nanos"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceConsistentHashHttpCookieTtlSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpCookieTtlSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2029,10 +2279,10 @@ func flattenComputeBackendServiceConsistentHashHttpCookieTtlSeconds(v interface{
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceConsistentHashHttpCookieTtlNanos(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpCookieTtlNanos(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2046,22 +2296,22 @@ func flattenComputeBackendServiceConsistentHashHttpCookieTtlNanos(v interface{},
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceConsistentHashHttpCookieName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpCookieName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceConsistentHashHttpCookiePath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpCookiePath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceConsistentHashHttpHeaderName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashHttpHeaderName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceConsistentHashMinimumRingSize(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConsistentHashMinimumRingSize(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2075,7 +2325,7 @@ func flattenComputeBackendServiceConsistentHashMinimumRingSize(v interface{}, d 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCdnPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2102,9 +2352,11 @@ func flattenComputeBackendServiceCdnPolicy(v interface{}, d *schema.ResourceData
 		flattenComputeBackendServiceCdnPolicyCacheMode(original["cacheMode"], d, config)
 	transformed["serve_while_stale"] =
 		flattenComputeBackendServiceCdnPolicyServeWhileStale(original["serveWhileStale"], d, config)
+	transformed["bypass_cache_on_request_headers"] =
+		flattenComputeBackendServiceCdnPolicyBypassCacheOnRequestHeaders(original["bypassCacheOnRequestHeaders"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2123,113 +2375,119 @@ func flattenComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d *schem
 		flattenComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringBlacklist(original["queryStringBlacklist"], d, config)
 	transformed["query_string_whitelist"] =
 		flattenComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringWhitelist(original["queryStringWhitelist"], d, config)
+	transformed["include_http_headers"] =
+		flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHttpHeaders(original["includeHttpHeaders"], d, config)
 	transformed["include_named_cookies"] =
 		flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeNamedCookies(original["includeNamedCookies"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHost(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHost(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeProtocol(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeProtocol(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeQueryString(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeQueryString(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringBlacklist(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringBlacklist(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringWhitelist(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringWhitelist(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeNamedCookies(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHttpHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCdnPolicySignedUrlCacheMaxAgeSec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	// Handles the string fixed64 format
-	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
-			return intVal
-		}
-	}
-
-	// number values are represented as float64
-	if floatVal, ok := v.(float64); ok {
-		intVal := int(floatVal)
-		return intVal
-	}
-
-	return v // let terraform core handle it otherwise
-}
-
-func flattenComputeBackendServiceCdnPolicyDefaultTtl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	// Handles the string fixed64 format
-	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
-			return intVal
-		}
-	}
-
-	// number values are represented as float64
-	if floatVal, ok := v.(float64); ok {
-		intVal := int(floatVal)
-		return intVal
-	}
-
-	return v // let terraform core handle it otherwise
-}
-
-func flattenComputeBackendServiceCdnPolicyMaxTtl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	// Handles the string fixed64 format
-	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
-			return intVal
-		}
-	}
-
-	// number values are represented as float64
-	if floatVal, ok := v.(float64); ok {
-		intVal := int(floatVal)
-		return intVal
-	}
-
-	return v // let terraform core handle it otherwise
-}
-
-func flattenComputeBackendServiceCdnPolicyClientTtl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	// Handles the string fixed64 format
-	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
-			return intVal
-		}
-	}
-
-	// number values are represented as float64
-	if floatVal, ok := v.(float64); ok {
-		intVal := int(floatVal)
-		return intVal
-	}
-
-	return v // let terraform core handle it otherwise
-}
-
-func flattenComputeBackendServiceCdnPolicyNegativeCaching(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeNamedCookies(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicySignedUrlCacheMaxAgeSec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenComputeBackendServiceCdnPolicyDefaultTtl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenComputeBackendServiceCdnPolicyMaxTtl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenComputeBackendServiceCdnPolicyClientTtl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenComputeBackendServiceCdnPolicyNegativeCaching(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -2248,10 +2506,10 @@ func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicy(v interface{}, d
 	}
 	return transformed
 }
-func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicyCode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicyCode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2265,10 +2523,10 @@ func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicyCode(v interface{
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicyTtl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicyTtl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2282,14 +2540,14 @@ func flattenComputeBackendServiceCdnPolicyNegativeCachingPolicyTtl(v interface{}
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCdnPolicyCacheMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyCacheMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCdnPolicyServeWhileStale(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyServeWhileStale(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2303,7 +2561,29 @@ func flattenComputeBackendServiceCdnPolicyServeWhileStale(v interface{}, d *sche
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceConnectionDraining(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCdnPolicyBypassCacheOnRequestHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"header_name": flattenComputeBackendServiceCdnPolicyBypassCacheOnRequestHeadersHeaderName(original["headerName"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenComputeBackendServiceCdnPolicyBypassCacheOnRequestHeadersHeaderName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceConnectionDraining(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2316,10 +2596,10 @@ func flattenComputeBackendServiceConnectionDraining(v interface{}, d *schema.Res
 		flattenComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(original["drainingTimeoutSec"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2333,44 +2613,61 @@ func flattenComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceCustomRequestHeaders(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCustomRequestHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeBackendServiceCustomResponseHeaders(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceCustomResponseHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeBackendServiceFingerprint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceFingerprint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceEnableCDN(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceEnableCDN(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceHealthChecks(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceHealthChecks(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return convertAndMapStringArr(v.([]interface{}), ConvertSelfLinkToV1)
+	return convertAndMapStringArr(v.([]interface{}), tpgresource.ConvertSelfLinkToV1)
 }
 
-func flattenComputeBackendServiceIap(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceGeneratedId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenComputeBackendServiceIap(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2387,31 +2684,90 @@ func flattenComputeBackendServiceIap(v interface{}, d *schema.ResourceData, conf
 		flattenComputeBackendServiceIapOauth2ClientSecretSha256(original["oauth2ClientSecretSha256"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceIapOauth2ClientId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceIapOauth2ClientId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceIapOauth2ClientSecret(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceIapOauth2ClientSecret(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return d.Get("iap.0.oauth2_client_secret")
 }
 
-func flattenComputeBackendServiceIapOauth2ClientSecretSha256(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceIapOauth2ClientSecretSha256(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceLoadBalancingScheme(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLoadBalancingScheme(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceLocalityLbPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLocalityLbPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLocalityLbPolicies(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"policy":        flattenComputeBackendServiceLocalityLbPoliciesPolicy(original["policy"], d, config),
+			"custom_policy": flattenComputeBackendServiceLocalityLbPoliciesCustomPolicy(original["customPolicy"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenComputeBackendServiceLocalityLbPoliciesPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["name"] =
+		flattenComputeBackendServiceLocalityLbPoliciesPolicyName(original["name"], d, config)
+	return []interface{}{transformed}
+}
+func flattenComputeBackendServiceLocalityLbPoliciesPolicyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceOutlierDetection(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLocalityLbPoliciesCustomPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["name"] =
+		flattenComputeBackendServiceLocalityLbPoliciesCustomPolicyName(original["name"], d, config)
+	transformed["data"] =
+		flattenComputeBackendServiceLocalityLbPoliciesCustomPolicyData(original["data"], d, config)
+	return []interface{}{transformed}
+}
+func flattenComputeBackendServiceLocalityLbPoliciesCustomPolicyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceLocalityLbPoliciesCustomPolicyData(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceOutlierDetection(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2444,7 +2800,7 @@ func flattenComputeBackendServiceOutlierDetection(v interface{}, d *schema.Resou
 		flattenComputeBackendServiceOutlierDetectionSuccessRateStdevFactor(original["successRateStdevFactor"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceOutlierDetectionBaseEjectionTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionBaseEjectionTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2459,10 +2815,10 @@ func flattenComputeBackendServiceOutlierDetectionBaseEjectionTime(v interface{},
 		flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeNanos(original["nanos"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2476,10 +2832,10 @@ func flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeSeconds(v inter
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeNanos(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeNanos(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2493,10 +2849,10 @@ func flattenComputeBackendServiceOutlierDetectionBaseEjectionTimeNanos(v interfa
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionConsecutiveErrors(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionConsecutiveErrors(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2510,10 +2866,10 @@ func flattenComputeBackendServiceOutlierDetectionConsecutiveErrors(v interface{}
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionConsecutiveGatewayFailure(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionConsecutiveGatewayFailure(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2527,10 +2883,10 @@ func flattenComputeBackendServiceOutlierDetectionConsecutiveGatewayFailure(v int
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionEnforcingConsecutiveErrors(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionEnforcingConsecutiveErrors(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2544,10 +2900,10 @@ func flattenComputeBackendServiceOutlierDetectionEnforcingConsecutiveErrors(v in
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionEnforcingConsecutiveGatewayFailure(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionEnforcingConsecutiveGatewayFailure(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2561,10 +2917,10 @@ func flattenComputeBackendServiceOutlierDetectionEnforcingConsecutiveGatewayFail
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionEnforcingSuccessRate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionEnforcingSuccessRate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2578,7 +2934,7 @@ func flattenComputeBackendServiceOutlierDetectionEnforcingSuccessRate(v interfac
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionInterval(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionInterval(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2593,10 +2949,10 @@ func flattenComputeBackendServiceOutlierDetectionInterval(v interface{}, d *sche
 		flattenComputeBackendServiceOutlierDetectionIntervalNanos(original["nanos"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceOutlierDetectionIntervalSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionIntervalSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2610,10 +2966,10 @@ func flattenComputeBackendServiceOutlierDetectionIntervalSeconds(v interface{}, 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionIntervalNanos(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionIntervalNanos(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2627,10 +2983,10 @@ func flattenComputeBackendServiceOutlierDetectionIntervalNanos(v interface{}, d 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionMaxEjectionPercent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionMaxEjectionPercent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2644,10 +3000,10 @@ func flattenComputeBackendServiceOutlierDetectionMaxEjectionPercent(v interface{
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionSuccessRateMinimumHosts(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionSuccessRateMinimumHosts(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2661,10 +3017,10 @@ func flattenComputeBackendServiceOutlierDetectionSuccessRateMinimumHosts(v inter
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionSuccessRateRequestVolume(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionSuccessRateRequestVolume(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2678,10 +3034,10 @@ func flattenComputeBackendServiceOutlierDetectionSuccessRateRequestVolume(v inte
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceOutlierDetectionSuccessRateStdevFactor(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceOutlierDetectionSuccessRateStdevFactor(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2695,19 +3051,23 @@ func flattenComputeBackendServiceOutlierDetectionSuccessRateStdevFactor(v interf
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServicePortName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServicePortName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceProtocol(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceProtocol(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceSecurityPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceSecurityPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceSecuritySettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceEdgeSecurityPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeBackendServiceSecuritySettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2722,25 +3082,25 @@ func flattenComputeBackendServiceSecuritySettings(v interface{}, d *schema.Resou
 		flattenComputeBackendServiceSecuritySettingsSubjectAltNames(original["subjectAltNames"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceSecuritySettingsClientTlsPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceSecuritySettingsClientTlsPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeBackendServiceSecuritySettingsSubjectAltNames(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceSecuritySettingsSubjectAltNames(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceSessionAffinity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceSessionAffinity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceTimeoutSec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceTimeoutSec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2754,7 +3114,7 @@ func flattenComputeBackendServiceTimeoutSec(v interface{}, d *schema.ResourceDat
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeBackendServiceLogConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLogConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2769,19 +3129,19 @@ func flattenComputeBackendServiceLogConfig(v interface{}, d *schema.ResourceData
 		flattenComputeBackendServiceLogConfigSampleRate(original["sampleRate"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeBackendServiceLogConfigEnable(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLogConfigEnable(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeBackendServiceLogConfigSampleRate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeBackendServiceLogConfigSampleRate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeBackendServiceAffinityCookieTtlSec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceAffinityCookieTtlSec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackend(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackend(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -2874,51 +3234,51 @@ func expandComputeBackendServiceBackend(v interface{}, d TerraformResourceData, 
 	return req, nil
 }
 
-func expandComputeBackendServiceBackendBalancingMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendBalancingMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendCapacityScaler(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendCapacityScaler(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendGroup(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendGroup(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxConnections(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxConnections(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxConnectionsPerInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxConnectionsPerInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxConnectionsPerEndpoint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxConnectionsPerEndpoint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxRate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxRate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxRatePerInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxRatePerInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxRatePerEndpoint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxRatePerEndpoint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceBackendMaxUtilization(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceBackendMaxUtilization(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCircuitBreakers(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCircuitBreakers(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2965,27 +3325,31 @@ func expandComputeBackendServiceCircuitBreakers(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandComputeBackendServiceCircuitBreakersMaxRequestsPerConnection(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCircuitBreakersMaxRequestsPerConnection(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCircuitBreakersMaxConnections(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCircuitBreakersMaxConnections(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCircuitBreakersMaxPendingRequests(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCircuitBreakersMaxPendingRequests(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCircuitBreakersMaxRequests(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCircuitBreakersMaxRequests(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCircuitBreakersMaxRetries(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCircuitBreakersMaxRetries(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConsistentHash(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCompressionMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceConsistentHash(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3018,7 +3382,7 @@ func expandComputeBackendServiceConsistentHash(v interface{}, d TerraformResourc
 	return transformed, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpCookie(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpCookie(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3051,7 +3415,7 @@ func expandComputeBackendServiceConsistentHashHttpCookie(v interface{}, d Terraf
 	return transformed, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpCookieTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpCookieTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3077,31 +3441,31 @@ func expandComputeBackendServiceConsistentHashHttpCookieTtl(v interface{}, d Ter
 	return transformed, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpCookieTtlSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpCookieTtlSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpCookieTtlNanos(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpCookieTtlNanos(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpCookieName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpCookieName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpCookiePath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpCookiePath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConsistentHashHttpHeaderName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashHttpHeaderName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConsistentHashMinimumRingSize(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConsistentHashMinimumRingSize(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3173,10 +3537,17 @@ func expandComputeBackendServiceCdnPolicy(v interface{}, d TerraformResourceData
 		transformed["serveWhileStale"] = transformedServeWhileStale
 	}
 
+	transformedBypassCacheOnRequestHeaders, err := expandComputeBackendServiceCdnPolicyBypassCacheOnRequestHeaders(original["bypass_cache_on_request_headers"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedBypassCacheOnRequestHeaders); val.IsValid() && !isEmptyValue(val) {
+		transformed["bypassCacheOnRequestHeaders"] = transformedBypassCacheOnRequestHeaders
+	}
+
 	return transformed, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3220,6 +3591,13 @@ func expandComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d Terrafo
 		transformed["queryStringWhitelist"] = transformedQueryStringWhitelist
 	}
 
+	transformedIncludeHttpHeaders, err := expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHttpHeaders(original["include_http_headers"], d, config)
+	if err != nil {
+		return nil, err
+	} else {
+		transformed["includeHttpHeaders"] = transformedIncludeHttpHeaders
+	}
+
 	transformedIncludeNamedCookies, err := expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeNamedCookies(original["include_named_cookies"], d, config)
 	if err != nil {
 		return nil, err
@@ -3230,53 +3608,57 @@ func expandComputeBackendServiceCdnPolicyCacheKeyPolicy(v interface{}, d Terrafo
 	return transformed, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHost(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHost(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeProtocol(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeProtocol(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeQueryString(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeQueryString(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringBlacklist(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringBlacklist(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringWhitelist(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyQueryStringWhitelist(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeNamedCookies(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeHttpHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicySignedUrlCacheMaxAgeSec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheKeyPolicyIncludeNamedCookies(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyDefaultTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicySignedUrlCacheMaxAgeSec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyMaxTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyDefaultTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyClientTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyMaxTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyNegativeCaching(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyClientTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyNegativeCachingPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyNegativeCaching(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceCdnPolicyNegativeCachingPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -3305,23 +3687,49 @@ func expandComputeBackendServiceCdnPolicyNegativeCachingPolicy(v interface{}, d 
 	return req, nil
 }
 
-func expandComputeBackendServiceCdnPolicyNegativeCachingPolicyCode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyNegativeCachingPolicyCode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyNegativeCachingPolicyTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyNegativeCachingPolicyTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyCacheMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyCacheMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCdnPolicyServeWhileStale(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyServeWhileStale(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceConnectionDraining(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCdnPolicyBypassCacheOnRequestHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedHeaderName, err := expandComputeBackendServiceCdnPolicyBypassCacheOnRequestHeadersHeaderName(original["header_name"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedHeaderName); val.IsValid() && !isEmptyValue(val) {
+			transformed["headerName"] = transformedHeaderName
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandComputeBackendServiceCdnPolicyBypassCacheOnRequestHeadersHeaderName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceConnectionDraining(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	transformed := make(map[string]interface{})
 	transformedConnectionDrainingTimeoutSec, err := expandComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(d.Get("connection_draining_timeout_sec"), d, config)
 	if err != nil {
@@ -3333,38 +3741,38 @@ func expandComputeBackendServiceConnectionDraining(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceConnectionDrainingConnectionDrainingTimeoutSec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceCustomRequestHeaders(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCustomRequestHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeBackendServiceCustomResponseHeaders(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceCustomResponseHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeBackendServiceFingerprint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceFingerprint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceEnableCDN(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceEnableCDN(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceHealthChecks(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceHealthChecks(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeBackendServiceIap(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceIap(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3397,31 +3805,117 @@ func expandComputeBackendServiceIap(v interface{}, d TerraformResourceData, conf
 	return transformed, nil
 }
 
-func expandComputeBackendServiceIapOauth2ClientId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceIapOauth2ClientId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceIapOauth2ClientSecret(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceIapOauth2ClientSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceIapOauth2ClientSecretSha256(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceIapOauth2ClientSecretSha256(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceLoadBalancingScheme(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLoadBalancingScheme(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceLocalityLbPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLocalityLbPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLocalityLbPolicies(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedPolicy, err := expandComputeBackendServiceLocalityLbPoliciesPolicy(original["policy"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedPolicy); val.IsValid() && !isEmptyValue(val) {
+			transformed["policy"] = transformedPolicy
+		}
+
+		transformedCustomPolicy, err := expandComputeBackendServiceLocalityLbPoliciesCustomPolicy(original["custom_policy"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedCustomPolicy); val.IsValid() && !isEmptyValue(val) {
+			transformed["customPolicy"] = transformedCustomPolicy
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandComputeBackendServiceLocalityLbPoliciesPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedName, err := expandComputeBackendServiceLocalityLbPoliciesPolicyName(original["name"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedName); val.IsValid() && !isEmptyValue(val) {
+		transformed["name"] = transformedName
+	}
+
+	return transformed, nil
+}
+
+func expandComputeBackendServiceLocalityLbPoliciesPolicyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetection(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLocalityLbPoliciesCustomPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedName, err := expandComputeBackendServiceLocalityLbPoliciesCustomPolicyName(original["name"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedName); val.IsValid() && !isEmptyValue(val) {
+		transformed["name"] = transformedName
+	}
+
+	transformedData, err := expandComputeBackendServiceLocalityLbPoliciesCustomPolicyData(original["data"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedData); val.IsValid() && !isEmptyValue(val) {
+		transformed["data"] = transformedData
+	}
+
+	return transformed, nil
+}
+
+func expandComputeBackendServiceLocalityLbPoliciesCustomPolicyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceLocalityLbPoliciesCustomPolicyData(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceOutlierDetection(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3510,7 +4004,7 @@ func expandComputeBackendServiceOutlierDetection(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionBaseEjectionTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionBaseEjectionTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3536,35 +4030,35 @@ func expandComputeBackendServiceOutlierDetectionBaseEjectionTime(v interface{}, 
 	return transformed, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionBaseEjectionTimeSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionBaseEjectionTimeSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionBaseEjectionTimeNanos(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionBaseEjectionTimeNanos(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionConsecutiveErrors(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionConsecutiveErrors(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionConsecutiveGatewayFailure(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionConsecutiveGatewayFailure(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionEnforcingConsecutiveErrors(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionEnforcingConsecutiveErrors(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionEnforcingConsecutiveGatewayFailure(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionEnforcingConsecutiveGatewayFailure(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionEnforcingSuccessRate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionEnforcingSuccessRate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionInterval(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionInterval(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3590,43 +4084,47 @@ func expandComputeBackendServiceOutlierDetectionInterval(v interface{}, d Terraf
 	return transformed, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionIntervalSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionIntervalSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionIntervalNanos(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionIntervalNanos(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionMaxEjectionPercent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionMaxEjectionPercent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionSuccessRateMinimumHosts(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionSuccessRateMinimumHosts(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionSuccessRateRequestVolume(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionSuccessRateRequestVolume(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceOutlierDetectionSuccessRateStdevFactor(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceOutlierDetectionSuccessRateStdevFactor(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServicePortName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServicePortName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceProtocol(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceProtocol(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceSecurityPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceSecurityPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceSecuritySettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceEdgeSecurityPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeBackendServiceSecuritySettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3652,7 +4150,7 @@ func expandComputeBackendServiceSecuritySettings(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandComputeBackendServiceSecuritySettingsClientTlsPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceSecuritySettingsClientTlsPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for client_tls_policy: %s", err)
@@ -3660,19 +4158,19 @@ func expandComputeBackendServiceSecuritySettingsClientTlsPolicy(v interface{}, d
 	return f.RelativeLink(), nil
 }
 
-func expandComputeBackendServiceSecuritySettingsSubjectAltNames(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceSecuritySettingsSubjectAltNames(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceSessionAffinity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceSessionAffinity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceTimeoutSec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceTimeoutSec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceLogConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLogConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3698,11 +4196,11 @@ func expandComputeBackendServiceLogConfig(v interface{}, d TerraformResourceData
 	return transformed, nil
 }
 
-func expandComputeBackendServiceLogConfigEnable(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLogConfigEnable(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeBackendServiceLogConfigSampleRate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeBackendServiceLogConfigSampleRate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

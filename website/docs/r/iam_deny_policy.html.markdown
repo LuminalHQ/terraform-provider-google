@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud IAM"
-page_title: "Google: google_iam_deny_policy"
 description: |-
   Represents a collection of denial policies to apply to a given resource.
 ---
@@ -135,7 +134,7 @@ The following arguments are supported:
   The excluded permissions can be specified using the same syntax as deniedPermissions.
 
 * `denial_condition` -
-  (Required)
+  (Optional)
   User defined CEVAL expression. A CEVAL expression is used to specify match criteria such as origin.ip, source.region_code and contents in the request header.
   Structure is [documented below](#nested_denial_condition).
 
@@ -182,7 +181,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

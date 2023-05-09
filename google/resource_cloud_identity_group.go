@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceCloudIdentityGroup() *schema.Resource {
+func ResourceCloudIdentityGroup() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudIdentityGroupCreate,
 		Read:   resourceCloudIdentityGroupRead,
@@ -83,12 +86,15 @@ and must be in the form of 'identitysources/{identity_source_id}'.`,
 			"labels": {
 				Type:     schema.TypeMap,
 				Required: true,
-				ForceNew: true,
-				Description: `The labels that apply to the Group.
+				Description: `One or more label entries that apply to the Group. Currently supported labels contain a key with an empty value.
 
-Must not contain more than one entry. Must contain the entry
-'cloudidentity.googleapis.com/groups.discussion_forum': '' if the Group is a Google Group or
-'system/groups/external': '' if the Group is an external-identity-mapped group.`,
+Google Groups are the default type of group and have a label with a key of cloudidentity.googleapis.com/groups.discussion_forum and an empty value.
+
+Existing Google Groups can have an additional label with a key of cloudidentity.googleapis.com/groups.security and an empty value added to them. This is an immutable change and the security label cannot be removed once added.
+
+Dynamic groups have a label with a key of cloudidentity.googleapis.com/groups.dynamic.
+
+Identity-mapped groups for Cloud Search have a label with a key of system/groups/external and an empty value.`,
 				Elem: &schema.Schema{Type: schema.TypeString},
 			},
 			"parent": {
@@ -115,7 +121,8 @@ Must not be longer than 4,096 characters.`,
 			"initial_group_config": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"INITIAL_GROUP_CONFIG_UNSPECIFIED", "WITH_INITIAL_OWNER", "EMPTY", ""}),
+				ForceNew:     true,
+				ValidateFunc: verify.ValidateEnum([]string{"INITIAL_GROUP_CONFIG_UNSPECIFIED", "WITH_INITIAL_OWNER", "EMPTY", ""}),
 				Description: `The initial configuration options for creating a Group.
 
 See the
@@ -145,8 +152,8 @@ is the unique ID assigned to the Group.`,
 }
 
 func resourceCloudIdentityGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -183,7 +190,7 @@ func resourceCloudIdentityGroupCreate(d *schema.ResourceData, meta interface{}) 
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}groups?initialGroupConfig={{initial_group_config}}")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}groups?initialGroupConfig={{initial_group_config}}")
 	if err != nil {
 		return err
 	}
@@ -196,7 +203,7 @@ func resourceCloudIdentityGroupCreate(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Group: %s", err)
 	}
@@ -205,7 +212,7 @@ func resourceCloudIdentityGroupCreate(d *schema.ResourceData, meta interface{}) 
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -241,9 +248,9 @@ func resourceCloudIdentityGroupCreate(d *schema.ResourceData, meta interface{}) 
 
 func resourceCloudIdentityGroupPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
+		url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -255,12 +262,12 @@ func resourceCloudIdentityGroupPollRead(d *schema.ResourceData, meta interface{}
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 		if err != nil {
 			return res, err
 		}
@@ -269,13 +276,13 @@ func resourceCloudIdentityGroupPollRead(d *schema.ResourceData, meta interface{}
 }
 
 func resourceCloudIdentityGroupRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -287,9 +294,9 @@ func resourceCloudIdentityGroupRead(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroup %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroup %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenCloudIdentityGroupName(res["name"], d, config)); err != nil {
@@ -321,8 +328,8 @@ func resourceCloudIdentityGroupRead(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceCloudIdentityGroupUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -342,8 +349,14 @@ func resourceCloudIdentityGroupUpdate(d *schema.ResourceData, meta interface{}) 
 	} else if v, ok := d.GetOkExists("description"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, descriptionProp)) {
 		obj["description"] = descriptionProp
 	}
+	labelsProp, err := expandCloudIdentityGroupLabels(d.Get("labels"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("labels"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, labelsProp)) {
+		obj["labels"] = labelsProp
+	}
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -358,9 +371,13 @@ func resourceCloudIdentityGroupUpdate(d *schema.ResourceData, meta interface{}) 
 	if d.HasChange("description") {
 		updateMask = append(updateMask, "description")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+
+	if d.HasChange("labels") {
+		updateMask = append(updateMask, "labels")
+	}
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -370,7 +387,7 @@ func resourceCloudIdentityGroupUpdate(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Group %q: %s", d.Id(), err)
@@ -378,19 +395,24 @@ func resourceCloudIdentityGroupUpdate(d *schema.ResourceData, meta interface{}) 
 		log.Printf("[DEBUG] Finished updating Group %q: %#v", d.Id(), res)
 	}
 
+	err = PollingWaitTime(resourceCloudIdentityGroupPollRead(d, meta), PollCheckForExistenceWith403, "Updating Group", d.Timeout(schema.TimeoutUpdate), 10)
+	if err != nil {
+		return err
+	}
+
 	return resourceCloudIdentityGroupRead(d, meta)
 }
 
 func resourceCloudIdentityGroupDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -403,9 +425,14 @@ func resourceCloudIdentityGroupDelete(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Group")
+		return transport_tpg.HandleNotFoundError(err, d, "Group")
+	}
+
+	err = PollingWaitTime(resourceCloudIdentityGroupPollRead(d, meta), PollCheckForAbsenceWith403, "Deleting Group", d.Timeout(schema.TimeoutCreate), 10)
+	if err != nil {
+		return fmt.Errorf("Error waiting to delete Group: %s", err)
 	}
 
 	log.Printf("[DEBUG] Finished deleting Group %q: %#v", d.Id(), res)
@@ -413,14 +440,18 @@ func resourceCloudIdentityGroupDelete(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceCloudIdentityGroupImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	name := d.Get("name").(string)
+
+	if d.Get("initial_group_config") == nil {
+		d.Set("initial_group_config", "EMPTY")
+	}
 
 	if err := d.Set("name", name); err != nil {
 		return nil, fmt.Errorf("Error setting name: %s", err)
@@ -429,11 +460,11 @@ func resourceCloudIdentityGroupImport(d *schema.ResourceData, meta interface{}) 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCloudIdentityGroupName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupGroupKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupGroupKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -448,39 +479,39 @@ func flattenCloudIdentityGroupGroupKey(v interface{}, d *schema.ResourceData, co
 		flattenCloudIdentityGroupGroupKeyNamespace(original["namespace"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudIdentityGroupGroupKeyId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupGroupKeyId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupGroupKeyNamespace(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupGroupKeyNamespace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupParent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupParent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCloudIdentityGroupGroupKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupGroupKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -506,27 +537,27 @@ func expandCloudIdentityGroupGroupKey(v interface{}, d TerraformResourceData, co
 	return transformed, nil
 }
 
-func expandCloudIdentityGroupGroupKeyId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupGroupKeyId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupGroupKeyNamespace(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupGroupKeyNamespace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupParent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupParent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudIdentityGroupLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}

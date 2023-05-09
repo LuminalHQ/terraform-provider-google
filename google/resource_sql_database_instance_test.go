@@ -1,11 +1,9 @@
 package google
 
 import (
-	"context"
 	"fmt"
-	"log"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -30,141 +28,54 @@ var ignoredReplicaConfigurationFields = []string{
 	"deletion_protection",
 }
 
-func init() {
-	resource.AddTestSweepers("gcp_sql_db_instance", &resource.Sweeper{
-		Name: "gcp_sql_db_instance",
-		F:    testSweepDatabases,
-	})
-}
-
-func testSweepDatabases(region string) error {
-	config, err := sharedConfigForRegion(region)
-	if err != nil {
-		return fmt.Errorf("error getting shared config for region: %s", err)
+func TestMaintenanceVersionDiffSuppress(t *testing.T) {
+	cases := map[string]struct {
+		Old, New       string
+		ShouldSuppress bool
+	}{
+		"older configuration maintenance version than current version should suppress diff": {
+			Old:            "MYSQL_8_0_26.R20220508.01_09",
+			New:            "MYSQL_5_7_37.R20210508.01_03",
+			ShouldSuppress: true,
+		},
+		"older configuration maintenance version than current version should suppress diff with lexicographically smaller database version": {
+			Old:            "MYSQL_5_8_10.R20220508.01_09",
+			New:            "MYSQL_5_8_7.R20210508.01_03",
+			ShouldSuppress: true,
+		},
+		"newer configuration maintenance version than current version should not suppress diff": {
+			Old:            "MYSQL_5_7_37.R20210508.01_03",
+			New:            "MYSQL_8_0_26.R20220508.01_09",
+			ShouldSuppress: false,
+		},
 	}
 
-	err = config.LoadAndValidate(context.Background())
-	if err != nil {
-		log.Fatalf("error loading: %s", err)
+	for tn, tc := range cases {
+		tc := tc
+		t.Run(tn, func(t *testing.T) {
+			t.Parallel()
+			if maintenanceVersionDiffSuppress("version", tc.Old, tc.New, nil) != tc.ShouldSuppress {
+				t.Fatalf("%q => %q expect DiffSuppress to return %t", tc.Old, tc.New, tc.ShouldSuppress)
+			}
+		})
 	}
-
-	found, err := config.NewSqlAdminClient(config.userAgent).Instances.List(config.Project).Do()
-	if err != nil {
-		log.Printf("error listing databases: %s", err)
-		return nil
-	}
-
-	if len(found.Items) == 0 {
-		log.Printf("No databases found")
-		return nil
-	}
-
-	running := map[string]struct{}{}
-
-	for _, d := range found.Items {
-		var testDbInstance bool
-		for _, testName := range []string{"tf-lw-", "sqldatabasetest"} {
-			// only destroy instances we know to fit our test naming pattern
-			if strings.HasPrefix(d.Name, testName) {
-				testDbInstance = true
-			}
-		}
-
-		if !testDbInstance {
-			continue
-		}
-		if d.State != "RUNNABLE" {
-			continue
-		}
-		running[d.Name] = struct{}{}
-	}
-
-	for _, d := range found.Items {
-		// don't delete replicas, we'll take care of that
-		// when deleting the database they replicate
-		if d.ReplicaConfiguration != nil {
-			continue
-		}
-		log.Printf("Destroying SQL Instance (%s)", d.Name)
-
-		// replicas need to be stopped and destroyed before destroying a master
-		// instance. The ordering slice tracks replica databases for a given master
-		// and we call destroy on them before destroying the master
-		var ordering []string
-		for _, replicaName := range d.ReplicaNames {
-			// don't try to stop replicas that aren't running
-			if _, ok := running[replicaName]; !ok {
-				ordering = append(ordering, replicaName)
-				continue
-			}
-
-			// need to stop replication before being able to destroy a database
-			op, err := config.NewSqlAdminClient(config.userAgent).Instances.StopReplica(config.Project, replicaName).Do()
-
-			if err != nil {
-				log.Printf("error, failed to stop replica instance (%s) for instance (%s): %s", replicaName, d.Name, err)
-				return nil
-			}
-
-			err = sqlAdminOperationWaitTime(config, op, config.Project, "Stop Replica", config.userAgent, 10*time.Minute)
-			if err != nil {
-				if strings.Contains(err.Error(), "does not exist") {
-					log.Printf("Replication operation not found")
-				} else {
-					log.Printf("Error waiting for sqlAdmin operation: %s", err)
-					return nil
-				}
-			}
-
-			ordering = append(ordering, replicaName)
-		}
-
-		// ordering has a list of replicas (or none), now add the primary to the end
-		ordering = append(ordering, d.Name)
-
-		for _, db := range ordering {
-			// destroy instances, replicas first
-			op, err := config.NewSqlAdminClient(config.userAgent).Instances.Delete(config.Project, db).Do()
-
-			if err != nil {
-				if strings.Contains(err.Error(), "409") {
-					// the GCP api can return a 409 error after the delete operation
-					// reaches a successful end
-					log.Printf("Operation not found, got 409 response")
-					continue
-				}
-
-				log.Printf("Error, failed to delete instance %s: %s", db, err)
-				return nil
-			}
-
-			err = sqlAdminOperationWaitTime(config, op, config.Project, "Delete Instance", config.userAgent, 10*time.Minute)
-			if err != nil {
-				if strings.Contains(err.Error(), "does not exist") {
-					log.Printf("SQL instance not found")
-					continue
-				}
-				log.Printf("Error, failed to delete instance %s: %s", db, err)
-				return nil
-			}
-		}
-	}
-
-	return nil
 }
 
 func TestAccSqlDatabaseInstance_basicInferredName(t *testing.T) {
 	// Randomness
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testGoogleSqlDatabaseInstance_basic2,
+				Check: resource.ComposeTestCheckFunc(
+					checkInstanceTypeIsPresent("google_sql_database_instance.instance"),
+				),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
@@ -179,12 +90,12 @@ func TestAccSqlDatabaseInstance_basicInferredName(t *testing.T) {
 func TestAccSqlDatabaseInstance_basicSecondGen(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -204,13 +115,13 @@ func TestAccSqlDatabaseInstance_basicSecondGen(t *testing.T) {
 func TestAccSqlDatabaseInstance_basicMSSQL(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
-	rootPassword := randString(t, 15)
+	databaseName := "tf-test-" + RandString(t, 10)
+	rootPassword := RandString(t, 15)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -239,16 +150,16 @@ func TestAccSqlDatabaseInstance_basicMSSQL(t *testing.T) {
 func TestAccSqlDatabaseInstance_dontDeleteDefaultUserOnReplica(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "sql-instance-test-" + randString(t, 10)
-	failoverName := "sql-instance-test-failover-" + randString(t, 10)
+	databaseName := "sql-instance-test-" + RandString(t, 10)
+	failoverName := "sql-instance-test-failover-" + RandString(t, 10)
 	// 1. Create an instance.
 	// 2. Add a root@'%' user.
 	// 3. Create a replica and assert it succeeds (it'll fail if we try to delete the root user thinking it's a
 	//    default user)
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testGoogleSqlDatabaseInstanceConfig_withoutReplica(databaseName),
@@ -262,18 +173,18 @@ func TestAccSqlDatabaseInstance_dontDeleteDefaultUserOnReplica(t *testing.T) {
 			{
 				PreConfig: func() {
 					// Add a root user
-					config := googleProviderConfig(t)
+					config := GoogleProviderConfig(t)
 					user := sqladmin.User{
 						Name:     "root",
 						Host:     "%",
-						Password: randString(t, 26),
+						Password: RandString(t, 26),
 					}
-					op, err := config.NewSqlAdminClient(config.userAgent).Users.Insert(config.Project, databaseName, &user).Do()
+					op, err := config.NewSqlAdminClient(config.UserAgent).Users.Insert(config.Project, databaseName, &user).Do()
 					if err != nil {
 						t.Errorf("Error while inserting root@%% user: %s", err)
 						return
 					}
-					err = sqlAdminOperationWaitTime(config, op, config.Project, "Waiting for user to insert", config.userAgent, 10*time.Minute)
+					err = SqlAdminOperationWaitTime(config, op, config.Project, "Waiting for user to insert", config.UserAgent, 10*time.Minute)
 					if err != nil {
 						t.Errorf("Error while waiting for user insert operation to complete: %s", err.Error())
 					}
@@ -285,15 +196,82 @@ func TestAccSqlDatabaseInstance_dontDeleteDefaultUserOnReplica(t *testing.T) {
 	})
 }
 
+// This test requires an arbitrary error to occur during the SQL instance creation. Currently, we
+// are relying on an error that occurs when settings are used on a MySQL clone. Note that this is
+// somewhat brittle, and the test could begin failing if that error no longer behaves the same way.
+// If this test begins failing, we will want to be sure that the root user is removed as early as
+// possible, and we should attempt to find any other scenarios where the root user could otherwise
+// be left on the instance.
+func TestAccSqlDatabaseInstance_deleteDefaultUserBeforeSubsequentApiCalls(t *testing.T) {
+	// Service Networking
+	acctest.SkipIfVcr(t)
+	t.Parallel()
+
+	databaseName := "tf-test-" + RandString(t, 10)
+	addressName := "tf-test-" + RandString(t, 10)
+	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private-clone-2")
+
+	// 1. Create an instance.
+	// 2. Add a root@'%' user.
+	// 3. Create a clone with settings and assert it fails after the instance creation API call.
+	// 4. Check root user was deleted.
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressName, false, false),
+			},
+			{
+				PreConfig: func() {
+					// Add a root user
+					config := GoogleProviderConfig(t)
+					user := sqladmin.User{
+						Name:     "root",
+						Host:     "%",
+						Password: RandString(t, 26),
+					}
+					op, err := config.NewSqlAdminClient(config.UserAgent).Users.Insert(config.Project, databaseName, &user).Do()
+					if err != nil {
+						t.Errorf("Error while inserting root@%% user: %s", err)
+						return
+					}
+					err = SqlAdminOperationWaitTime(config, op, config.Project, "Waiting for user to insert", config.UserAgent, 10*time.Minute)
+					if err != nil {
+						t.Errorf("Error while waiting for user insert operation to complete: %s", err.Error())
+					}
+				},
+				Config:      testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeClone_withSettings(databaseName, networkName, addressName),
+				ExpectError: regexp.MustCompile("Error, failed to update instance settings"),
+			},
+			{
+				// This PreConfig does a check on the previous step. It is needed because the
+				// previous step expects an error, so it cannot perform a check of its own.
+				PreConfig: func() {
+					var s *terraform.State
+					err := testAccCheckGoogleSqlDatabaseRootUserDoesNotExist(t, databaseName+"-clone1")(s)
+					if err != nil {
+						t.Errorf("Failed to verify that root user was removed: %s", err)
+					}
+				},
+				Config:             testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeClone_withSettings(databaseName, networkName, addressName),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
 func TestAccSqlDatabaseInstance_settings_basic(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -312,12 +290,12 @@ func TestAccSqlDatabaseInstance_settings_basic(t *testing.T) {
 func TestAccSqlDatabaseInstance_settings_secondary(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -336,12 +314,12 @@ func TestAccSqlDatabaseInstance_settings_secondary(t *testing.T) {
 func TestAccSqlDatabaseInstance_settings_deletionProtection(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -367,15 +345,95 @@ func TestAccSqlDatabaseInstance_settings_deletionProtection(t *testing.T) {
 	})
 }
 
+func TestAccSqlDatabaseInstance_maintenanceVersion(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "tf-test-" + RandString(t, 10)
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_maintenanceVersionWithOldVersion, databaseName),
+				ExpectError: regexp.MustCompile(
+					`.*Maintenance version \(MYSQL_5_7_37.R20210508.01_03\) must not be set.*`),
+			},
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_basic3, databaseName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_maintenanceVersionWithOldVersion, databaseName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_settings_deletionProtectionEnabled(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "tf-test-" + RandString(t, 10)
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_settings_deletionProtectionEnabled, databaseName, "true"),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_settings_deletionProtectionEnabled, databaseName, "true"),
+				Destroy:     true,
+				ExpectError: regexp.MustCompile(fmt.Sprintf("Error, failed to delete instance %s: googleapi: Error 400: The instance is protected. Please disable the deletion protection and try again. To disable deletion protection, update the instance settings with deletionProtectionEnabled set to false.", databaseName)),
+			},
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_settings_deletionProtectionEnabled, databaseName, "false"),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
 func TestAccSqlDatabaseInstance_settings_checkServiceNetworking(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -389,16 +447,21 @@ func TestAccSqlDatabaseInstance_settings_checkServiceNetworking(t *testing.T) {
 func TestAccSqlDatabaseInstance_replica(t *testing.T) {
 	t.Parallel()
 
-	databaseID := randInt(t)
+	databaseID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
-					testGoogleSqlDatabaseInstance_replica, databaseID, databaseID, databaseID),
+					testGoogleSqlDatabaseInstance_replica, databaseID, databaseID, databaseID, "true"),
+				ExpectError: regexp.MustCompile("Error, failed to create instance tf-test-\\d+-2: googleapi: Error 400: Invalid request: Invalid flag for instance role: Backups cannot be enabled for read replica instance.., invalid"),
+			},
+			{
+				Config: fmt.Sprintf(
+					testGoogleSqlDatabaseInstance_replica, databaseID, databaseID, databaseID, "false"),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance_master",
@@ -425,13 +488,13 @@ func TestAccSqlDatabaseInstance_replica(t *testing.T) {
 func TestAccSqlDatabaseInstance_slave(t *testing.T) {
 	t.Parallel()
 
-	masterID := randInt(t)
-	slaveID := randInt(t)
+	masterID := RandInt(t)
+	slaveID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -456,12 +519,12 @@ func TestAccSqlDatabaseInstance_slave(t *testing.T) {
 func TestAccSqlDatabaseInstance_highAvailability(t *testing.T) {
 	t.Parallel()
 
-	instanceID := randInt(t)
+	instanceID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -480,12 +543,12 @@ func TestAccSqlDatabaseInstance_highAvailability(t *testing.T) {
 func TestAccSqlDatabaseInstance_diskspecs(t *testing.T) {
 	t.Parallel()
 
-	masterID := randInt(t)
+	masterID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -504,12 +567,12 @@ func TestAccSqlDatabaseInstance_diskspecs(t *testing.T) {
 func TestAccSqlDatabaseInstance_maintenance(t *testing.T) {
 	t.Parallel()
 
-	masterID := randInt(t)
+	masterID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -528,12 +591,12 @@ func TestAccSqlDatabaseInstance_maintenance(t *testing.T) {
 func TestAccSqlDatabaseInstance_settings_upgrade(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -562,12 +625,12 @@ func TestAccSqlDatabaseInstance_settings_upgrade(t *testing.T) {
 func TestAccSqlDatabaseInstance_settingsDowngrade(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -597,12 +660,12 @@ func TestAccSqlDatabaseInstance_settingsDowngrade(t *testing.T) {
 func TestAccSqlDatabaseInstance_authNets(t *testing.T) {
 	t.Parallel()
 
-	databaseID := randInt(t)
+	databaseID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -643,12 +706,12 @@ func TestAccSqlDatabaseInstance_authNets(t *testing.T) {
 func TestAccSqlDatabaseInstance_multipleOperations(t *testing.T) {
 	t.Parallel()
 
-	databaseID, instanceID, userID := randString(t, 8), randString(t, 8), randString(t, 8)
+	databaseID, instanceID, userID := RandString(t, 8), RandString(t, 8), RandString(t, 8)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -667,12 +730,12 @@ func TestAccSqlDatabaseInstance_multipleOperations(t *testing.T) {
 func TestAccSqlDatabaseInstance_basic_with_user_labels(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -702,17 +765,44 @@ func TestAccSqlDatabaseInstance_basic_with_user_labels(t *testing.T) {
 func TestAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(t *testing.T) {
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
-	addressName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
+	addressName := "tf-test-" + RandString(t, 10)
 	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private")
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressName),
+				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressName, false, false),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressName, true, false),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressName, true, true),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressName, true, false),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
@@ -725,18 +815,20 @@ func TestAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(t *te
 }
 
 func TestAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRange(t *testing.T) {
+	// Service Networking
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
-	addressName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
+	addressName := "tf-test-" + RandString(t, 10)
 	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private-allocated-ip-range")
-	addressName_update := "tf-test-" + randString(t, 10) + "update"
+	addressName_update := "tf-test-" + RandString(t, 10) + "update"
 	networkName_update := BootstrapSharedTestNetwork(t, "sql-instance-private-allocated-ip-range-update")
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRange(databaseName, networkName, addressName),
@@ -761,16 +853,18 @@ func TestAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRange(t *testi
 }
 
 func TestAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeReplica(t *testing.T) {
+	// Service Networking
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
-	addressName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
+	addressName := "tf-test-" + RandString(t, 10)
 	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private-replica")
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeReplica(databaseName, networkName, addressName),
@@ -792,16 +886,18 @@ func TestAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeReplica(t
 }
 
 func TestAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeClone(t *testing.T) {
+	// Service Networking
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	databaseName := "tf-test-" + randString(t, 10)
-	addressName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
+	addressName := "tf-test-" + RandString(t, 10)
 	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private-clone")
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeClone(databaseName, networkName, addressName),
@@ -824,18 +920,18 @@ func TestAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeClone(t *
 
 func TestAccSqlDatabaseInstance_createFromBackup(t *testing.T) {
 	// Sqladmin client
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix":    randString(t, 10),
+		"random_suffix":    RandString(t, 10),
 		"original_db_name": BootstrapSharedSQLInstanceBackupRun(t),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_restoreFromBackup(context),
@@ -852,18 +948,18 @@ func TestAccSqlDatabaseInstance_createFromBackup(t *testing.T) {
 
 func TestAccSqlDatabaseInstance_backupUpdate(t *testing.T) {
 	// Sqladmin client
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix":    randString(t, 10),
+		"random_suffix":    RandString(t, 10),
 		"original_db_name": BootstrapSharedSQLInstanceBackupRun(t),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_beforeBackup(context),
@@ -889,18 +985,18 @@ func TestAccSqlDatabaseInstance_backupUpdate(t *testing.T) {
 
 func TestAccSqlDatabaseInstance_basicClone(t *testing.T) {
 	// Sqladmin client
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix":    randString(t, 10),
+		"random_suffix":    RandString(t, 10),
 		"original_db_name": BootstrapSharedSQLInstanceBackupRun(t),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_basicClone(context),
@@ -917,18 +1013,18 @@ func TestAccSqlDatabaseInstance_basicClone(t *testing.T) {
 
 func TestAccSqlDatabaseInstance_cloneWithSettings(t *testing.T) {
 	// Sqladmin client
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix":    randString(t, 10),
+		"random_suffix":    RandString(t, 10),
 		"original_db_name": BootstrapSharedSQLInstanceBackupRun(t),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_cloneWithSettings(context),
@@ -943,15 +1039,43 @@ func TestAccSqlDatabaseInstance_cloneWithSettings(t *testing.T) {
 	})
 }
 
+func TestAccSqlDatabaseInstance_cloneWithDatabaseNames(t *testing.T) {
+	// Sqladmin client
+	acctest.SkipIfVcr(t)
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix":    RandString(t, 10),
+		"original_db_name": BootstrapSharedSQLInstanceBackupRun(t),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSqlDatabaseInstance_cloneWithDatabaseNames(context),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "clone"},
+			},
+		},
+	})
+}
+
 func testAccSqlDatabaseInstanceDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for _, rs := range s.RootModule().Resources {
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 			if rs.Type != "google_sql_database_instance" {
 				continue
 			}
 
-			_, err := config.NewSqlAdminClient(config.userAgent).Instances.Get(config.Project,
+			_, err := config.NewSqlAdminClient(config.UserAgent).Instances.Get(config.Project,
 				rs.Primary.Attributes["name"]).Do()
 			if err == nil {
 				return fmt.Errorf("Database Instance still exists")
@@ -964,9 +1088,9 @@ func testAccSqlDatabaseInstanceDestroyProducer(t *testing.T) func(s *terraform.S
 
 func testAccCheckGoogleSqlDatabaseRootUserDoesNotExist(t *testing.T, instance string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		config := googleProviderConfig(t)
+		config := GoogleProviderConfig(t)
 
-		users, err := config.NewSqlAdminClient(config.userAgent).Users.List(config.Project, instance).Do()
+		users, err := config.NewSqlAdminClient(config.UserAgent).Users.List(config.Project, instance).Do()
 
 		if err != nil {
 			return fmt.Errorf("Could not list database users for %q: %s", instance, err)
@@ -985,12 +1109,12 @@ func testAccCheckGoogleSqlDatabaseRootUserDoesNotExist(t *testing.T, instance st
 func TestAccSqlDatabaseInstance_BackupRetention(t *testing.T) {
 	t.Parallel()
 
-	masterID := randInt(t)
+	masterID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testGoogleSqlDatabaseInstance_BackupRetention(masterID),
@@ -1008,30 +1132,62 @@ func TestAccSqlDatabaseInstance_BackupRetention(t *testing.T) {
 func TestAccSqlDatabaseInstance_PointInTimeRecoveryEnabled(t *testing.T) {
 	t.Parallel()
 
-	masterID := randInt(t)
+	masterID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID, true),
+				Config: testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID, true, "POSTGRES_9_6"),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"deletion_protection"},
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
 			},
 			{
-				Config: testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID, false),
+				Config: testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID, false, "POSTGRES_9_6"),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"deletion_protection"},
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_PointInTimeRecoveryEnabledForSqlServer(t *testing.T) {
+	t.Parallel()
+
+	masterID := RandInt(t)
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID, true, "SQLSERVER_2017_STANDARD"),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID, false, "SQLSERVER_2017_STANDARD"),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
 			},
 		},
 	})
@@ -1040,12 +1196,12 @@ func TestAccSqlDatabaseInstance_PointInTimeRecoveryEnabled(t *testing.T) {
 func TestAccSqlDatabaseInstance_insights(t *testing.T) {
 	t.Parallel()
 
-	masterID := randInt(t)
+	masterID := RandInt(t)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(
@@ -1065,15 +1221,15 @@ func TestAccSqlDatabaseInstance_encryptionKey(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_id":    getTestProjectFromEnv(),
-		"key_name":      "tf-test-key-" + randString(t, 10),
-		"instance_name": "tf-test-sql-" + randString(t, 10),
+		"project_id":    acctest.GetTestProjectFromEnv(),
+		"key_name":      "tf-test-key-" + RandString(t, 10),
+		"instance_name": "tf-test-sql-" + RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: Nprintf(
@@ -1099,15 +1255,15 @@ func TestAccSqlDatabaseInstance_encryptionKey_replicaInDifferentRegion(t *testin
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_id":    getTestProjectFromEnv(),
-		"key_name":      "tf-test-key-" + randString(t, 10),
-		"instance_name": "tf-test-sql-" + randString(t, 10),
+		"project_id":    acctest.GetTestProjectFromEnv(),
+		"key_name":      "tf-test-key-" + RandString(t, 10),
+		"instance_name": "tf-test-sql-" + RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: Nprintf(
@@ -1130,17 +1286,21 @@ func TestAccSqlDatabaseInstance_encryptionKey_replicaInDifferentRegion(t *testin
 }
 
 func TestAccSqlDatabaseInstance_ActiveDirectory(t *testing.T) {
+	// skip the test until Active Directory setup issue gets resolved
+	// see https://github.com/hashicorp/terraform-provider-google/issues/13517
+	t.Skip()
+
 	t.Parallel()
-	databaseName := "tf-test-" + randString(t, 10)
+	databaseName := "tf-test-" + RandString(t, 10)
 	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private-test-ad")
-	addressName := "tf-test-" + randString(t, 10)
-	rootPassword := randString(t, 15)
+	addressName := "tf-test-" + RandString(t, 10)
+	rootPassword := RandString(t, 15)
 	adDomainName := BootstrapSharedTestADDomain(t, "test-domain", networkName)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testGoogleSqlDatabaseInstance_ActiveDirectoryConfig(databaseName, networkName, addressName, rootPassword, adDomainName),
@@ -1155,26 +1315,50 @@ func TestAccSqlDatabaseInstance_ActiveDirectory(t *testing.T) {
 	})
 }
 
-func TestAccSqlDatabaseInstance_SqlServerAuditConfig(t *testing.T) {
+func TestAccSQLDatabaseInstance_DenyMaintenancePeriod(t *testing.T) {
 	t.Parallel()
-	databaseName := "tf-test-" + randString(t, 10)
-	rootPassword := randString(t, 15)
-	addressName := "tf-test-" + randString(t, 10)
-	networkName := BootstrapSharedTestNetwork(t, "sql-instance-private-allocated-ip-range")
-	bucketName := fmt.Sprintf("%s-%d", "tf-test-bucket", randInt(t))
+	databaseName := "tf-test-" + RandString(t, 10)
+	endDate := "2022-12-5"
+	startDate := "2022-10-5"
+	time := "00:00:00"
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstance_DenyMaintenancePeriodConfig(databaseName, endDate, startDate, time),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_SqlServerAuditConfig(t *testing.T) {
+	// Service Networking
+	acctest.SkipIfVcr(t)
+	t.Parallel()
+	databaseName := "tf-test-" + RandString(t, 10)
+	rootPassword := RandString(t, 15)
+	bucketName := fmt.Sprintf("%s-%d", "tf-test-bucket", RandInt(t))
 	uploadInterval := "900s"
 	retentionInterval := "86400s"
-	bucketNameUpdate := fmt.Sprintf("%s-%d", "tf-test-bucket", randInt(t)) + "update"
+	bucketNameUpdate := fmt.Sprintf("%s-%d", "tf-test-bucket", RandInt(t)) + "update"
 	uploadIntervalUpdate := "1200s"
 	retentionIntervalUpdate := "172800s"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testGoogleSqlDatabaseInstance_SqlServerAuditConfig(networkName, addressName, databaseName, rootPassword, bucketName, uploadInterval, retentionInterval),
+				Config: testGoogleSqlDatabaseInstance_SqlServerAuditConfig(databaseName, rootPassword, bucketName, uploadInterval, retentionInterval),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
@@ -1183,7 +1367,7 @@ func TestAccSqlDatabaseInstance_SqlServerAuditConfig(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"root_password", "deletion_protection"},
 			},
 			{
-				Config: testGoogleSqlDatabaseInstance_SqlServerAuditConfig(networkName, addressName, databaseName, rootPassword, bucketNameUpdate, uploadIntervalUpdate, retentionIntervalUpdate),
+				Config: testGoogleSqlDatabaseInstance_SqlServerAuditConfig(databaseName, rootPassword, bucketNameUpdate, uploadIntervalUpdate, retentionIntervalUpdate),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
@@ -1195,16 +1379,20 @@ func TestAccSqlDatabaseInstance_SqlServerAuditConfig(t *testing.T) {
 	})
 }
 
-func TestAccSqlDatabaseInstance_mysqlMajorVersionUpgrade(t *testing.T) {
+func TestAccSqlDatabaseInstance_SqlServerAuditOptionalBucket(t *testing.T) {
 	t.Parallel()
+	databaseName := "tf-test-" + RandString(t, 10)
+	rootPassword := RandString(t, 15)
+	uploadInterval := "900s"
+	retentionInterval := "86400s"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlDatabaseInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testGoogleSqlDatabaseInstance_basic2,
+				Config: testGoogleSqlDatabaseInstance_SqlServerAuditOptionalBucket(databaseName, rootPassword, uploadInterval, retentionInterval),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
@@ -1212,8 +1400,23 @@ func TestAccSqlDatabaseInstance_mysqlMajorVersionUpgrade(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"root_password", "deletion_protection"},
 			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_Timezone(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "tf-test-" + RandString(t, 10)
+	rootPassword := RandString(t, 15)
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
 			{
-				Config: testGoogleSqlDatabaseInstance_basic2_update,
+				Config: testGoogleSqlDatabaseInstance_Timezone(databaseName, rootPassword, "Pacific Standard Time"),
 			},
 			{
 				ResourceName:            "google_sql_database_instance.instance",
@@ -1230,12 +1433,12 @@ func TestAccSqlDatabaseInstance_sqlMysqlInstancePvpExample(t *testing.T) {
 
 	context := map[string]interface{}{
 		"deletion_protection": false,
-		"random_suffix":       randString(t, 10),
+		"random_suffix":       RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSqlDatabaseInstance_sqlMysqlInstancePvpExample(context),
@@ -1245,6 +1448,363 @@ func TestAccSqlDatabaseInstance_sqlMysqlInstancePvpExample(t *testing.T) {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_updateReadReplicaWithBinaryLogEnabled(t *testing.T) {
+	t.Parallel()
+
+	instance := "tf-test-" + RandString(t, 10)
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstance_readReplica(instance),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.replica",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_updateReadReplica(instance),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.replica",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_rootPasswordShouldBeUpdatable(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "tf-test-" + RandString(t, 10)
+	rootPwd := "rootPassword-1-" + RandString(t, 10)
+	newRootPwd := "rootPassword-2-" + RandString(t, 10)
+	databaseVersion := "SQLSERVER_2017_STANDARD"
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstance_updateRootPassword(databaseName, databaseVersion, rootPwd),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.main",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_updateRootPassword(databaseName, databaseVersion, newRootPwd),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.main",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_updateRootPassword(databaseName, databaseVersion, ""),
+				ExpectError: regexp.MustCompile(
+					`Error, root password cannot be empty for SQL Server instance.`),
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_activationPolicy(t *testing.T) {
+	t.Parallel()
+
+	instanceName := "tf-test-" + RandString(t, 10)
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstance_activationPolicy(instanceName, "MYSQL_5_7", "ALWAYS", true),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_activationPolicy(instanceName, "MYSQL_5_7", "NEVER", true),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_activationPolicy(instanceName, "MYSQL_8_0_18", "ALWAYS", true),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_activationPolicy(instanceName, "MYSQL_8_0_26", "NEVER", true),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+			{
+				Config: testGoogleSqlDatabaseInstance_activationPolicy(instanceName, "MYSQL_8_0_26", "ALWAYS", false),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection", "root_password"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_ReplicaPromoteSuccessful(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "sql-instance-test-" + RandString(t, 10)
+	failoverName := "sql-instance-test-failover-" + RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstanceConfig_withReplica(databaseName, failoverName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: googleSqlDatabaseInstance_replicaPromote(databaseName, failoverName),
+				Check:  resource.ComposeTestCheckFunc(checkPromoteReplicaConfigurations("google_sql_database_instance.instance-failover")),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_ReplicaPromoteFailedWithMasterInstanceNamePresent(t *testing.T) {
+	t.Parallel()
+	databaseName := "sql-instance-test-" + RandString(t, 10)
+	failoverName := "sql-instance-test-failover-" + RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstanceConfig_withReplica(databaseName, failoverName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config:      googleSqlDatabaseInstance_replicaPromoteWithMasterInstanceName(databaseName, failoverName),
+				ExpectError: regexp.MustCompile("Replica promote configuration check failed. Please remove master_instance_name and try again."),
+				Check:       resource.ComposeTestCheckFunc(checkPromoteReplicaSkipConfigurations("google_sql_database_instance.instance-failover")),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_ReplicaPromoteFailedWithReplicaConfigurationPresent(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "sql-instance-test-" + RandString(t, 10)
+	failoverName := "sql-instance-test-failover-" + RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstanceConfig_withReplica(databaseName, failoverName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config:      googleSqlDatabaseInstance_replicaPromoteWithReplicaConfiguration(databaseName, failoverName),
+				ExpectError: regexp.MustCompile("Replica promote configuration check failed. Please remove replica_configuration and try again."),
+				Check:       resource.ComposeTestCheckFunc(checkPromoteReplicaSkipConfigurations("google_sql_database_instance.instance-failover")),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_ReplicaPromoteFailedWithMasterInstanceNameAndReplicaConfigurationPresent(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "sql-instance-test-" + RandString(t, 10)
+	failoverName := "sql-instance-test-failover-" + RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstanceConfig_withReplica(databaseName, failoverName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config:      googleSqlDatabaseInstance_replicaPromoteWithMasterInstanceNameAndReplicaConfiguration(databaseName, failoverName),
+				ExpectError: regexp.MustCompile("Replica promote configuration check failed. Please remove master_instance_name and try again."),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+		},
+	})
+}
+
+func TestAccSqlDatabaseInstance_ReplicaPromoteSkippedWithNoMasterInstanceNameAndNoReplicaConfigurationPresent(t *testing.T) {
+	t.Parallel()
+
+	databaseName := "sql-instance-test-" + RandString(t, 10)
+	failoverName := "sql-instance-test-failover-" + RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlDatabaseInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testGoogleSqlDatabaseInstanceConfig_withReplica(databaseName, failoverName),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				Config: googleSqlDatabaseInstance_replicaPromoteSkippedWithNoMasterInstanceNameAndNoReplicaConfiguration(databaseName, failoverName),
+				Check:  resource.ComposeTestCheckFunc(checkPromoteReplicaSkipConfigurations("google_sql_database_instance.instance-failover")),
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
+			},
+			{
+				ResourceName:            "google_sql_database_instance.instance-failover",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_protection"},
 			},
 		},
 	})
@@ -1283,10 +1843,11 @@ resource "google_sql_database_instance" "instance" {
 }
 `
 
-var testGoogleSqlDatabaseInstance_basic2_update = `
+var testGoogleSqlDatabaseInstance_basic3 = `
 resource "google_sql_database_instance" "instance" {
+  name                = "%s"
   region              = "us-central1"
-  database_version    = "MYSQL_8_0"
+  database_version    = "MYSQL_5_7"
   deletion_protection = false
   settings {
     tier = "db-f1-micro"
@@ -1294,11 +1855,11 @@ resource "google_sql_database_instance" "instance" {
 }
 `
 
-var testGoogleSqlDatabaseInstance_basic3 = `
+var testGoogleSqlDatabaseInstance_basic3_update = `
 resource "google_sql_database_instance" "instance" {
   name                = "%s"
   region              = "us-central1"
-  database_version    = "MYSQL_5_7"
+  database_version    = "MYSQL_8_0"
   deletion_protection = false
   settings {
     tier = "db-f1-micro"
@@ -1377,7 +1938,26 @@ resource "google_sql_database_instance" "instance-with-ad" {
 }`, networkName, addressRangeName, databaseName, rootPassword, adDomainName)
 }
 
-func testGoogleSqlDatabaseInstance_SqlServerAuditConfig(networkName, addressName, databaseName, rootPassword, bucketName, uploadInterval, retentionInterval string) string {
+func testGoogleSqlDatabaseInstance_DenyMaintenancePeriodConfig(databaseName, endDate, startDate, time string) string {
+	return fmt.Sprintf(`
+
+resource "google_sql_database_instance" "instance" {
+  name             = "%s"
+  region           = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+  settings {
+    tier = "db-custom-4-26624"
+    deny_maintenance_period {
+      end_date     	= "%s"
+      start_date	= "%s"
+      time 		= "%s"
+    }
+  }
+}`, databaseName, endDate, startDate, time)
+}
+
+func testGoogleSqlDatabaseInstance_SqlServerAuditConfig(databaseName, rootPassword, bucketName, uploadInterval, retentionInterval string) string {
 	return fmt.Sprintf(`
 resource "google_storage_bucket" "gs-bucket" {
   name                      	= "%s"
@@ -1385,26 +1965,7 @@ resource "google_storage_bucket" "gs-bucket" {
   uniform_bucket_level_access = true
 }
 
-data "google_compute_network" "servicenet" {
-  name = "%s"
-}
-
-resource "google_compute_global_address" "foobar" {
-  name          = "%s"
-  purpose       = "VPC_PEERING"
-  address_type  = "INTERNAL"
-  prefix_length = 16
-  network       = data.google_compute_network.servicenet.self_link
-}
-
-resource "google_service_networking_connection" "foobar" {
-  network                 = data.google_compute_network.servicenet.self_link
-  service                 = "servicenetworking.googleapis.com"
-  reserved_peering_ranges = [google_compute_global_address.foobar.name]
-}
-
 resource "google_sql_database_instance" "instance" {
-	depends_on = [google_service_networking_connection.foobar]
   name             = "%s"
   region           = "us-central1"
   database_version = "SQLSERVER_2017_STANDARD"
@@ -1413,8 +1974,7 @@ resource "google_sql_database_instance" "instance" {
   settings {
     tier = "db-custom-1-3840"
     ip_configuration {
-      ipv4_enabled       = "false"
-      private_network    = data.google_compute_network.servicenet.self_link
+      ipv4_enabled       = "true"
     }
     sql_server_audit_config {
       bucket = "gs://%s"
@@ -1423,7 +1983,45 @@ resource "google_sql_database_instance" "instance" {
     }
   }
 }
-`, bucketName, networkName, addressName, databaseName, rootPassword, bucketName, retentionInterval, uploadInterval)
+`, bucketName, databaseName, rootPassword, bucketName, retentionInterval, uploadInterval)
+}
+
+func testGoogleSqlDatabaseInstance_SqlServerAuditOptionalBucket(databaseName, rootPassword, uploadInterval, retentionInterval string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name             = "%s"
+  region           = "us-central1"
+  database_version = "SQLSERVER_2017_STANDARD"
+  root_password    = "%s"
+  deletion_protection = false
+  settings {
+    tier = "db-custom-1-3840"
+    sql_server_audit_config {
+      retention_interval = "%s"
+      upload_interval = "%s"
+    }
+  }
+}
+`, databaseName, rootPassword, retentionInterval, uploadInterval)
+}
+
+func testGoogleSqlDatabaseInstance_Timezone(databaseName, rootPassword, timezone string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name             = "%s"
+  region           = "us-central1"
+  database_version = "SQLSERVER_2017_STANDARD"
+  root_password    = "%s"
+  deletion_protection = false
+  settings {
+    tier = "db-custom-1-3840"
+    ip_configuration {
+      ipv4_enabled       = "true"
+    }
+    time_zone = "%s"
+  }
+}
+`, databaseName, rootPassword, timezone)
 }
 
 func testGoogleSqlDatabaseInstanceConfig_withoutReplica(instanceName string) string {
@@ -1484,7 +2082,185 @@ resource "google_sql_database_instance" "instance-failover" {
 `, instanceName, failoverName)
 }
 
-func testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressRangeName string) string {
+func googleSqlDatabaseInstance_replicaPromote(instanceName, failoverName string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+
+  settings {
+    tier = "db-n1-standard-1"
+
+    backup_configuration {
+      binary_log_enabled = "true"
+      enabled            = "true"
+      start_time         = "18:00"
+    }
+  }
+}
+
+resource "google_sql_database_instance" "instance-failover" {
+  name                 = "%s"
+  region               = "us-central1"
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+
+  instance_type = "CLOUD_SQL_INSTANCE"
+  settings {
+    tier = "db-n1-standard-1"
+  }
+}
+`, instanceName, failoverName)
+}
+
+func googleSqlDatabaseInstance_replicaPromoteWithMasterInstanceName(instanceName, failoverName string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+
+  settings {
+    tier = "db-n1-standard-1"
+
+    backup_configuration {
+      binary_log_enabled = "true"
+      enabled            = "true"
+      start_time         = "18:00"
+    }
+  }
+}
+
+resource "google_sql_database_instance" "instance-failover" {
+  name                 = "%s"
+  region               = "us-central1"
+  master_instance_name = google_sql_database_instance.instance.name
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+  instance_type = "CLOUD_SQL_INSTANCE"
+  settings {
+    tier = "db-n1-standard-1"
+  }
+}
+`, instanceName, failoverName)
+}
+
+func googleSqlDatabaseInstance_replicaPromoteWithMasterInstanceNameAndReplicaConfiguration(instanceName string, failoverName string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+
+  settings {
+    tier = "db-n1-standard-1"
+
+    backup_configuration {
+      binary_log_enabled = "true"
+      enabled            = "true"
+      start_time         = "18:00"
+    }
+  }
+}
+
+resource "google_sql_database_instance" "instance-failover" {
+  name                 = "%s"
+  region               = "us-central1"
+  master_instance_name = google_sql_database_instance.instance.name
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+
+  replica_configuration {
+    failover_target = "true"
+  }
+
+  instance_type = "CLOUD_SQL_INSTANCE"
+  settings {
+    tier = "db-n1-standard-1"
+  }
+}
+`, instanceName, failoverName)
+}
+
+func googleSqlDatabaseInstance_replicaPromoteSkippedWithNoMasterInstanceNameAndNoReplicaConfiguration(instanceName string, failoverName string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+
+  settings {
+    tier = "db-n1-standard-1"
+
+    backup_configuration {
+      binary_log_enabled = "true"
+      enabled            = "true"
+      start_time         = "18:00"
+    }
+  }
+}
+
+resource "google_sql_database_instance" "instance-failover" {
+  name                 = "%s"
+  region               = "us-central1"
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+  settings {
+    tier = "db-n1-standard-1"
+  }
+  depends_on = [google_sql_database_instance.instance]
+}
+`, instanceName, failoverName)
+}
+
+func googleSqlDatabaseInstance_replicaPromoteWithReplicaConfiguration(instanceName string, failoverName string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+
+  settings {
+    tier = "db-n1-standard-1"
+
+    backup_configuration {
+      binary_log_enabled = "true"
+      enabled            = "true"
+      start_time         = "18:00"
+    }
+  }
+}
+
+resource "google_sql_database_instance" "instance-failover" {
+  name                 = "%s"
+  region               = "us-central1"
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+
+  replica_configuration {
+    failover_target = "true"
+  }
+
+  instance_type = "CLOUD_SQL_INSTANCE"
+  settings {
+    tier = "db-n1-standard-1"
+  }
+}
+`, instanceName, failoverName)
+}
+
+func testAccSqlDatabaseInstance_withPrivateNetwork_withoutAllocatedIpRange(databaseName, networkName, addressRangeName string, specifyPrivatePathOption bool, enablePrivatePath bool) string {
+	privatePathOption := ""
+	if specifyPrivatePathOption {
+		privatePathOption = fmt.Sprintf("enable_private_path_for_google_cloud_services = %t", enablePrivatePath)
+	}
+
 	return fmt.Sprintf(`
 data "google_compute_network" "servicenet" {
   name                    = "%s"
@@ -1515,10 +2291,11 @@ resource "google_sql_database_instance" "instance" {
     ip_configuration {
       ipv4_enabled       = "false"
       private_network    = data.google_compute_network.servicenet.self_link
+      %s
     }
   }
 }
-`, networkName, addressRangeName, databaseName)
+`, networkName, addressRangeName, databaseName, privatePathOption)
 }
 
 func testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRange(databaseName, networkName, addressRangeName string) string {
@@ -1682,6 +2459,67 @@ resource "google_sql_database_instance" "clone1" {
 `, networkName, addressRangeName, databaseName, databaseName)
 }
 
+func testAccSqlDatabaseInstance_withPrivateNetwork_withAllocatedIpRangeClone_withSettings(databaseName, networkName, addressRangeName string) string {
+	return fmt.Sprintf(`
+data "google_compute_network" "servicenet" {
+  name                    = "%s"
+}
+
+resource "google_compute_global_address" "foobar" {
+  name          = "%s"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = data.google_compute_network.servicenet.self_link
+}
+
+resource "google_service_networking_connection" "foobar" {
+  network                 = data.google_compute_network.servicenet.self_link
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.foobar.name]
+}
+
+resource "google_sql_database_instance" "instance" {
+  depends_on = [google_service_networking_connection.foobar]
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+  settings {
+    tier = "db-f1-micro"
+    ip_configuration {
+      ipv4_enabled       = "false"
+      private_network    = data.google_compute_network.servicenet.self_link
+    }
+    backup_configuration {
+      enabled            = true
+      start_time         = "00:00"
+      binary_log_enabled = true
+    }
+  }
+}
+
+resource "google_sql_database_instance" "clone1" {
+  name                = "%s-clone1"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+
+  clone {
+    source_instance_name = google_sql_database_instance.instance.name
+    allocated_ip_range   = google_compute_global_address.foobar.name
+  }
+
+  settings {
+    tier = "db-f1-micro"
+    backup_configuration {
+      enabled = false
+    }
+  }
+}
+`, networkName, addressRangeName, databaseName, databaseName)
+}
+
 var testGoogleSqlDatabaseInstance_settings = `
 resource "google_sql_database_instance" "instance" {
   name                = "%s"
@@ -1721,9 +2559,10 @@ resource "google_sql_database_instance" "instance" {
   deletion_protection = false
   settings {
     tier                   = "db-f1-micro"
+    availability_type      = "REGIONAL"
     location_preference {
       zone           = "us-central1-f"
-	  secondary_zone = "us-central1-a"	  
+      secondary_zone = "us-central1-a"
     }
 
     ip_configuration {
@@ -1738,9 +2577,11 @@ resource "google_sql_database_instance" "instance" {
     backup_configuration {
       enabled    = "true"
       start_time = "19:19"
+      binary_log_enabled = true
     }
 
     activation_policy = "ALWAYS"
+    connector_enforcement = "REQUIRED"
   }
 }
 `
@@ -1776,6 +2617,32 @@ resource "google_sql_database_instance" "instance" {
 }
 `
 
+var testGoogleSqlDatabaseInstance_maintenanceVersionWithOldVersion = `
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "MYSQL_5_7"
+  deletion_protection = false
+  maintenance_version = "MYSQL_5_7_37.R20210508.01_03"
+  settings {
+    tier = "db-f1-micro"
+  }
+}
+`
+
+var testGoogleSqlDatabaseInstance_settings_deletionProtectionEnabled = `
+resource "google_sql_database_instance" "instance" {
+  name                        = "%s"
+  region                      = "us-central1"
+  database_version            = "MYSQL_5_7"
+  deletion_protection         = false
+  settings {
+	deletion_protection_enabled = %s
+    tier                        = "db-f1-micro"
+  }
+}
+`
+
 var testGoogleSqlDatabaseInstance_settings_checkServiceNetworking = `
 resource "google_compute_network" "servicenet" {
   name                    = "%s"
@@ -1798,7 +2665,7 @@ resource "google_sql_database_instance" "instance" {
 
 var testGoogleSqlDatabaseInstance_replica = `
 resource "google_sql_database_instance" "instance_master" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   database_version    = "MYSQL_5_7"
   region              = "us-central1"
   deletion_protection = false
@@ -1815,16 +2682,17 @@ resource "google_sql_database_instance" "instance_master" {
 }
 
 resource "google_sql_database_instance" "replica1" {
-  name                = "tf-lw-%d-1"
+  name                = "tf-test-%d-1"
   database_version    = "MYSQL_5_7"
   region              = "us-central1"
   deletion_protection = false
 
   settings {
     tier = "db-n1-standard-1"
-		backup_configuration {
+    backup_configuration {
+      enabled = false
       binary_log_enabled = true
-		}
+    }
   }
 
   master_instance_name = google_sql_database_instance.instance_master.name
@@ -1840,13 +2708,16 @@ resource "google_sql_database_instance" "replica1" {
 }
 
 resource "google_sql_database_instance" "replica2" {
-  name                = "tf-lw-%d-2"
+  name                = "tf-test-%d-2"
   database_version    = "MYSQL_5_7"
   region              = "us-central1"
   deletion_protection = false
 
   settings {
     tier = "db-n1-standard-1"
+    backup_configuration {
+      enabled = %s
+    }
   }
 
   master_instance_name = google_sql_database_instance.instance_master.name
@@ -1864,7 +2735,7 @@ resource "google_sql_database_instance" "replica2" {
 
 var testGoogleSqlDatabaseInstance_slave = `
 resource "google_sql_database_instance" "instance_master" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "MYSQL_5_7"
   deletion_protection = false
@@ -1880,7 +2751,7 @@ resource "google_sql_database_instance" "instance_master" {
 }
 
 resource "google_sql_database_instance" "instance_slave" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "MYSQL_5_7"
   deletion_protection = false
@@ -1895,7 +2766,7 @@ resource "google_sql_database_instance" "instance_slave" {
 
 var testGoogleSqlDatabaseInstance_highAvailability = `
 resource "google_sql_database_instance" "instance" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "POSTGRES_9_6"
   deletion_protection = false
@@ -1915,7 +2786,7 @@ resource "google_sql_database_instance" "instance" {
 
 var testGoogleSqlDatabaseInstance_diskspecs = `
 resource "google_sql_database_instance" "instance" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "MYSQL_5_7"
   deletion_protection = false
@@ -1932,7 +2803,7 @@ resource "google_sql_database_instance" "instance" {
 
 var testGoogleSqlDatabaseInstance_maintenance = `
 resource "google_sql_database_instance" "instance" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "MYSQL_5_7"
   deletion_protection = false
@@ -1951,7 +2822,7 @@ resource "google_sql_database_instance" "instance" {
 
 var testGoogleSqlDatabaseInstance_authNets_step1 = `
 resource "google_sql_database_instance" "instance" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "MYSQL_5_7"
   deletion_protection = false
@@ -1971,7 +2842,7 @@ resource "google_sql_database_instance" "instance" {
 
 var testGoogleSqlDatabaseInstance_authNets_step2 = `
 resource "google_sql_database_instance" "instance" {
-  name                = "tf-lw-%d"
+  name                = "tf-test-%d"
   region              = "us-central1"
   database_version    = "MYSQL_5_7"
   deletion_protection = false
@@ -2054,6 +2925,7 @@ resource "google_sql_database_instance" "instance" {
       query_string_length     = 256
       record_application_tags = true
       record_client_address   = true
+      query_plans_per_minute  = 10
     }
   }
 }
@@ -2195,15 +3067,16 @@ resource "google_sql_database_instance" "replica" {
 }
 `
 
-func testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID int, pointInTimeRecoveryEnabled bool) string {
+func testGoogleSqlDatabaseInstance_PointInTimeRecoveryEnabled(masterID int, pointInTimeRecoveryEnabled bool, dbVersion string) string {
 	return fmt.Sprintf(`
 resource "google_sql_database_instance" "instance" {
   name                = "tf-test-%d"
   region              = "us-central1"
-  database_version    = "POSTGRES_9_6"
+  database_version    = "%s"
   deletion_protection = false
+  root_password		  = "rand-pwd-%d"
   settings {
-    tier = "db-f1-micro"
+    tier = "db-custom-2-13312"
     backup_configuration {
       enabled                        = true
       start_time                     = "00:00"
@@ -2211,7 +3084,7 @@ resource "google_sql_database_instance" "instance" {
     }
   }
 }
-`, masterID, pointInTimeRecoveryEnabled)
+`, masterID, dbVersion, masterID, pointInTimeRecoveryEnabled)
 }
 
 func testGoogleSqlDatabaseInstance_BackupRetention(masterID int) string {
@@ -2349,4 +3222,273 @@ data "google_sql_backup_run" "backup" {
 	most_recent = true
 }
 `, context)
+}
+
+func testAccSqlDatabaseInstance_cloneWithDatabaseNames(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_sql_database_instance" "instance" {
+  name             = "tf-test-%{random_suffix}"
+  database_version = "POSTGRES_11"
+  region           = "us-central1"
+
+  clone {
+    source_instance_name = data.google_sql_backup_run.backup.instance
+    point_in_time = data.google_sql_backup_run.backup.start_time
+    database_names = ["userdb1"]
+  }
+
+  deletion_protection = false
+
+  // Ignore changes, since the most recent backup may change during the test
+  lifecycle{
+	ignore_changes = [clone[0].point_in_time]
+  }
+}
+
+data "google_sql_backup_run" "backup" {
+	instance = "%{original_db_name}"
+	most_recent = true
+}
+`, context)
+}
+
+func checkPromoteReplicaSkipConfigurations(resourceName string) func(*terraform.State) error {
+	return func(s *terraform.State) error {
+		resource, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("Can't find %s in state", resourceName)
+		}
+
+		resourceAttributes := resource.Primary.Attributes
+		instanceType, ok := resourceAttributes["instance_type"]
+		if !ok {
+			return fmt.Errorf("Instance type is not present in state for %s", resourceName)
+		}
+		if instanceType != "READ_REPLICA_INSTANCE" {
+			return fmt.Errorf("instance_type is %s, it should be READ_REPLICA_INSTANCE.", instanceType)
+		}
+
+		masterInstanceName, ok := resourceAttributes["master_instance_name"]
+		if !ok && masterInstanceName != "" {
+			return fmt.Errorf("master_instance_name should be present in %s state.", resourceName)
+		}
+
+		return nil
+	}
+}
+
+func checkPromoteReplicaConfigurations(resourceName string) func(*terraform.State) error {
+	return func(s *terraform.State) error {
+		resource, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("Can't find %s in state", resourceName)
+		}
+
+		resourceAttributes := resource.Primary.Attributes
+		instanceType, ok := resourceAttributes["instance_type"]
+		if !ok {
+			return fmt.Errorf("Instance type is not present in state for %s", resourceName)
+		}
+		if instanceType != "CLOUD_SQL_INSTANCE" {
+			return fmt.Errorf("Error in replica promotion. instance_type is %s, it should be CLOUD_SQL_INSTANCE.", instanceType)
+		}
+
+		masterInstanceName, ok := resourceAttributes["master_instance_name"]
+		if ok && masterInstanceName != "" {
+			return fmt.Errorf("Error in replica promotion. master_instance_name should not be present in %s state.", resourceName)
+		}
+
+		replicaConfiguration, ok := resourceAttributes["replica_configuration"]
+		if ok && replicaConfiguration != "" {
+			return fmt.Errorf("Error in replica promotion. replica_configuration should not be present in %s state.", resourceName)
+		}
+
+		return nil
+	}
+}
+
+func checkInstanceTypeIsPresent(resourceName string) func(*terraform.State) error {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("can't find %s in state", resourceName)
+		}
+		rsAttr := rs.Primary.Attributes
+		_, ok = rsAttr["instance_type"]
+		if !ok {
+			return fmt.Errorf("Instance type is not computed for %s", resourceName)
+		}
+		return nil
+	}
+}
+
+func testGoogleSqlDatabaseInstance_readReplica(instance string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "master" {
+  region           = "asia-northeast1"
+  name             = "%s-master"
+  database_version = "MYSQL_5_7"
+  deletion_protection  = false
+  settings {
+    availability_type = "ZONAL"
+    disk_autoresize   = true
+    disk_size         = 10
+    disk_type         = "PD_SSD"
+    tier              = "db-f1-micro"
+
+    activation_policy = "ALWAYS"
+    pricing_plan      = "PER_USE"
+
+    backup_configuration {
+      binary_log_enabled = true
+      enabled            = true
+      location           = "asia"
+      start_time         = "18:00"
+    }
+
+    database_flags {
+      name  = "character_set_server"
+      value = "utf8mb4"
+    }
+  }
+}
+
+
+resource "google_sql_database_instance" "replica" {
+  depends_on           = [google_sql_database_instance.master]
+  name                 = "%s-replica"
+  master_instance_name = google_sql_database_instance.master.name
+  region               = "asia-northeast1"
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+  replica_configuration {
+    failover_target = false
+  }
+  settings {
+    tier              = "db-f1-micro"
+    availability_type = "ZONAL"
+    pricing_plan      = "PER_USE"
+    disk_autoresize   = true
+    disk_size         = 10
+
+    backup_configuration {
+      binary_log_enabled = true
+    }
+
+    database_flags {
+      name  = "slave_parallel_workers"
+      value = "3"
+    }
+
+    database_flags {
+      name  = "slave_parallel_type"
+      value = "LOGICAL_CLOCK"
+    }
+
+    database_flags {
+      name  = "slave_pending_jobs_size_max"
+      value = "536870912" # 512MB
+    }
+  }
+}`, instance, instance)
+}
+
+func testGoogleSqlDatabaseInstance_updateReadReplica(instance string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "master" {
+  region           = "asia-northeast1"
+  name             = "%s-master"
+  database_version = "MYSQL_5_7"
+  deletion_protection  = false
+  settings {
+    availability_type = "ZONAL"
+    disk_autoresize   = true
+    disk_size         = 10
+    disk_type         = "PD_SSD"
+    tier              = "db-f1-micro"
+
+    activation_policy = "ALWAYS"
+    pricing_plan      = "PER_USE"
+
+    backup_configuration {
+      binary_log_enabled = true
+      enabled            = true
+      location           = "asia"
+      start_time         = "18:00"
+    }
+
+    database_flags {
+      name  = "character_set_server"
+      value = "utf8mb4"
+    }
+  }
+}
+
+
+resource "google_sql_database_instance" "replica" {
+  depends_on           = [google_sql_database_instance.master]
+  name                 = "%s-replica"
+  master_instance_name = google_sql_database_instance.master.name
+  region               = "asia-northeast1"
+  database_version     = "MYSQL_5_7"
+  deletion_protection  = false
+  replica_configuration {
+    failover_target = false
+  }
+  settings {
+    tier              = "db-f1-micro"
+    availability_type = "ZONAL"
+    pricing_plan      = "PER_USE"
+    disk_autoresize   = true
+    disk_size         = 10
+
+    backup_configuration {
+      binary_log_enabled = true
+    }
+
+    database_flags {
+      name  = "slave_parallel_workers"
+      value = "2"
+    }
+
+    database_flags {
+      name  = "slave_parallel_type"
+      value = "LOGICAL_CLOCK"
+    }
+
+    database_flags {
+      name  = "slave_pending_jobs_size_max"
+      value = "536870912" # 512MB
+    }
+  }
+}`, instance, instance)
+}
+
+func testGoogleSqlDatabaseInstance_updateRootPassword(instance, databaseVersion, rootPassword string) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "main" {
+    name             = "%s"
+	database_version = "%s"
+	region           = "us-central1"
+	deletion_protection = false
+	root_password = "%s"
+	settings {
+		tier = "db-custom-2-13312"
+	}
+}`, instance, databaseVersion, rootPassword)
+}
+
+func testGoogleSqlDatabaseInstance_activationPolicy(instance, databaseVersion, activationPolicy string, deletionProtection bool) string {
+	return fmt.Sprintf(`
+resource "google_sql_database_instance" "instance" {
+  name                = "%s"
+  region              = "us-central1"
+  database_version    = "%s"
+  deletion_protection = %t
+  settings {
+    tier              = "db-f1-micro"
+    activation_policy = "%s"
+  }
+}
+`, instance, databaseVersion, deletionProtection, activationPolicy)
 }

@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -10,12 +11,12 @@ import (
 func TestAccDNSPolicy_update(t *testing.T) {
 	t.Parallel()
 
-	policySuffix := randString(t, 10)
+	policySuffix := RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckDNSPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDNSPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDnsPolicy_privateUpdate(policySuffix, "true", "172.16.1.10", "172.16.1.30", "network-1"),

@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceNotebooksLocation() *schema.Resource {
+func ResourceNotebooksLocation() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceNotebooksLocationCreate,
 		Read:   resourceNotebooksLocationRead,
@@ -62,8 +65,8 @@ func resourceNotebooksLocation() *schema.Resource {
 }
 
 func resourceNotebooksLocationCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -76,7 +79,7 @@ func resourceNotebooksLocationCreate(d *schema.ResourceData, meta interface{}) e
 		obj["name"] = nameProp
 	}
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations")
 	if err != nil {
 		return err
 	}
@@ -95,13 +98,13 @@ func resourceNotebooksLocationCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Location: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -110,12 +113,13 @@ func resourceNotebooksLocationCreate(d *schema.ResourceData, meta interface{}) e
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = notebooksOperationWaitTimeWithResponse(
+	err = NotebooksOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Location", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Location: %s", err)
 	}
 
@@ -124,7 +128,7 @@ func resourceNotebooksLocationCreate(d *schema.ResourceData, meta interface{}) e
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -136,13 +140,13 @@ func resourceNotebooksLocationCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceNotebooksLocationRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -160,9 +164,9 @@ func resourceNotebooksLocationRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("NotebooksLocation %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("NotebooksLocation %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -172,7 +176,7 @@ func resourceNotebooksLocationRead(d *schema.ResourceData, meta interface{}) err
 	if err := d.Set("name", flattenNotebooksLocationName(res["name"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Location: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading Location: %s", err)
 	}
 
@@ -180,8 +184,8 @@ func resourceNotebooksLocationRead(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceNotebooksLocationUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -202,7 +206,7 @@ func resourceNotebooksLocationUpdate(d *schema.ResourceData, meta interface{}) e
 		obj["name"] = nameProp
 	}
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -214,7 +218,7 @@ func resourceNotebooksLocationUpdate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Location %q: %s", d.Id(), err)
@@ -222,7 +226,7 @@ func resourceNotebooksLocationUpdate(d *schema.ResourceData, meta interface{}) e
 		log.Printf("[DEBUG] Finished updating Location %q: %#v", d.Id(), res)
 	}
 
-	err = notebooksOperationWaitTime(
+	err = NotebooksOperationWaitTime(
 		config, res, project, "Updating Location", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -234,8 +238,8 @@ func resourceNotebooksLocationUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceNotebooksLocationDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -248,7 +252,7 @@ func resourceNotebooksLocationDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -261,12 +265,12 @@ func resourceNotebooksLocationDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Location")
+		return transport_tpg.HandleNotFoundError(err, d, "Location")
 	}
 
-	err = notebooksOperationWaitTime(
+	err = NotebooksOperationWaitTime(
 		config, res, project, "Deleting Location", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -279,8 +283,8 @@ func resourceNotebooksLocationDelete(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceNotebooksLocationImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -289,7 +293,7 @@ func resourceNotebooksLocationImport(d *schema.ResourceData, meta interface{}) (
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -298,13 +302,13 @@ func resourceNotebooksLocationImport(d *schema.ResourceData, meta interface{}) (
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNotebooksLocationName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksLocationName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandNotebooksLocationName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksLocationName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

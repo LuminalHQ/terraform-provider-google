@@ -21,9 +21,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceApigeeEnvgroupAttachment() *schema.Resource {
+func ResourceApigeeEnvgroupAttachment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceApigeeEnvgroupAttachmentCreate,
 		Read:   resourceApigeeEnvgroupAttachmentRead,
@@ -63,8 +65,8 @@ in the format 'organizations/{{org_name}}/envgroups/{{envgroup_name}}'.`,
 }
 
 func resourceApigeeEnvgroupAttachmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -77,7 +79,7 @@ func resourceApigeeEnvgroupAttachmentCreate(d *schema.ResourceData, meta interfa
 		obj["environment"] = environmentProp
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{envgroup_id}}/attachments")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{envgroup_id}}/attachments")
 	if err != nil {
 		return err
 	}
@@ -90,13 +92,13 @@ func resourceApigeeEnvgroupAttachmentCreate(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating EnvgroupAttachment: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{envgroup_id}}/attachments/{{name}}")
+	id, err := ReplaceVars(d, config, "{{envgroup_id}}/attachments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -105,12 +107,13 @@ func resourceApigeeEnvgroupAttachmentCreate(d *schema.ResourceData, meta interfa
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = apigeeOperationWaitTimeWithResponse(
+	err = ApigeeOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating EnvgroupAttachment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create EnvgroupAttachment: %s", err)
 	}
 
@@ -119,7 +122,7 @@ func resourceApigeeEnvgroupAttachmentCreate(d *schema.ResourceData, meta interfa
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{envgroup_id}}/attachments/{{name}}")
+	id, err = ReplaceVars(d, config, "{{envgroup_id}}/attachments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -131,13 +134,13 @@ func resourceApigeeEnvgroupAttachmentCreate(d *schema.ResourceData, meta interfa
 }
 
 func resourceApigeeEnvgroupAttachmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{envgroup_id}}/attachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{envgroup_id}}/attachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -149,9 +152,9 @@ func resourceApigeeEnvgroupAttachmentRead(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ApigeeEnvgroupAttachment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ApigeeEnvgroupAttachment %q", d.Id()))
 	}
 
 	if err := d.Set("environment", flattenApigeeEnvgroupAttachmentEnvironment(res["environment"], d, config)); err != nil {
@@ -165,15 +168,15 @@ func resourceApigeeEnvgroupAttachmentRead(d *schema.ResourceData, meta interface
 }
 
 func resourceApigeeEnvgroupAttachmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{envgroup_id}}/attachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{envgroup_id}}/attachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -186,12 +189,12 @@ func resourceApigeeEnvgroupAttachmentDelete(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "EnvgroupAttachment")
+		return transport_tpg.HandleNotFoundError(err, d, "EnvgroupAttachment")
 	}
 
-	err = apigeeOperationWaitTime(
+	err = ApigeeOperationWaitTime(
 		config, res, "Deleting EnvgroupAttachment", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -204,10 +207,10 @@ func resourceApigeeEnvgroupAttachmentDelete(d *schema.ResourceData, meta interfa
 }
 
 func resourceApigeeEnvgroupAttachmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats cannot import fields with forward slashes in their value
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"(?P<envgroup_id>.+)/attachments/(?P<name>.+)",
 		"(?P<envgroup_id>.+)/(?P<name>.+)",
 	}, d, config); err != nil {
@@ -215,7 +218,7 @@ func resourceApigeeEnvgroupAttachmentImport(d *schema.ResourceData, meta interfa
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{envgroup_id}}/attachments/{{name}}")
+	id, err := ReplaceVars(d, config, "{{envgroup_id}}/attachments/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -224,14 +227,14 @@ func resourceApigeeEnvgroupAttachmentImport(d *schema.ResourceData, meta interfa
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenApigeeEnvgroupAttachmentEnvironment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeEnvgroupAttachmentEnvironment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeEnvgroupAttachmentName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeEnvgroupAttachmentName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandApigeeEnvgroupAttachmentEnvironment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeEnvgroupAttachmentEnvironment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

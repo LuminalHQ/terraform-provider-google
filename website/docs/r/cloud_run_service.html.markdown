@@ -13,27 +13,13 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Run"
-page_title: "Google: google_cloud_run_service"
 description: |-
-  Service acts as a top-level container that manages a set of Routes and
-  Configurations which implement a network service.
+  A Cloud Run service has a unique endpoint and autoscales containers.
 ---
 
 # google\_cloud\_run\_service
 
-Service acts as a top-level container that manages a set of Routes and
-Configurations which implement a network service. Service exists to provide a
-singular abstraction which can be access controlled, reasoned about, and
-which encapsulates software lifecycle decisions such as rollout policy and
-team resource ownership. Service acts only as an orchestrator of the
-underlying Routes and Configurations (much as a kubernetes Deployment
-orchestrates ReplicaSets).
-
-The Service's controller will track the statuses of its owned Configuration
-and Route, reflecting their statuses and conditions as its own.
-
-See also:
-https://github.com/knative/specs/blob/main/specs/serving/overview.md
+A Cloud Run service has a unique endpoint and autoscales containers.
 
 
 To get more information about Service, see:
@@ -42,65 +28,9 @@ To get more information about Service, see:
 * How-to Guides
     * [Official Documentation](https://cloud.google.com/run/docs/)
 
-~> **Warning:** `google_cloudrun_service` creates a Managed Google Cloud Run Service. If you need to create
-a Cloud Run Service on Anthos(GKE/VMWare) then you will need to create it using the kubernetes alpha provider.
-Have a look at the Cloud Run Anthos example below.
+~> **Warning:** We recommend using the `google_cloud_run_v2_service` resource which offers a better
+developer experience and broader support of Cloud Run features.
 
-## Example Usage - Cloud Run Service Pubsub
-
-
-```hcl
-resource "google_cloud_run_service" "default" {
-    name     = "cloud_run_service_name"
-    location = "us-central1"
-    template {
-      spec {
-            containers {
-                image = "gcr.io/cloudrun/hello"
-            }
-      }
-    }
-    traffic {
-      percent         = 100
-      latest_revision = true
-    }
-}
-
-resource "google_service_account" "sa" {
-  account_id   = "cloud-run-pubsub-invoker"
-  display_name = "Cloud Run Pub/Sub Invoker"
-}
-
-resource "google_cloud_run_service_iam_binding" "binding" {
-  location = google_cloud_run_service.default.location
-  service = google_cloud_run_service.default.name
-  role = "roles/run.invoker"
-  members = ["serviceAccount:${google_service_account.sa.email}"]
-}
-
-resource "google_project_iam_binding" "project" {
-  role    = "roles/iam.serviceAccountTokenCreator"
-  members = ["serviceAccount:${google_service_account.sa.email}"]
-}
-
-resource "google_pubsub_topic" "topic" {
-  name = "pubsub_topic"
-}
-
-resource "google_pubsub_subscription" "subscription" {
-  name  = "pubsub_subscription"
-  topic = google_pubsub_topic.topic.name
-  push_config {
-    push_endpoint = google_cloud_run_service.default.status[0].url
-    oidc_token {
-      service_account_email = google_service_account.sa.email
-    }
-    attributes = {
-      x-goog-version = "v1"
-    }
-  }
-}
-```
 ## Example Usage - Cloud Run Service Basic
 
 
@@ -169,7 +99,6 @@ resource "google_sql_database_instance" "instance" {
 
 
 ```hcl
-# Example of how to deploy a publicly-accessible Cloud Run application
 
 resource "google_cloud_run_service" "default" {
   name     = "cloudrun-srv"
@@ -201,7 +130,7 @@ resource "google_cloud_run_service_iam_policy" "noauth" {
   policy_data = data.google_iam_policy.noauth.policy_data
 }
 ```
-## Example Usage - Cloud Run Service Add Tag
+## Example Usage - Cloud Run Service Probes
 
 
 ```hcl
@@ -209,19 +138,37 @@ resource "google_cloud_run_service" "default" {
   name     = "cloudrun-srv"
   location = "us-central1"
 
-  template {}
-
-  traffic {
-    percent       = 100
-    # This revision needs to already exist
-    revision_name = "cloudrun-srv-green"
+  template {
+    spec {
+      containers {
+        image = "us-docker.pkg.dev/cloudrun/container/hello"
+        startup_probe {
+          initial_delay_seconds = 0
+          timeout_seconds = 1
+          period_seconds = 3
+          failure_threshold = 1
+          tcp_socket {
+            port = 8080
+          }
+        }
+        liveness_probe {
+          http_get {
+            path = "/"
+          }
+        }
+      }
+    }
   }
 
   traffic {
-    # Deploy new revision with 0% traffic
-    percent       = 0
-    revision_name = "cloudrun-srv-blue"
-    tag           = "tag-name"
+    percent         = 100
+    latest_revision = true
+  }
+
+  lifecycle {
+    ignore_changes = [
+      metadata.0.annotations,
+    ]
   }
 }
 ```
@@ -233,7 +180,7 @@ The following arguments are supported:
 
 * `name` -
   (Required)
-  Name must be unique within a namespace, within a Cloud Run region.
+  Name must be unique within a Google Cloud project and region.
   Is required when creating resources. Name is primarily intended
   for creation idempotence and configuration definition. Cannot be updated.
   More info: http://kubernetes.io/docs/user-guide/identifiers#names
@@ -266,8 +213,9 @@ The following arguments are supported:
   false when RevisionName is non-empty.
 
 * `url` -
-  URL displays the URL for accessing tagged traffic targets. URL is displayed in status, 
-  and is disallowed on spec. URL must contain a scheme (e.g. http://) and a hostname, 
+  (Output)
+  URL displays the URL for accessing tagged traffic targets. URL is displayed in status,
+  and is disallowed on spec. URL must contain a scheme (e.g. http://) and a hostname,
   but may not contain anything else (e.g. basic auth, url path, etc.)
 
 <a name="nested_template"></a>The `template` block supports:
@@ -294,29 +242,28 @@ The following arguments are supported:
 * `labels` -
   (Optional)
   Map of string keys and values that can be used to organize and categorize
-  (scope and select) objects. May match selectors of replication controllers
-  and routes.
-  More info: http://kubernetes.io/docs/user-guide/labels
+  (scope and select) objects.
 
 * `generation` -
+  (Output)
   A sequence number representing a specific generation of the desired state.
 
 * `resource_version` -
+  (Output)
   An opaque value that represents the internal version of this object that
   can be used by clients to determine when objects have changed. May be used
   for optimistic concurrency, change detection, and the watch operation on a
   resource or set of resources. They may only be valid for a
   particular resource or set of resources.
-  More info:
-  https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-control-and-consistency
 
 * `self_link` -
+  (Output)
   SelfLink is a URL representing this object.
 
 * `uid` -
+  (Output)
   UID is a unique id generated by the server on successful creation of a resource and is not
   allowed to change on PUT operations.
-  More info: http://kubernetes.io/docs/user-guide/identifiers#uids
 
 * `namespace` -
   (Optional)
@@ -331,13 +278,44 @@ The following arguments are supported:
   **Note**: The Cloud Run API may add additional annotations that were not provided in your config.
   If terraform plan shows a diff where a server-side annotation is added, you can add it to your config
   or apply the lifecycle.ignore_changes rule to the metadata.0.annotations field.
+  Annotations with `run.googleapis.com/` and `autoscaling.knative.dev` are restricted. Use the following annotation
+  keys to configure features on a Revision template:
+  - `autoscaling.knative.dev/maxScale` sets the [maximum number of container
+    instances](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--max-instances) of the Revision to run.
+  - `autoscaling.knative.dev/minScale` sets the [minimum number of container
+    instances](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--min-instances) of the Revision to run.
+  - `run.googleapis.com/client-name` sets the client name calling the Cloud Run API.
+  - `run.googleapis.com/cloudsql-instances` sets the [Cloud SQL
+    instances](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--add-cloudsql-instances) the Revision connects to.
+  - `run.googleapis.com/cpu-throttling` sets whether to throttle the CPU when the container is not actively serving
+    requests. See https://cloud.google.com/sdk/gcloud/reference/run/deploy#--[no-]cpu-throttling.
+  - `run.googleapis.com/encryption-key-shutdown-hours` sets the number of hours to wait before an automatic shutdown
+    server after CMEK key revocation is detected.
+  - `run.googleapis.com/encryption-key` sets the [CMEK key](https://cloud.google.com/run/docs/securing/using-cmek)
+    reference to encrypt the container with.
+  - `run.googleapis.com/execution-environment` sets the [execution
+    environment](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--execution-environment)
+    where the application will run.
+  - `run.googleapis.com/post-key-revocation-action-type` sets the
+    [action type](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--post-key-revocation-action-type)
+    after CMEK key revocation.
+  - `run.googleapis.com/secrets` sets a list of key-value pairs to set as
+    [secrets](https://cloud.google.com/run/docs/configuring/secrets#yaml).
+  - `run.googleapis.com/sessionAffinity` sets whether to enable
+    [session affinity](https://cloud.google.com/sdk/gcloud/reference/beta/run/deploy#--[no-]session-affinity)
+    for connections to the Revision.
+  - `run.googleapis.com/startup-cpu-boost` sets whether to allocate extra CPU to containers on startup.
+    See https://cloud.google.com/sdk/gcloud/reference/run/deploy#--[no-]cpu-boost.
+  - `run.googleapis.com/vpc-access-connector` sets a [VPC connector](https://cloud.google.com/run/docs/configuring/connecting-vpc#terraform_1)
+    for the Revision.
+  - `run.googleapis.com/vpc-access-egress` sets the outbound traffic to send through the VPC connector for this resource.
+    See https://cloud.google.com/sdk/gcloud/reference/run/deploy#--vpc-egress.
 
 * `name` -
   (Optional)
-  Name must be unique within a namespace, within a Cloud Run region.
+  Name must be unique within a Google Cloud project and region.
   Is required when creating resources. Name is primarily intended
   for creation idempotence and configuration definition. Cannot be updated.
-  More info: http://kubernetes.io/docs/user-guide/identifiers#names
 
 <a name="nested_spec"></a>The `spec` block supports:
 
@@ -346,8 +324,6 @@ The following arguments are supported:
   Container defines the unit of execution for this Revision.
   In the context of a Revision, we disallow a number of the fields of
   this Container, including: name, ports, and volumeMounts.
-  The runtime contract is documented here:
-  https://github.com/knative/serving/blob/main/docs/runtime-contract.md
   Structure is [documented below](#nested_containers).
 
 * `container_concurrency` -
@@ -376,7 +352,7 @@ The following arguments are supported:
   Structure is [documented below](#nested_volumes).
 
 * `serving_state` -
-  (Deprecated)
+  (Output, Deprecated)
   ServingState holds a value describing the state the resources
   are in for this Revision.
   It is expected
@@ -395,13 +371,6 @@ The following arguments are supported:
   (Optional)
   Arguments to the entrypoint.
   The docker image's CMD is used if this is not provided.
-  Variable references $(VAR_NAME) are expanded using the container's
-  environment. If a variable cannot be resolved, the reference in the input
-  string will be unchanged. The $(VAR_NAME) syntax can be escaped with a
-  double $$, ie: $$(VAR_NAME). Escaped references will never be expanded,
-  regardless of whether the variable exists or not.
-  More info:
-  https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell
 
 * `env_from` -
   (Optional, Deprecated)
@@ -416,19 +385,11 @@ The following arguments are supported:
   (Required)
   Docker image name. This is most often a reference to a container located
   in the container registry, such as gcr.io/cloudrun/hello
-  More info: https://kubernetes.io/docs/concepts/containers/images
 
 * `command` -
   (Optional)
   Entrypoint array. Not executed within a shell.
   The docker image's ENTRYPOINT is used if this is not provided.
-  Variable references $(VAR_NAME) are expanded using the container's
-  environment. If a variable cannot be resolved, the reference in the input
-  string will be unchanged. The $(VAR_NAME) syntax can be escaped with a
-  double $$, ie: $$(VAR_NAME). Escaped references will never be expanded,
-  regardless of whether the variable exists or not.
-  More info:
-  https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell
 
 * `env` -
   (Optional)
@@ -438,15 +399,11 @@ The following arguments are supported:
 * `ports` -
   (Optional)
   List of open ports in the container.
-  More Info:
-  https://cloud.google.com/run/docs/reference/rest/v1/RevisionSpec#ContainerPort
   Structure is [documented below](#nested_ports).
 
 * `resources` -
   (Optional)
   Compute Resources required by this container. Used to set values such as max memory
-  More info:
-  https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#requests-and-limits
   Structure is [documented below](#nested_resources).
 
 * `volume_mounts` -
@@ -454,6 +411,18 @@ The following arguments are supported:
   Volume to mount into the container's filesystem.
   Only supports SecretVolumeSources.
   Structure is [documented below](#nested_volume_mounts).
+
+* `startup_probe` -
+  (Optional)
+  Startup probe of application within the container.
+  All other probes are disabled if a startup probe is provided, until it
+  succeeds. Container will not be added to service endpoints if the probe fails.
+  Structure is [documented below](#nested_startup_probe).
+
+* `liveness_probe` -
+  (Optional)
+  Periodic probe of container liveness. Container will be restarted if the probe fails.
+  Structure is [documented below](#nested_liveness_probe).
 
 
 <a name="nested_env_from"></a>The `env_from` block supports:
@@ -490,8 +459,6 @@ The following arguments are supported:
 * `name` -
   (Required)
   Name of the referent.
-  More info:
-  https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
 
 <a name="nested_secret_ref"></a>The `secret_ref` block supports:
 
@@ -510,8 +477,6 @@ The following arguments are supported:
 * `name` -
   (Required)
   Name of the referent.
-  More info:
-  https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
 
 <a name="nested_env"></a>The `env` block supports:
 
@@ -521,13 +486,6 @@ The following arguments are supported:
 
 * `value` -
   (Optional)
-  Variable references $(VAR_NAME) are expanded
-  using the previous defined environment variables in the container and
-  any route environment variables. If a variable cannot be resolved,
-  the reference in the input string will be unchanged. The $(VAR_NAME)
-  syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped
-  references will never be expanded, regardless of whether the variable
-  exists or not.
   Defaults to "".
 
 * `value_from` -
@@ -553,17 +511,17 @@ The following arguments are supported:
 
 * `name` -
   (Required)
-  The name of the secret in Cloud Secret Manager. By default, the secret is assumed to be in the same project. 
-  If the secret is in another project, you must define an alias. 
-  An alias definition has the form: :projects/<project-id|project-number>/secrets/. 
-  If multiple alias definitions are needed, they must be separated by commas. 
+  The name of the secret in Cloud Secret Manager. By default, the secret is assumed to be in the same project.
+  If the secret is in another project, you must define an alias.
+  An alias definition has the form: :projects/{project-id|project-number}/secrets/.
+  If multiple alias definitions are needed, they must be separated by commas.
   The alias definitions must be set on the run.googleapis.com/secrets annotation.
 
 <a name="nested_ports"></a>The `ports` block supports:
 
 * `name` -
   (Optional)
-  If specified, used to specify which protocol to use. Allowed values are "http1" and "h2c".
+  If specified, used to specify which protocol to use. Allowed values are "http1" (HTTP/1) and "h2c" (HTTP/2 end-to-end). Defaults to "http1".
 
 * `protocol` -
   (Optional)
@@ -571,7 +529,7 @@ The following arguments are supported:
 
 * `container_port` -
   (Optional)
-  Port number the container listens on. This must be a valid port number, 0 < x < 65536.
+  Port number the container listens on. This must be a valid port number (between 1 and 65535). Defaults to "8080".
 
 <a name="nested_resources"></a>The `resources` block supports:
 
@@ -600,6 +558,168 @@ The following arguments are supported:
   (Required)
   This must match the Name of a Volume.
 
+<a name="nested_startup_probe"></a>The `startup_probe` block supports:
+
+* `initial_delay_seconds` -
+  (Optional)
+  Number of seconds after the container has started before the probe is
+  initiated.
+  Defaults to 0 seconds. Minimum value is 0. Maximum value is 240.
+
+* `timeout_seconds` -
+  (Optional)
+  Number of seconds after which the probe times out.
+  Defaults to 1 second. Minimum value is 1. Maximum value is 3600.
+  Must be smaller than periodSeconds.
+
+* `period_seconds` -
+  (Optional)
+  How often (in seconds) to perform the probe.
+  Default to 10 seconds. Minimum value is 1. Maximum value is 240.
+
+* `failure_threshold` -
+  (Optional)
+  Minimum consecutive failures for the probe to be considered failed after
+  having succeeded. Defaults to 3. Minimum value is 1.
+
+* `tcp_socket` -
+  (Optional)
+  TcpSocket specifies an action involving a TCP port.
+  Structure is [documented below](#nested_tcp_socket).
+
+* `http_get` -
+  (Optional)
+  HttpGet specifies the http request to perform.
+  Structure is [documented below](#nested_http_get).
+
+* `grpc` -
+  (Optional)
+  GRPC specifies an action involving a GRPC port.
+  Structure is [documented below](#nested_grpc).
+
+
+<a name="nested_tcp_socket"></a>The `tcp_socket` block supports:
+
+* `port` -
+  (Optional)
+  Port number to access on the container. Number must be in the range 1 to 65535.
+  If not specified, defaults to the same value as container.ports[0].containerPort.
+
+<a name="nested_http_get"></a>The `http_get` block supports:
+
+* `path` -
+  (Optional)
+  Path to access on the HTTP server. If set, it should not be empty string.
+
+* `port` -
+  (Optional)
+  Port number to access on the container. Number must be in the range 1 to 65535.
+  If not specified, defaults to the same value as container.ports[0].containerPort.
+
+* `http_headers` -
+  (Optional)
+  Custom headers to set in the request. HTTP allows repeated headers.
+  Structure is [documented below](#nested_http_headers).
+
+
+<a name="nested_http_headers"></a>The `http_headers` block supports:
+
+* `name` -
+  (Required)
+  The header field name.
+
+* `value` -
+  (Optional)
+  The header field value.
+
+<a name="nested_grpc"></a>The `grpc` block supports:
+
+* `port` -
+  (Optional)
+  Port number to access on the container. Number must be in the range 1 to 65535.
+  If not specified, defaults to the same value as container.ports[0].containerPort.
+
+* `service` -
+  (Optional)
+  The name of the service to place in the gRPC HealthCheckRequest
+  (see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).
+  If this is not specified, the default behavior is defined by gRPC.
+
+<a name="nested_liveness_probe"></a>The `liveness_probe` block supports:
+
+* `initial_delay_seconds` -
+  (Optional)
+  Number of seconds after the container has started before the probe is
+  initiated.
+  Defaults to 0 seconds. Minimum value is 0. Maximum value is 3600.
+
+* `timeout_seconds` -
+  (Optional)
+  Number of seconds after which the probe times out.
+  Defaults to 1 second. Minimum value is 1. Maximum value is 3600.
+  Must be smaller than period_seconds.
+
+* `period_seconds` -
+  (Optional)
+  How often (in seconds) to perform the probe.
+  Default to 10 seconds. Minimum value is 1. Maximum value is 3600.
+
+* `failure_threshold` -
+  (Optional)
+  Minimum consecutive failures for the probe to be considered failed after
+  having succeeded. Defaults to 3. Minimum value is 1.
+
+* `http_get` -
+  (Optional)
+  HttpGet specifies the http request to perform.
+  Structure is [documented below](#nested_http_get).
+
+* `grpc` -
+  (Optional)
+  GRPC specifies an action involving a GRPC port.
+  Structure is [documented below](#nested_grpc).
+
+
+<a name="nested_http_get"></a>The `http_get` block supports:
+
+* `path` -
+  (Optional)
+  Path to access on the HTTP server. If set, it should not be empty string.
+
+* `port` -
+  (Optional)
+  Port number to access on the container. Number must be in the range 1 to 65535.
+  If not specified, defaults to the same value as container.ports[0].containerPort.
+
+* `http_headers` -
+  (Optional)
+  Custom headers to set in the request. HTTP allows repeated headers.
+  Structure is [documented below](#nested_http_headers).
+
+
+<a name="nested_http_headers"></a>The `http_headers` block supports:
+
+* `name` -
+  (Required)
+  The header field name.
+
+* `value` -
+  (Optional)
+  The header field value.
+
+<a name="nested_grpc"></a>The `grpc` block supports:
+
+* `port` -
+  (Optional)
+  Port number to access on the container. Number must be in the range 1 to 65535.
+  If not specified, defaults to the same value as container.ports[0].containerPort.
+
+* `service` -
+  (Optional)
+  The name of the service to place in the gRPC HealthCheckRequest
+  (see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).
+  If this is not specified, the default behavior is defined by gRPC.
+
 <a name="nested_volumes"></a>The `volumes` block supports:
 
 * `name` -
@@ -622,7 +742,7 @@ The following arguments are supported:
   is assumed to be in the same project.
   If the secret is in another project, you must define an alias.
   An alias definition has the form:
-  <alias>:projects/<project-id|project-number>/secrets/<secret-name>.
+  {alias}:projects/{project-id|project-number}/secrets/{secret-name}.
   If multiple alias definitions are needed, they must be separated by
   commas.
   The alias definitions must be set on the run.googleapis.com/secrets
@@ -711,27 +831,27 @@ this field is set to false, the revision name will still autogenerate.)
   Map of string keys and values that can be used to organize and categorize
   (scope and select) objects. May match selectors of replication controllers
   and routes.
-  More info: http://kubernetes.io/docs/user-guide/labels
 
 * `generation` -
+  (Output)
   A sequence number representing a specific generation of the desired state.
 
 * `resource_version` -
+  (Output)
   An opaque value that represents the internal version of this object that
   can be used by clients to determine when objects have changed. May be used
   for optimistic concurrency, change detection, and the watch operation on a
   resource or set of resources. They may only be valid for a
   particular resource or set of resources.
-  More info:
-  https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-control-and-consistency
 
 * `self_link` -
+  (Output)
   SelfLink is a URL representing this object.
 
 * `uid` -
+  (Output)
   UID is a unique id generated by the server on successful creation of a resource and is not
   allowed to change on PUT operations.
-  More info: http://kubernetes.io/docs/user-guide/identifiers#uids
 
 * `namespace` -
   (Optional)
@@ -746,9 +866,18 @@ this field is set to false, the revision name will still autogenerate.)
   **Note**: The Cloud Run API may add additional annotations that were not provided in your config.
   If terraform plan shows a diff where a server-side annotation is added, you can add it to your config
   or apply the lifecycle.ignore_changes rule to the metadata.0.annotations field.
-  Cloud Run (fully managed) uses the following annotation keys to configure features on a Service:
+  Annotations with `run.googleapis.com/` and `autoscaling.knative.dev` are restricted. Use the following annotation
+  keys to configure features on a Service:
+  - `run.googleapis.com/binary-authorization-breakglass` sets the [Binary Authorization breakglass](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--breakglass).
+  - `run.googleapis.com/binary-authorization` sets the [Binary Authorization](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--binary-authorization).
+  - `run.googleapis.com/client-name` sets the client name calling the Cloud Run API.
+  - `run.googleapis.com/custom-audiences` sets the [custom audiences](https://cloud.google.com/sdk/gcloud/reference/alpha/run/deploy#--add-custom-audiences)
+    that can be used in the audience field of ID token for authenticated requests.
+  - `run.googleapis.com/description` sets a user defined description for the Service.
   - `run.googleapis.com/ingress` sets the [ingress settings](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--ingress)
     for the Service. For example, `"run.googleapis.com/ingress" = "all"`.
+  - `run.googleapis.com/launch-stage` sets the [launch stage](https://cloud.google.com/run/docs/troubleshooting#launch-stage-validation)
+    when a preview feature is used. For example, `"run.googleapis.com/launch-stage": "BETA"`
 
 ## Attributes Reference
 
@@ -764,26 +893,31 @@ In addition to the arguments listed above, the following computed attributes are
 <a name="nested_status"></a>The `status` block contains:
 
 * `conditions` -
+  (Output)
   Array of observed Service Conditions, indicating the current ready state of the service.
   Structure is [documented below](#nested_conditions).
 
 * `url` -
+  (Output)
   From RouteStatus. URL holds the url that will distribute traffic over the provided traffic
   targets. It generally has the form
   https://{route-hash}-{project-hash}-{cluster-level-suffix}.a.run.app
 
 * `observed_generation` -
+  (Output)
   ObservedGeneration is the 'Generation' of the Route that was last processed by the
   controller.
   Clients polling for completed reconciliation should poll until observedGeneration =
   metadata.generation and the Ready condition's status is True or False.
 
 * `latest_created_revision_name` -
+  (Output)
   From ConfigurationStatus. LatestCreatedRevisionName is the last revision that was created
   from this Service's Configuration. It might not be ready yet, for that use
   LatestReadyRevisionName.
 
 * `latest_ready_revision_name` -
+  (Output)
   From ConfigurationStatus. LatestReadyRevisionName holds the name of the latest Revision
   stamped out from this Service's Configuration that has had its "Ready" condition become
   "True".
@@ -792,21 +926,25 @@ In addition to the arguments listed above, the following computed attributes are
 <a name="nested_conditions"></a>The `conditions` block contains:
 
 * `message` -
+  (Output)
   Human readable message indicating details about the current status.
 
 * `status` -
+  (Output)
   Status of the condition, one of True, False, Unknown.
 
 * `reason` -
+  (Output)
   One-word CamelCase reason for the condition's current status.
 
 * `type` -
+  (Output)
   Type of domain mapping condition.
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -825,4 +963,4 @@ $ terraform import google_cloud_run_service.default {{location}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

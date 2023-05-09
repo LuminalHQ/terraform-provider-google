@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeAutoscaler() *schema.Resource {
+func ResourceComputeAutoscaler() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeAutoscalerCreate,
 		Read:   resourceComputeAutoscalerRead,
@@ -171,7 +175,7 @@ of the instances.`,
 									"type": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validateEnum([]string{"GAUGE", "DELTA_PER_SECOND", "DELTA_PER_MINUTE", ""}),
+										ValidateFunc: verify.ValidateEnum([]string{"GAUGE", "DELTA_PER_SECOND", "DELTA_PER_MINUTE", ""}),
 										Description: `Defines how target utilization value is expressed for a
 Stackdriver Monitoring metric. Possible values: ["GAUGE", "DELTA_PER_SECOND", "DELTA_PER_MINUTE"]`,
 									},
@@ -181,7 +185,7 @@ Stackdriver Monitoring metric. Possible values: ["GAUGE", "DELTA_PER_SECOND", "D
 						"mode": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"OFF", "ONLY_UP", "ON", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"OFF", "ONLY_UP", "ON", ""}),
 							Description:  `Defines operating mode for this policy. Default value: "ON" Possible values: ["OFF", "ONLY_UP", "ON"]`,
 							Default:      "ON",
 						},
@@ -280,7 +284,7 @@ to include directives regarding slower scale down, as described above.`,
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateGCEName,
+				ValidateFunc: verify.ValidateGCEName,
 				Description: `Name of the resource. The name must be 1-63 characters long and match
 the regular expression '[a-z]([-a-z0-9]*[a-z0-9])?' which means the
 first character must be a lowercase letter, and all following
@@ -327,8 +331,8 @@ character, which cannot be a dash.`,
 }
 
 func resourceComputeAutoscalerCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -365,7 +369,7 @@ func resourceComputeAutoscalerCreate(d *schema.ResourceData, meta interface{}) e
 		obj["zone"] = zoneProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers")
 	if err != nil {
 		return err
 	}
@@ -384,19 +388,19 @@ func resourceComputeAutoscalerCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Autoscaler: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating Autoscaler", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -412,13 +416,13 @@ func resourceComputeAutoscalerCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeAutoscalerRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -436,9 +440,9 @@ func resourceComputeAutoscalerRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeAutoscaler %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeAutoscaler %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -463,7 +467,7 @@ func resourceComputeAutoscalerRead(d *schema.ResourceData, meta interface{}) err
 	if err := d.Set("zone", flattenComputeAutoscalerZone(res["zone"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Autoscaler: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading Autoscaler: %s", err)
 	}
 
@@ -471,8 +475,8 @@ func resourceComputeAutoscalerRead(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeAutoscalerUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -517,7 +521,7 @@ func resourceComputeAutoscalerUpdate(d *schema.ResourceData, meta interface{}) e
 		obj["zone"] = zoneProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers?autoscaler={{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers?autoscaler={{name}}")
 	if err != nil {
 		return err
 	}
@@ -529,7 +533,7 @@ func resourceComputeAutoscalerUpdate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Autoscaler %q: %s", d.Id(), err)
@@ -537,7 +541,7 @@ func resourceComputeAutoscalerUpdate(d *schema.ResourceData, meta interface{}) e
 		log.Printf("[DEBUG] Finished updating Autoscaler %q: %#v", d.Id(), res)
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Updating Autoscaler", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -549,8 +553,8 @@ func resourceComputeAutoscalerUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeAutoscalerDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -563,7 +567,7 @@ func resourceComputeAutoscalerDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -576,12 +580,12 @@ func resourceComputeAutoscalerDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Autoscaler")
+		return transport_tpg.HandleNotFoundError(err, d, "Autoscaler")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting Autoscaler", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -594,8 +598,8 @@ func resourceComputeAutoscalerDelete(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeAutoscalerImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/zones/(?P<zone>[^/]+)/autoscalers/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<zone>[^/]+)/(?P<name>[^/]+)",
@@ -605,7 +609,7 @@ func resourceComputeAutoscalerImport(d *schema.ResourceData, meta interface{}) (
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/autoscalers/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -614,19 +618,19 @@ func resourceComputeAutoscalerImport(d *schema.ResourceData, meta interface{}) (
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeAutoscalerCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -655,10 +659,10 @@ func flattenComputeAutoscalerAutoscalingPolicy(v interface{}, d *schema.Resource
 		flattenComputeAutoscalerAutoscalingPolicyScalingSchedules(original["scalingSchedules"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeAutoscalerAutoscalingPolicyMinReplicas(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMinReplicas(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -672,10 +676,10 @@ func flattenComputeAutoscalerAutoscalingPolicyMinReplicas(v interface{}, d *sche
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyMaxReplicas(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMaxReplicas(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -689,10 +693,10 @@ func flattenComputeAutoscalerAutoscalingPolicyMaxReplicas(v interface{}, d *sche
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyCooldownPeriod(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyCooldownPeriod(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -706,11 +710,11 @@ func flattenComputeAutoscalerAutoscalingPolicyCooldownPeriod(v interface{}, d *s
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScaleInControl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScaleInControl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -725,7 +729,7 @@ func flattenComputeAutoscalerAutoscalingPolicyScaleInControl(v interface{}, d *s
 		flattenComputeAutoscalerAutoscalingPolicyScaleInControlTimeWindowSec(original["timeWindowSec"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicas(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicas(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -740,10 +744,10 @@ func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicas(
 		flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasPercent(original["percent"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasFixed(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasFixed(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -757,10 +761,10 @@ func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasF
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasPercent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasPercent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -774,10 +778,10 @@ func flattenComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasP
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScaleInControlTimeWindowSec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScaleInControlTimeWindowSec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -791,7 +795,7 @@ func flattenComputeAutoscalerAutoscalingPolicyScaleInControlTimeWindowSec(v inte
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyCpuUtilization(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyCpuUtilization(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -806,11 +810,11 @@ func flattenComputeAutoscalerAutoscalingPolicyCpuUtilization(v interface{}, d *s
 		flattenComputeAutoscalerAutoscalingPolicyCpuUtilizationPredictiveMethod(original["predictiveMethod"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeAutoscalerAutoscalingPolicyCpuUtilizationTarget(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyCpuUtilizationTarget(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyCpuUtilizationPredictiveMethod(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyCpuUtilizationPredictiveMethod(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil || isEmptyValue(reflect.ValueOf(v)) {
 		return "NONE"
 	}
@@ -818,7 +822,7 @@ func flattenComputeAutoscalerAutoscalingPolicyCpuUtilizationPredictiveMethod(v i
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyMetric(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMetric(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -838,19 +842,19 @@ func flattenComputeAutoscalerAutoscalingPolicyMetric(v interface{}, d *schema.Re
 	}
 	return transformed
 }
-func flattenComputeAutoscalerAutoscalingPolicyMetricName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMetricName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyMetricTarget(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMetricTarget(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyMetricType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyMetricType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyLoadBalancingUtilization(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyLoadBalancingUtilization(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -863,11 +867,11 @@ func flattenComputeAutoscalerAutoscalingPolicyLoadBalancingUtilization(v interfa
 		flattenComputeAutoscalerAutoscalingPolicyLoadBalancingUtilizationTarget(original["utilizationTarget"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeAutoscalerAutoscalingPolicyLoadBalancingUtilizationTarget(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyLoadBalancingUtilizationTarget(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedules(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedules(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -887,10 +891,10 @@ func flattenComputeAutoscalerAutoscalingPolicyScalingSchedules(v interface{}, d 
 	}
 	return transformed
 }
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesMinRequiredReplicas(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesMinRequiredReplicas(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -904,18 +908,18 @@ func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesMinRequiredReplica
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesTimeZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesTimeZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDurationSec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDurationSec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -929,37 +933,37 @@ func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDurationSec(v inte
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDisabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDisabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerAutoscalingPolicyScalingSchedulesDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeAutoscalerTarget(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerTarget(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeAutoscalerZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeAutoscalerZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func expandComputeAutoscalerName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1034,23 +1038,23 @@ func expandComputeAutoscalerAutoscalingPolicy(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMinReplicas(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMinReplicas(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMaxReplicas(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMaxReplicas(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyCooldownPeriod(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyCooldownPeriod(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScaleInControl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScaleInControl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1076,7 +1080,7 @@ func expandComputeAutoscalerAutoscalingPolicyScaleInControl(v interface{}, d Ter
 	return transformed, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicas(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicas(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1102,19 +1106,19 @@ func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicas(v
 	return transformed, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasFixed(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasFixed(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasPercent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScaleInControlMaxScaledInReplicasPercent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScaleInControlTimeWindowSec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScaleInControlTimeWindowSec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyCpuUtilization(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyCpuUtilization(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1140,15 +1144,15 @@ func expandComputeAutoscalerAutoscalingPolicyCpuUtilization(v interface{}, d Ter
 	return transformed, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyCpuUtilizationTarget(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyCpuUtilizationTarget(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyCpuUtilizationPredictiveMethod(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyCpuUtilizationPredictiveMethod(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMetric(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMetric(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1184,19 +1188,19 @@ func expandComputeAutoscalerAutoscalingPolicyMetric(v interface{}, d TerraformRe
 	return req, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMetricName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMetricName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMetricTarget(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMetricTarget(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyMetricType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyMetricType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyLoadBalancingUtilization(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyLoadBalancingUtilization(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1215,11 +1219,11 @@ func expandComputeAutoscalerAutoscalingPolicyLoadBalancingUtilization(v interfac
 	return transformed, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyLoadBalancingUtilizationTarget(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyLoadBalancingUtilizationTarget(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedules(v interface{}, d TerraformResourceData, config *Config) (map[string]interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedules(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]interface{}, error) {
 	if v == nil {
 		return map[string]interface{}{}, nil
 	}
@@ -1279,31 +1283,31 @@ func expandComputeAutoscalerAutoscalingPolicyScalingSchedules(v interface{}, d T
 	return m, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesMinRequiredReplicas(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesMinRequiredReplicas(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesTimeZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesTimeZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesDurationSec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesDurationSec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesDisabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesDisabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerAutoscalingPolicyScalingSchedulesDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeAutoscalerTarget(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerTarget(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil || v.(string) == "" {
 		return "", nil
 	}
@@ -1312,7 +1316,7 @@ func expandComputeAutoscalerTarget(v interface{}, d TerraformResourceData, confi
 		return nil, fmt.Errorf("Invalid value for target: %s", err)
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}"+f.RelativeLink())
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}"+f.RelativeLink())
 	if err != nil {
 		return nil, err
 	}
@@ -1320,7 +1324,7 @@ func expandComputeAutoscalerTarget(v interface{}, d TerraformResourceData, confi
 	return url, nil
 }
 
-func expandComputeAutoscalerZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeAutoscalerZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("zones", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for zone: %s", err)

@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceNetworkManagementConnectivityTest() *schema.Resource {
+func ResourceNetworkManagementConnectivityTest() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceNetworkManagementConnectivityTestCreate,
 		Read:   resourceNetworkManagementConnectivityTestRead,
@@ -159,7 +163,7 @@ destination is a global load balancer VIP.`,
 						"network_type": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"GCP_NETWORK", "NON_GCP_NETWORK", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"GCP_NETWORK", "NON_GCP_NETWORK", ""}),
 							Description:  `Type of the network where the endpoint is located. Possible values: ["GCP_NETWORK", "NON_GCP_NETWORK"]`,
 						},
 						"port": {
@@ -225,8 +229,8 @@ boundaries.`,
 }
 
 func resourceNetworkManagementConnectivityTestCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -275,7 +279,7 @@ func resourceNetworkManagementConnectivityTestCreate(d *schema.ResourceData, met
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests?testId={{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests?testId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -294,13 +298,13 @@ func resourceNetworkManagementConnectivityTestCreate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating ConnectivityTest: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/connectivityTests/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/connectivityTests/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -309,12 +313,13 @@ func resourceNetworkManagementConnectivityTestCreate(d *schema.ResourceData, met
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = networkManagementOperationWaitTimeWithResponse(
+	err = NetworkManagementOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating ConnectivityTest", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create ConnectivityTest: %s", err)
 	}
 
@@ -323,7 +328,7 @@ func resourceNetworkManagementConnectivityTestCreate(d *schema.ResourceData, met
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/global/connectivityTests/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/global/connectivityTests/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -335,13 +340,13 @@ func resourceNetworkManagementConnectivityTestCreate(d *schema.ResourceData, met
 }
 
 func resourceNetworkManagementConnectivityTestRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -359,9 +364,9 @@ func resourceNetworkManagementConnectivityTestRead(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("NetworkManagementConnectivityTest %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("NetworkManagementConnectivityTest %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -394,8 +399,8 @@ func resourceNetworkManagementConnectivityTestRead(d *schema.ResourceData, meta 
 }
 
 func resourceNetworkManagementConnectivityTestUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -446,7 +451,7 @@ func resourceNetworkManagementConnectivityTestUpdate(d *schema.ResourceData, met
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -486,9 +491,9 @@ func resourceNetworkManagementConnectivityTestUpdate(d *schema.ResourceData, met
 	if d.HasChange("labels") {
 		updateMask = append(updateMask, "labels")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -498,7 +503,7 @@ func resourceNetworkManagementConnectivityTestUpdate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating ConnectivityTest %q: %s", d.Id(), err)
@@ -506,7 +511,7 @@ func resourceNetworkManagementConnectivityTestUpdate(d *schema.ResourceData, met
 		log.Printf("[DEBUG] Finished updating ConnectivityTest %q: %#v", d.Id(), res)
 	}
 
-	err = networkManagementOperationWaitTime(
+	err = NetworkManagementOperationWaitTime(
 		config, res, project, "Updating ConnectivityTest", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -518,8 +523,8 @@ func resourceNetworkManagementConnectivityTestUpdate(d *schema.ResourceData, met
 }
 
 func resourceNetworkManagementConnectivityTestDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -532,7 +537,7 @@ func resourceNetworkManagementConnectivityTestDelete(d *schema.ResourceData, met
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkManagementBasePath}}projects/{{project}}/locations/global/connectivityTests/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -545,12 +550,12 @@ func resourceNetworkManagementConnectivityTestDelete(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "ConnectivityTest")
+		return transport_tpg.HandleNotFoundError(err, d, "ConnectivityTest")
 	}
 
-	err = networkManagementOperationWaitTime(
+	err = NetworkManagementOperationWaitTime(
 		config, res, project, "Deleting ConnectivityTest", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -563,8 +568,8 @@ func resourceNetworkManagementConnectivityTestDelete(d *schema.ResourceData, met
 }
 
 func resourceNetworkManagementConnectivityTestImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/connectivityTests/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -573,7 +578,7 @@ func resourceNetworkManagementConnectivityTestImport(d *schema.ResourceData, met
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/connectivityTests/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/connectivityTests/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -582,18 +587,18 @@ func resourceNetworkManagementConnectivityTestImport(d *schema.ResourceData, met
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNetworkManagementConnectivityTestName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenNetworkManagementConnectivityTestDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestSource(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSource(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -616,14 +621,14 @@ func flattenNetworkManagementConnectivityTestSource(v interface{}, d *schema.Res
 		flattenNetworkManagementConnectivityTestSourceProjectId(original["projectId"], d, config)
 	return []interface{}{transformed}
 }
-func flattenNetworkManagementConnectivityTestSourceIpAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSourceIpAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestSourcePort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSourcePort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -637,23 +642,23 @@ func flattenNetworkManagementConnectivityTestSourcePort(v interface{}, d *schema
 	return v // let terraform core handle it otherwise
 }
 
-func flattenNetworkManagementConnectivityTestSourceInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSourceInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestSourceNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSourceNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestSourceNetworkType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSourceNetworkType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestSourceProjectId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestSourceProjectId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestDestination(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDestination(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -674,14 +679,14 @@ func flattenNetworkManagementConnectivityTestDestination(v interface{}, d *schem
 		flattenNetworkManagementConnectivityTestDestinationProjectId(original["projectId"], d, config)
 	return []interface{}{transformed}
 }
-func flattenNetworkManagementConnectivityTestDestinationIpAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDestinationIpAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestDestinationPort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDestinationPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -695,31 +700,31 @@ func flattenNetworkManagementConnectivityTestDestinationPort(v interface{}, d *s
 	return v // let terraform core handle it otherwise
 }
 
-func flattenNetworkManagementConnectivityTestDestinationInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDestinationInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestDestinationNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDestinationNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestDestinationProjectId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestDestinationProjectId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestProtocol(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestProtocol(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestRelatedProjects(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestRelatedProjects(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkManagementConnectivityTestLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkManagementConnectivityTestLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandNetworkManagementConnectivityTestName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	// projects/X/tests/Y - note not "connectivityTests"
 	f, err := parseGlobalFieldValue("tests", v.(string), "project", d, config, true)
 	if err != nil {
@@ -728,11 +733,11 @@ func expandNetworkManagementConnectivityTestName(v interface{}, d TerraformResou
 	return f.RelativeLink(), nil
 }
 
-func expandNetworkManagementConnectivityTestDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestSource(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSource(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -786,31 +791,31 @@ func expandNetworkManagementConnectivityTestSource(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandNetworkManagementConnectivityTestSourceIpAddress(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSourceIpAddress(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestSourcePort(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSourcePort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestSourceInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSourceInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestSourceNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSourceNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestSourceNetworkType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSourceNetworkType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestSourceProjectId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestSourceProjectId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestDestination(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDestination(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -857,35 +862,35 @@ func expandNetworkManagementConnectivityTestDestination(v interface{}, d Terrafo
 	return transformed, nil
 }
 
-func expandNetworkManagementConnectivityTestDestinationIpAddress(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDestinationIpAddress(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestDestinationPort(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDestinationPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestDestinationInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDestinationInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestDestinationNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDestinationNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestDestinationProjectId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestDestinationProjectId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestProtocol(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestProtocol(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestRelatedProjects(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkManagementConnectivityTestRelatedProjects(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkManagementConnectivityTestLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandNetworkManagementConnectivityTestLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}

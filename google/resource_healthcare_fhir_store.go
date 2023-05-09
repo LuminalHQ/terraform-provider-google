@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceHealthcareFhirStore() *schema.Resource {
+func ResourceHealthcareFhirStore() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceHealthcareFhirStoreCreate,
 		Read:   resourceHealthcareFhirStoreRead,
@@ -62,7 +65,7 @@ func resourceHealthcareFhirStore() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"DSTU2", "STU3", "R4"}),
+				ValidateFunc: verify.ValidateEnum([]string{"DSTU2", "STU3", "R4"}),
 				Description:  `The FHIR specification version. Possible values: ["DSTU2", "STU3", "R4"]`,
 			},
 			"disable_referential_integrity": {
@@ -194,7 +197,7 @@ value 2. The maximum depth allowed is 5.`,
 												"schema_type": {
 													Type:         schema.TypeString,
 													Optional:     true,
-													ValidateFunc: validateEnum([]string{"ANALYTICS", "ANALYTICS_V2", "LOSSLESS", ""}),
+													ValidateFunc: verify.ValidateEnum([]string{"ANALYTICS", "ANALYTICS_V2", "LOSSLESS", ""}),
 													Description: `Specifies the output schema type.
  * ANALYTICS: Analytics schema defined by the FHIR community.
   See https://github.com/FHIR/sql-on-fhir/blob/master/sql-on-fhir.md.
@@ -232,8 +235,8 @@ an empty list as an intent to stream all the supported resource types in this FH
 }
 
 func resourceHealthcareFhirStoreCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -294,7 +297,7 @@ func resourceHealthcareFhirStoreCreate(d *schema.ResourceData, meta interface{})
 		obj["streamConfigs"] = streamConfigsProp
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores?fhirStoreId={{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores?fhirStoreId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -307,13 +310,13 @@ func resourceHealthcareFhirStoreCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating FhirStore: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{dataset}}/fhirStores/{{name}}")
+	id, err := ReplaceVars(d, config, "{{dataset}}/fhirStores/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -325,13 +328,13 @@ func resourceHealthcareFhirStoreCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceHealthcareFhirStoreRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -343,9 +346,9 @@ func resourceHealthcareFhirStoreRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("HealthcareFhirStore %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("HealthcareFhirStore %q", d.Id()))
 	}
 
 	res, err = resourceHealthcareFhirStoreDecoder(d, meta, res)
@@ -392,8 +395,8 @@ func resourceHealthcareFhirStoreRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceHealthcareFhirStoreUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -426,7 +429,7 @@ func resourceHealthcareFhirStoreUpdate(d *schema.ResourceData, meta interface{})
 		obj["streamConfigs"] = streamConfigsProp
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -449,9 +452,9 @@ func resourceHealthcareFhirStoreUpdate(d *schema.ResourceData, meta interface{})
 	if d.HasChange("stream_configs") {
 		updateMask = append(updateMask, "streamConfigs")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -461,7 +464,7 @@ func resourceHealthcareFhirStoreUpdate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating FhirStore %q: %s", d.Id(), err)
@@ -473,15 +476,15 @@ func resourceHealthcareFhirStoreUpdate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceHealthcareFhirStoreDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/fhirStores/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -494,9 +497,9 @@ func resourceHealthcareFhirStoreDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "FhirStore")
+		return transport_tpg.HandleNotFoundError(err, d, "FhirStore")
 	}
 
 	log.Printf("[DEBUG] Finished deleting FhirStore %q: %#v", d.Id(), res)
@@ -505,14 +508,14 @@ func resourceHealthcareFhirStoreDelete(d *schema.ResourceData, meta interface{})
 
 func resourceHealthcareFhirStoreImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	fhirStoreId, err := parseHealthcareFhirStoreId(d.Id(), config)
+	fhirStoreId, err := ParseHealthcareFhirStoreId(d.Id(), config)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := d.Set("dataset", fhirStoreId.DatasetId.datasetId()); err != nil {
+	if err := d.Set("dataset", fhirStoreId.DatasetId.DatasetId()); err != nil {
 		return nil, fmt.Errorf("Error setting dataset: %s", err)
 	}
 	if err := d.Set("name", fhirStoreId.Name); err != nil {
@@ -522,35 +525,35 @@ func resourceHealthcareFhirStoreImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenHealthcareFhirStoreName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreEnableUpdateCreate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreEnableUpdateCreate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreDisableReferentialIntegrity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreDisableReferentialIntegrity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreDisableResourceVersioning(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreDisableResourceVersioning(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreEnableHistoryImport(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreEnableHistoryImport(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreNotificationConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreNotificationConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -563,11 +566,11 @@ func flattenHealthcareFhirStoreNotificationConfig(v interface{}, d *schema.Resou
 		flattenHealthcareFhirStoreNotificationConfigPubsubTopic(original["pubsubTopic"], d, config)
 	return []interface{}{transformed}
 }
-func flattenHealthcareFhirStoreNotificationConfigPubsubTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreNotificationConfigPubsubTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreStreamConfigs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -586,11 +589,11 @@ func flattenHealthcareFhirStoreStreamConfigs(v interface{}, d *schema.ResourceDa
 	}
 	return transformed
 }
-func flattenHealthcareFhirStoreStreamConfigsResourceTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigsResourceTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreStreamConfigsBigqueryDestination(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigsBigqueryDestination(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -605,11 +608,11 @@ func flattenHealthcareFhirStoreStreamConfigsBigqueryDestination(v interface{}, d
 		flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(original["schemaConfig"], d, config)
 	return []interface{}{transformed}
 }
-func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationDatasetUri(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationDatasetUri(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -624,14 +627,14 @@ func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(v in
 		flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigRecursiveStructureDepth(original["recursiveStructureDepth"], d, config)
 	return []interface{}{transformed}
 }
-func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigSchemaType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigSchemaType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigRecursiveStructureDepth(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigRecursiveStructureDepth(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -645,31 +648,31 @@ func flattenHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigRecur
 	return v // let terraform core handle it otherwise
 }
 
-func expandHealthcareFhirStoreName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreEnableUpdateCreate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreEnableUpdateCreate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreDisableReferentialIntegrity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreDisableReferentialIntegrity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreDisableResourceVersioning(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreDisableResourceVersioning(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreEnableHistoryImport(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreEnableHistoryImport(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandHealthcareFhirStoreLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -680,7 +683,7 @@ func expandHealthcareFhirStoreLabels(v interface{}, d TerraformResourceData, con
 	return m, nil
 }
 
-func expandHealthcareFhirStoreNotificationConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreNotificationConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -699,11 +702,11 @@ func expandHealthcareFhirStoreNotificationConfig(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandHealthcareFhirStoreNotificationConfigPubsubTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreNotificationConfigPubsubTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigs(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -732,11 +735,11 @@ func expandHealthcareFhirStoreStreamConfigs(v interface{}, d TerraformResourceDa
 	return req, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigsResourceTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigsResourceTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigsBigqueryDestination(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigsBigqueryDestination(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -762,11 +765,11 @@ func expandHealthcareFhirStoreStreamConfigsBigqueryDestination(v interface{}, d 
 	return transformed, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationDatasetUri(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationDatasetUri(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -792,11 +795,11 @@ func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfig(v int
 	return transformed, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigSchemaType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigSchemaType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigRecursiveStructureDepth(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareFhirStoreStreamConfigsBigqueryDestinationSchemaConfigRecursiveStructureDepth(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

@@ -23,9 +23,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceCloudAssetFolderFeed() *schema.Resource {
+func ResourceCloudAssetFolderFeed() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudAssetFolderFeedCreate,
 		Read:   resourceCloudAssetFolderFeedRead,
@@ -48,7 +51,7 @@ func resourceCloudAssetFolderFeed() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 				Description: `The project whose identity will be used when sending messages to the
-destination pubsub topic. It also specifies the project for API 
+destination pubsub topic. It also specifies the project for API
 enablement check, quota, and billing.`,
 			},
 			"feed_id": {
@@ -91,7 +94,7 @@ enablement check, quota, and billing.`,
 			"asset_names": {
 				Type:     schema.TypeList,
 				Optional: true,
-				Description: `A list of the full names of the assets to receive updates. You must specify either or both of 
+				Description: `A list of the full names of the assets to receive updates. You must specify either or both of
 assetNames and assetTypes. Only asset updates matching specified assetNames and assetTypes are
 exported to the feed. For example: //compute.googleapis.com/projects/my_project_123/zones/zone1/instances/instance1.
 See https://cloud.google.com/apis/design/resourceNames#fullResourceName for more info.`,
@@ -136,7 +139,7 @@ e.g. when hovered over it in a UI.`,
 						"location": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Description: `String indicating the location of the expression for error reporting, e.g. a file 
+							Description: `String indicating the location of the expression for error reporting, e.g. a file
 name and a position in the file.`,
 						},
 						"title": {
@@ -151,8 +154,8 @@ This can be used e.g. in UIs which allow to enter the expression.`,
 			"content_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"CONTENT_TYPE_UNSPECIFIED", "RESOURCE", "IAM_POLICY", "ORG_POLICY", "ACCESS_POLICY", ""}),
-				Description:  `Asset content type. If not specified, no content but the asset name and type will be returned. Possible values: ["CONTENT_TYPE_UNSPECIFIED", "RESOURCE", "IAM_POLICY", "ORG_POLICY", "ACCESS_POLICY"]`,
+				ValidateFunc: verify.ValidateEnum([]string{"CONTENT_TYPE_UNSPECIFIED", "RESOURCE", "IAM_POLICY", "ORG_POLICY", "OS_INVENTORY", "ACCESS_POLICY", ""}),
+				Description:  `Asset content type. If not specified, no content but the asset name and type will be returned. Possible values: ["CONTENT_TYPE_UNSPECIFIED", "RESOURCE", "IAM_POLICY", "ORG_POLICY", "OS_INVENTORY", "ACCESS_POLICY"]`,
 			},
 			"folder_id": {
 				Type:     schema.TypeString,
@@ -171,8 +174,8 @@ and folders/[FOLDER_NUMBER] are accepted.`,
 }
 
 func resourceCloudAssetFolderFeedCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -214,7 +217,7 @@ func resourceCloudAssetFolderFeedCreate(d *schema.ResourceData, meta interface{}
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudAssetBasePath}}folders/{{folder_id}}/feeds?feedId={{feed_id}}")
+	url, err := ReplaceVars(d, config, "{{CloudAssetBasePath}}folders/{{folder_id}}/feeds?feedId={{feed_id}}")
 	if err != nil {
 		return err
 	}
@@ -234,7 +237,7 @@ func resourceCloudAssetFolderFeedCreate(d *schema.ResourceData, meta interface{}
 	// Send the project ID in the X-Goog-User-Project header.
 	origUserProjectOverride := config.UserProjectOverride
 	config.UserProjectOverride = true
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating FolderFeed: %s", err)
 	}
@@ -243,7 +246,7 @@ func resourceCloudAssetFolderFeedCreate(d *schema.ResourceData, meta interface{}
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -258,13 +261,13 @@ func resourceCloudAssetFolderFeedCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceCloudAssetFolderFeedRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudAssetBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudAssetBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -280,9 +283,9 @@ func resourceCloudAssetFolderFeedRead(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudAssetFolderFeed %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CloudAssetFolderFeed %q", d.Id()))
 	}
 
 	if err := d.Set("folder_id", flattenCloudAssetFolderFeedFolderId(res["folder_id"], d, config)); err != nil {
@@ -311,8 +314,8 @@ func resourceCloudAssetFolderFeedRead(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceCloudAssetFolderFeedUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -356,7 +359,7 @@ func resourceCloudAssetFolderFeedUpdate(d *schema.ResourceData, meta interface{}
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudAssetBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudAssetBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -383,9 +386,9 @@ func resourceCloudAssetFolderFeedUpdate(d *schema.ResourceData, meta interface{}
 	if d.HasChange("condition") {
 		updateMask = append(updateMask, "condition")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -398,7 +401,7 @@ func resourceCloudAssetFolderFeedUpdate(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating FolderFeed %q: %s", d.Id(), err)
@@ -410,15 +413,15 @@ func resourceCloudAssetFolderFeedUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceCloudAssetFolderFeedDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{CloudAssetBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudAssetBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -436,9 +439,9 @@ func resourceCloudAssetFolderFeedDelete(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "FolderFeed")
+		return transport_tpg.HandleNotFoundError(err, d, "FolderFeed")
 	}
 
 	log.Printf("[DEBUG] Finished deleting FolderFeed %q: %#v", d.Id(), res)
@@ -452,27 +455,27 @@ func resourceCloudAssetFolderFeedImport(d *schema.ResourceData, meta interface{}
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCloudAssetFolderFeedFolderId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedFolderId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedAssetNames(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedAssetNames(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedAssetTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedAssetTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedContentType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedContentType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedFeedOutputConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedFeedOutputConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -485,7 +488,7 @@ func flattenCloudAssetFolderFeedFeedOutputConfig(v interface{}, d *schema.Resour
 		flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestination(original["pubsubDestination"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestination(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestination(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -498,11 +501,11 @@ func flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestination(v interface{},
 		flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestinationTopic(original["topic"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestinationTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedFeedOutputConfigPubsubDestinationTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedCondition(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedCondition(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -521,35 +524,35 @@ func flattenCloudAssetFolderFeedCondition(v interface{}, d *schema.ResourceData,
 		flattenCloudAssetFolderFeedConditionLocation(original["location"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudAssetFolderFeedConditionExpression(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedConditionExpression(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedConditionTitle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedConditionTitle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedConditionDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedConditionDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudAssetFolderFeedConditionLocation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudAssetFolderFeedConditionLocation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCloudAssetFolderFeedAssetNames(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedAssetNames(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedAssetTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedAssetTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedContentType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedContentType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedFeedOutputConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedFeedOutputConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -568,7 +571,7 @@ func expandCloudAssetFolderFeedFeedOutputConfig(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandCloudAssetFolderFeedFeedOutputConfigPubsubDestination(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedFeedOutputConfigPubsubDestination(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -587,11 +590,11 @@ func expandCloudAssetFolderFeedFeedOutputConfigPubsubDestination(v interface{}, 
 	return transformed, nil
 }
 
-func expandCloudAssetFolderFeedFeedOutputConfigPubsubDestinationTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedFeedOutputConfigPubsubDestinationTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedCondition(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedCondition(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -631,19 +634,19 @@ func expandCloudAssetFolderFeedCondition(v interface{}, d TerraformResourceData,
 	return transformed, nil
 }
 
-func expandCloudAssetFolderFeedConditionExpression(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedConditionExpression(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedConditionTitle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedConditionTitle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedConditionDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedConditionDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudAssetFolderFeedConditionLocation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudAssetFolderFeedConditionLocation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

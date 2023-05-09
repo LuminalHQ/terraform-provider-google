@@ -24,21 +24,24 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccDataplexAsset_BasicAssetHandWritten(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_name":  getTestProjectFromEnv(),
-		"region":        getTestRegionFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"region":        acctest.GetTestRegionFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckDataplexAssetDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDataplexAssetDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDataplexAsset_BasicAssetHandWritten(context),
@@ -65,7 +68,7 @@ func TestAccDataplexAsset_BasicAssetHandWritten(t *testing.T) {
 func testAccDataplexAsset_BasicAssetHandWritten(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_storage_bucket" "basic_bucket" {
-  name          = "dataplex-bucket-%{random_suffix}"
+  name          = "tf-test-bucket%{random_suffix}"
   location      = "%{region}"
   uniform_bucket_level_access = true
   lifecycle {
@@ -115,7 +118,7 @@ resource "google_dataplex_asset" "primary" {
   }
  
   resource_spec {
-    name = "projects/%{project_name}/buckets/dataplex-bucket-%{random_suffix}"
+    name = "projects/%{project_name}/buckets/tf-test-bucket%{random_suffix}"
     type = "STORAGE_BUCKET"
   }
  
@@ -130,7 +133,7 @@ resource "google_dataplex_asset" "primary" {
 func testAccDataplexAsset_BasicAssetHandWrittenUpdate0(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_storage_bucket" "basic_bucket" {
-  name          = "dataplex-bucket-%{random_suffix}"
+  name          = "tf-test-bucket%{random_suffix}"
   location      = "%{region}"
   uniform_bucket_level_access = true
   lifecycle {
@@ -180,7 +183,7 @@ resource "google_dataplex_asset" "primary" {
   }
  
   resource_spec {
-    name = "projects/%{project_name}/buckets/dataplex-bucket-%{random_suffix}"
+    name = "projects/%{project_name}/buckets/tf-test-bucket%{random_suffix}"
     type = "STORAGE_BUCKET"
   }
  
@@ -202,7 +205,7 @@ func testAccCheckDataplexAssetDestroyProducer(t *testing.T) func(s *terraform.St
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
 			billingProject := ""
 			if config.BillingProject != "" {
@@ -223,7 +226,7 @@ func testAccCheckDataplexAssetDestroyProducer(t *testing.T) func(s *terraform.St
 				UpdateTime:   dcl.StringOrNil(rs.Primary.Attributes["update_time"]),
 			}
 
-			client := NewDCLDataplexClient(config, config.userAgent, billingProject, 0)
+			client := transport_tpg.NewDCLDataplexClient(config, config.UserAgent, billingProject, 0)
 			_, err := client.GetAsset(context.Background(), obj)
 			if err == nil {
 				return fmt.Errorf("google_dataplex_asset still exists %v", obj)

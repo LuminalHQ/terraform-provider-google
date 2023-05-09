@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceCloudIdentityGroupMembership() *schema.Resource {
+func ResourceCloudIdentityGroupMembership() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudIdentityGroupMembershipCreate,
 		Read:   resourceCloudIdentityGroupMembershipRead,
@@ -128,7 +131,7 @@ func cloudidentityGroupMembershipRolesSchema() *schema.Resource {
 			"name": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ValidateFunc: validateEnum([]string{"OWNER", "MANAGER", "MEMBER"}),
+				ValidateFunc: verify.ValidateEnum([]string{"OWNER", "MANAGER", "MEMBER"}),
 				Description:  `The name of the MembershipRole. Must be one of OWNER, MANAGER, MEMBER. Possible values: ["OWNER", "MANAGER", "MEMBER"]`,
 			},
 		},
@@ -136,8 +139,8 @@ func cloudidentityGroupMembershipRolesSchema() *schema.Resource {
 }
 
 func resourceCloudIdentityGroupMembershipCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -156,7 +159,7 @@ func resourceCloudIdentityGroupMembershipCreate(d *schema.ResourceData, meta int
 		obj["roles"] = rolesProp
 	}
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{group}}/memberships")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{group}}/memberships")
 	if err != nil {
 		return err
 	}
@@ -169,7 +172,7 @@ func resourceCloudIdentityGroupMembershipCreate(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating GroupMembership: %s", err)
 	}
@@ -178,7 +181,7 @@ func resourceCloudIdentityGroupMembershipCreate(d *schema.ResourceData, meta int
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -208,13 +211,13 @@ func resourceCloudIdentityGroupMembershipCreate(d *schema.ResourceData, meta int
 }
 
 func resourceCloudIdentityGroupMembershipRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -226,9 +229,9 @@ func resourceCloudIdentityGroupMembershipRead(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroupMembership %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(transformCloudIdentityGroupMembershipReadError(err), d, fmt.Sprintf("CloudIdentityGroupMembership %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenCloudIdentityGroupMembershipName(res["name"], d, config)); err != nil {
@@ -254,8 +257,8 @@ func resourceCloudIdentityGroupMembershipRead(d *schema.ResourceData, meta inter
 }
 
 func resourceCloudIdentityGroupMembershipUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -279,7 +282,7 @@ func resourceCloudIdentityGroupMembershipUpdate(d *schema.ResourceData, meta int
 			return err
 		}
 
-		url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}:modifyMembershipRoles")
+		url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}:modifyMembershipRoles")
 		if err != nil {
 			return err
 		}
@@ -289,7 +292,7 @@ func resourceCloudIdentityGroupMembershipUpdate(d *schema.ResourceData, meta int
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating GroupMembership %q: %s", d.Id(), err)
 		} else {
@@ -304,15 +307,15 @@ func resourceCloudIdentityGroupMembershipUpdate(d *schema.ResourceData, meta int
 }
 
 func resourceCloudIdentityGroupMembershipDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudIdentityBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -325,9 +328,9 @@ func resourceCloudIdentityGroupMembershipDelete(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "GroupMembership")
+		return transport_tpg.HandleNotFoundError(err, d, "GroupMembership")
 	}
 
 	log.Printf("[DEBUG] Finished deleting GroupMembership %q: %#v", d.Id(), res)
@@ -335,15 +338,15 @@ func resourceCloudIdentityGroupMembershipDelete(d *schema.ResourceData, meta int
 }
 
 func resourceCloudIdentityGroupMembershipImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<name>.+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -358,11 +361,11 @@ func resourceCloudIdentityGroupMembershipImport(d *schema.ResourceData, meta int
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCloudIdentityGroupMembershipName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupMembershipPreferredMemberKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipPreferredMemberKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -377,23 +380,23 @@ func flattenCloudIdentityGroupMembershipPreferredMemberKey(v interface{}, d *sch
 		flattenCloudIdentityGroupMembershipPreferredMemberKeyNamespace(original["namespace"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudIdentityGroupMembershipPreferredMemberKeyId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipPreferredMemberKeyId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupMembershipPreferredMemberKeyNamespace(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipPreferredMemberKeyNamespace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupMembershipCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupMembershipUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupMembershipRoles(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipRoles(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -411,15 +414,15 @@ func flattenCloudIdentityGroupMembershipRoles(v interface{}, d *schema.ResourceD
 	}
 	return transformed
 }
-func flattenCloudIdentityGroupMembershipRolesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipRolesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudIdentityGroupMembershipType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudIdentityGroupMembershipType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCloudIdentityGroupMembershipPreferredMemberKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupMembershipPreferredMemberKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -445,15 +448,15 @@ func expandCloudIdentityGroupMembershipPreferredMemberKey(v interface{}, d Terra
 	return transformed, nil
 }
 
-func expandCloudIdentityGroupMembershipPreferredMemberKeyId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupMembershipPreferredMemberKeyId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupMembershipPreferredMemberKeyNamespace(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupMembershipPreferredMemberKeyNamespace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudIdentityGroupMembershipRoles(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupMembershipRoles(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -476,7 +479,7 @@ func expandCloudIdentityGroupMembershipRoles(v interface{}, d TerraformResourceD
 	return req, nil
 }
 
-func expandCloudIdentityGroupMembershipRolesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudIdentityGroupMembershipRolesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

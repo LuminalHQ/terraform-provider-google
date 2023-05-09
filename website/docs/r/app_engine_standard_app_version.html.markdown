@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "App Engine"
-page_title: "Google: google_app_engine_standard_app_version"
 description: |-
   Standard App Version resource to create a new version of standard GAE Application.
 ---
@@ -36,6 +35,23 @@ To get more information about StandardAppVersion, see:
 
 
 ```hcl
+resource "google_service_account" "custom_service_account" {
+  account_id   = "my-account"
+  display_name = "Custom Service Account"
+}
+
+resource "google_project_iam_member" "gae_api" {
+  project = google_service_account.custom_service_account.project
+  role    = "roles/compute.networkUser"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
+}
+
+resource "google_project_iam_member" "storage_viewer" {
+  project = google_service_account.custom_service_account.project
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
+}
+
 resource "google_app_engine_standard_app_version" "myapp_v1" {
   version_id = "v1"
   service    = "myapp"
@@ -70,6 +86,7 @@ resource "google_app_engine_standard_app_version" "myapp_v1" {
   }
 
   delete_service_on_destroy = true
+  service_account = google_service_account.custom_service_account.email
 }
 
 resource "google_app_engine_standard_app_version" "myapp_v2" {
@@ -97,6 +114,7 @@ resource "google_app_engine_standard_app_version" "myapp_v2" {
   }
 
   noop_on_destroy = true
+  service_account = google_service_account.custom_service_account.email
 }
 
 resource "google_storage_bucket" "bucket" {
@@ -184,6 +202,10 @@ The following arguments are supported:
   (Optional)
   Relative name of the version within the service. For example, `v1`. Version names can contain only lowercase letters, numbers, or hyphens. Reserved names,"default", "latest", and any name with the prefix "ah-".
 
+* `service_account` -
+  (Optional)
+  The identity that the deployed version will run as. Admin API will use the App Engine Appspot service account as default if this field is neither provided in app.yaml file nor through CLI flag.
+
 * `threadsafe` -
   (Optional)
   Whether multiple requests can be dispatched to this version at once.
@@ -221,7 +243,7 @@ The following arguments are supported:
 * `inbound_services` -
   (Optional)
   A list of the types of messages that this application is able to receive.
-  Each value may be one of `INBOUND_SERVICE_MAIL`, `INBOUND_SERVICE_MAIL_BOUNCE`, `INBOUND_SERVICE_XMPP_ERROR`, `INBOUND_SERVICE_XMPP_MESSAGE`, `INBOUND_SERVICE_XMPP_SUBSCRIBE`, `INBOUND_SERVICE_XMPP_PRESENCE`, `INBOUND_SERVICE_CHANNEL_PRESENCE`, and `INBOUND_SERVICE_WARMUP`.
+  Each value may be one of: `INBOUND_SERVICE_MAIL`, `INBOUND_SERVICE_MAIL_BOUNCE`, `INBOUND_SERVICE_XMPP_ERROR`, `INBOUND_SERVICE_XMPP_MESSAGE`, `INBOUND_SERVICE_XMPP_SUBSCRIBE`, `INBOUND_SERVICE_XMPP_PRESENCE`, `INBOUND_SERVICE_CHANNEL_PRESENCE`, `INBOUND_SERVICE_WARMUP`.
 
 * `instance_class` -
   (Optional)
@@ -250,7 +272,7 @@ The following arguments are supported:
 
 * `noop_on_destroy` - (Optional) If set to `true`, the application version will not be deleted.
 
-* `delete_service_on_destroy` - (Optional) If set to `true`, the service will be deleted if it is the last version.    
+* `delete_service_on_destroy` - (Optional) If set to `true`, the service will be deleted if it is the last version.
 
 
 <a name="nested_handlers"></a>The `handlers` block supports:
@@ -263,22 +285,22 @@ The following arguments are supported:
 * `security_level` -
   (Optional)
   Security (HTTPS) enforcement for this URL.
-  Possible values are `SECURE_DEFAULT`, `SECURE_NEVER`, `SECURE_OPTIONAL`, and `SECURE_ALWAYS`.
+  Possible values are: `SECURE_DEFAULT`, `SECURE_NEVER`, `SECURE_OPTIONAL`, `SECURE_ALWAYS`.
 
 * `login` -
   (Optional)
   Methods to restrict access to a URL based on login status.
-  Possible values are `LOGIN_OPTIONAL`, `LOGIN_ADMIN`, and `LOGIN_REQUIRED`.
+  Possible values are: `LOGIN_OPTIONAL`, `LOGIN_ADMIN`, `LOGIN_REQUIRED`.
 
 * `auth_fail_action` -
   (Optional)
   Actions to take when the user is not logged in.
-  Possible values are `AUTH_FAIL_ACTION_REDIRECT` and `AUTH_FAIL_ACTION_UNAUTHORIZED`.
+  Possible values are: `AUTH_FAIL_ACTION_REDIRECT`, `AUTH_FAIL_ACTION_UNAUTHORIZED`.
 
 * `redirect_http_response_code` -
   (Optional)
   30x code to use when performing redirects for the secure field.
-  Possible values are `REDIRECT_HTTP_RESPONSE_CODE_301`, `REDIRECT_HTTP_RESPONSE_CODE_302`, `REDIRECT_HTTP_RESPONSE_CODE_303`, and `REDIRECT_HTTP_RESPONSE_CODE_307`.
+  Possible values are: `REDIRECT_HTTP_RESPONSE_CODE_301`, `REDIRECT_HTTP_RESPONSE_CODE_302`, `REDIRECT_HTTP_RESPONSE_CODE_303`, `REDIRECT_HTTP_RESPONSE_CODE_307`.
 
 * `script` -
   (Optional)
@@ -348,6 +370,10 @@ The following arguments are supported:
 * `name` -
   (Required)
   Full Serverless VPC Access Connector name e.g. /projects/my-project/locations/us-central1/connectors/c1.
+
+* `egress_setting` -
+  (Optional)
+  The egress setting for the connector, controlling what traffic is diverted through it.
 
 <a name="nested_automatic_scaling"></a>The `automatic_scaling` block supports:
 
@@ -430,7 +456,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -449,4 +475,4 @@ $ terraform import google_app_engine_standard_app_version.default {{service}}/{{
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"log"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func resourceProjectUsageBucket() *schema.Resource {
+func ResourceProjectUsageBucket() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceProjectUsageBucketCreate,
 		Read:   resourceProjectUsageBucketRead,
@@ -50,8 +51,8 @@ func resourceProjectUsageBucket() *schema.Resource {
 }
 
 func resourceProjectUsageBucketRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -63,7 +64,7 @@ func resourceProjectUsageBucketRead(d *schema.ResourceData, meta interface{}) er
 
 	p, err := config.NewComputeClient(userAgent).Projects.Get(project).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Project data for project %s", project))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Project data for project %s", project))
 	}
 
 	if p.UsageExportLocation == nil {
@@ -85,8 +86,8 @@ func resourceProjectUsageBucketRead(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceProjectUsageBucketCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,7 @@ func resourceProjectUsageBucketCreate(d *schema.ResourceData, meta interface{}) 
 		return err
 	}
 	d.SetId(project)
-	err = computeOperationWaitTime(config, op, project, "Setting usage export bucket.", userAgent, d.Timeout(schema.TimeoutCreate))
+	err = ComputeOperationWaitTime(config, op, project, "Setting usage export bucket.", userAgent, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		d.SetId("")
 		return err
@@ -118,8 +119,8 @@ func resourceProjectUsageBucketCreate(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceProjectUsageBucketDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func resourceProjectUsageBucketDelete(d *schema.ResourceData, meta interface{}) 
 		return err
 	}
 
-	err = computeOperationWaitTime(config, op, project,
+	err = ComputeOperationWaitTime(config, op, project,
 		"Setting usage export bucket to nil, automatically disabling usage export.", userAgent, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
 		return err

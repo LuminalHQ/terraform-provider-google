@@ -10,10 +10,15 @@ import (
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
+
 	"google.golang.org/api/compute/v1"
 )
 
-func resourceComputeSecurityPolicy() *schema.Resource {
+func ResourceComputeSecurityPolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeSecurityPolicyCreate,
 		Read:   resourceComputeSecurityPolicyRead,
@@ -35,7 +40,7 @@ func resourceComputeSecurityPolicy() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateGCEName,
+				ValidateFunc: verify.ValidateGCEName,
 				Description:  `The name of the security policy.`,
 			},
 
@@ -207,7 +212,7 @@ func resourceComputeSecurityPolicy() *schema.Resource {
 										Optional:     true,
 										Default:      "ALL",
 										Description:  `Determines the key to enforce the rateLimitThreshold on`,
-										ValidateFunc: validation.StringInSlice([]string{"ALL", "IP", "HTTP_HEADER", "XFF_IP", "HTTP_COOKIE"}, false),
+										ValidateFunc: validation.StringInSlice([]string{"ALL", "IP", "HTTP_HEADER", "XFF_IP", "HTTP_COOKIE", "HTTP_PATH", "SNI", "REGION_CODE", ""}, false),
 									},
 
 									"enforce_on_key_name": {
@@ -292,6 +297,35 @@ func resourceComputeSecurityPolicy() *schema.Resource {
 							},
 							Description: `Parameters defining the redirect action. Cannot be specified for any other actions.`,
 						},
+						"header_action": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							MaxItems:    1,
+							Description: `Additional actions that are performed on headers.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"request_headers_to_adds": {
+										Type:        schema.TypeList,
+										Required:    true,
+										Description: `The list of request headers to add or overwrite if they're already present.`,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"header_name": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: `The name of the header to set.`,
+												},
+												"header_value": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: `The value to set the named header to.`,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 				Description: `The set of rules that belong to this policy. There must always be a default rule (rule with priority 2147483647 and match "*"). If no rules are provided when creating a security policy, a default rule with action "allow" will be added.`,
@@ -323,6 +357,23 @@ func resourceComputeSecurityPolicy() *schema.Resource {
 							Computed:     true,
 							ValidateFunc: validation.StringInSlice([]string{"DISABLED", "STANDARD"}, false),
 							Description:  `JSON body parsing. Supported values include: "DISABLED", "STANDARD".`,
+						},
+						"json_custom_config": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Computed:    true,
+							Description: `Custom configuration to apply the JSON parsing. Only applicable when JSON parsing is set to STANDARD.`,
+							MaxItems:    1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"content_types": {
+										Type:        schema.TypeSet,
+										Required:    true,
+										Elem:        &schema.Schema{Type: schema.TypeString},
+										Description: `A list of custom Content-Type header values to apply the JSON parsing.`,
+									},
+								},
+							},
 						},
 						"log_level": {
 							Type:         schema.TypeString,
@@ -367,6 +418,21 @@ func resourceComputeSecurityPolicy() *schema.Resource {
 					},
 				},
 			},
+			"recaptcha_options_config": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: `reCAPTCHA configuration options to be applied for the security policy.`,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"redirect_site_key": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: `A field to supply a reCAPTCHA site key to be used for all the rules using the redirect action with the type of GOOGLE_RECAPTCHA under the security policy. The specified site key needs to be created from the reCAPTCHA API. The user is responsible for the validity of the specified site key. If not specified, a Google-managed site key is used.`,
+						},
+					},
+				},
+			},
 		},
 
 		UseJSONNumber: true,
@@ -390,8 +456,8 @@ func rulesCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, _ interfac
 }
 
 func resourceComputeSecurityPolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -425,6 +491,10 @@ func resourceComputeSecurityPolicyCreate(d *schema.ResourceData, meta interface{
 
 	log.Printf("[DEBUG] SecurityPolicy insert request: %#v", securityPolicy)
 
+	if v, ok := d.GetOk("recaptcha_options_config"); ok {
+		securityPolicy.RecaptchaOptionsConfig = expandSecurityPolicyRecaptchaOptionsConfig(v.([]interface{}), d)
+	}
+
 	client := config.NewComputeClient(userAgent)
 
 	op, err := client.SecurityPolicies.Insert(project, securityPolicy).Do()
@@ -433,13 +503,13 @@ func resourceComputeSecurityPolicyCreate(d *schema.ResourceData, meta interface{
 		return errwrap.Wrapf("Error creating SecurityPolicy: {{err}}", err)
 	}
 
-	id, err := replaceVars(d, config, "projects/{{project}}/global/securityPolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/securityPolicies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(config, op, project, fmt.Sprintf("Creating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutCreate))
+	err = ComputeOperationWaitTime(config, op, project, fmt.Sprintf("Creating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return err
 	}
@@ -448,8 +518,8 @@ func resourceComputeSecurityPolicyCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeSecurityPolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -465,7 +535,7 @@ func resourceComputeSecurityPolicyRead(d *schema.ResourceData, meta interface{})
 
 	securityPolicy, err := client.SecurityPolicies.Get(project, sp).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("SecurityPolicy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("SecurityPolicy %q", d.Id()))
 	}
 
 	if err := d.Set("name", securityPolicy.Name); err != nil {
@@ -486,7 +556,7 @@ func resourceComputeSecurityPolicyRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("project", project); err != nil {
 		return fmt.Errorf("Error setting project: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(securityPolicy.SelfLink)); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(securityPolicy.SelfLink)); err != nil {
 		return fmt.Errorf("Error setting self_link: %s", err)
 	}
 	if err := d.Set("advanced_options_config", flattenSecurityPolicyAdvancedOptionsConfig(securityPolicy.AdvancedOptionsConfig)); err != nil {
@@ -497,12 +567,16 @@ func resourceComputeSecurityPolicyRead(d *schema.ResourceData, meta interface{})
 		return fmt.Errorf("Error setting adaptive_protection_config: %s", err)
 	}
 
+	if err := d.Set("recaptcha_options_config", flattenSecurityPolicyRecaptchaOptionConfig(securityPolicy.RecaptchaOptionsConfig)); err != nil {
+		return fmt.Errorf("Error setting recaptcha_options_config: %s", err)
+	}
+
 	return nil
 }
 
 func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -530,12 +604,17 @@ func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{
 
 	if d.HasChange("advanced_options_config") {
 		securityPolicy.AdvancedOptionsConfig = expandSecurityPolicyAdvancedOptionsConfig(d.Get("advanced_options_config").([]interface{}))
-		securityPolicy.ForceSendFields = append(securityPolicy.ForceSendFields, "AdvancedOptionsConfig", "advancedOptionsConfig.jsonParsing", "advancedOptionsConfig.logLevel")
+		securityPolicy.ForceSendFields = append(securityPolicy.ForceSendFields, "AdvancedOptionsConfig", "advancedOptionsConfig.jsonParsing", "advancedOptionsConfig.jsonCustomConfig", "advancedOptionsConfig.logLevel")
 	}
 
 	if d.HasChange("adaptive_protection_config") {
 		securityPolicy.AdaptiveProtectionConfig = expandSecurityPolicyAdaptiveProtectionConfig(d.Get("adaptive_protection_config").([]interface{}))
 		securityPolicy.ForceSendFields = append(securityPolicy.ForceSendFields, "AdaptiveProtectionConfig", "adaptiveProtectionConfig.layer7DdosDefenseConfig.enable", "adaptiveProtectionConfig.layer7DdosDefenseConfig.ruleVisibility")
+	}
+
+	if d.HasChange("recaptcha_options_config") {
+		securityPolicy.RecaptchaOptionsConfig = expandSecurityPolicyRecaptchaOptionsConfig(d.Get("recaptcha_options_config").([]interface{}), d)
+		securityPolicy.ForceSendFields = append(securityPolicy.ForceSendFields, "RecaptchaOptionsConfig")
 	}
 
 	if len(securityPolicy.ForceSendFields) > 0 {
@@ -547,7 +626,7 @@ func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{
 			return errwrap.Wrapf(fmt.Sprintf("Error updating SecurityPolicy %q: {{err}}", sp), err)
 		}
 
-		err = computeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
+		err = ComputeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return err
 		}
@@ -577,7 +656,7 @@ func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{
 					return errwrap.Wrapf(fmt.Sprintf("Error updating SecurityPolicy %q: {{err}}", sp), err)
 				}
 
-				err = computeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
+				err = ComputeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
 				if err != nil {
 					return err
 				}
@@ -591,7 +670,7 @@ func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{
 					return errwrap.Wrapf(fmt.Sprintf("Error updating SecurityPolicy %q: {{err}}", sp), err)
 				}
 
-				err = computeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
+				err = ComputeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
 				if err != nil {
 					return err
 				}
@@ -610,7 +689,7 @@ func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{
 					return errwrap.Wrapf(fmt.Sprintf("Error updating SecurityPolicy %q: {{err}}", sp), err)
 				}
 
-				err = computeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
+				err = ComputeOperationWaitTime(config, op, project, fmt.Sprintf("Updating SecurityPolicy %q", sp), userAgent, d.Timeout(schema.TimeoutUpdate))
 				if err != nil {
 					return err
 				}
@@ -622,8 +701,8 @@ func resourceComputeSecurityPolicyUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeSecurityPolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -641,7 +720,7 @@ func resourceComputeSecurityPolicyDelete(d *schema.ResourceData, meta interface{
 		return errwrap.Wrapf("Error deleting SecurityPolicy: {{err}}", err)
 	}
 
-	err = computeOperationWaitTime(config, op, project, "Deleting SecurityPolicy", userAgent, d.Timeout(schema.TimeoutDelete))
+	err = ComputeOperationWaitTime(config, op, project, "Deleting SecurityPolicy", userAgent, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
 		return err
 	}
@@ -668,6 +747,7 @@ func expandSecurityPolicyRule(raw interface{}) *compute.SecurityPolicyRule {
 		Match:            expandSecurityPolicyMatch(data["match"].([]interface{})),
 		RateLimitOptions: expandSecurityPolicyRuleRateLimitOptions(data["rate_limit_options"].([]interface{})),
 		RedirectOptions:  expandSecurityPolicyRuleRedirectOptions(data["redirect_options"].([]interface{})),
+		HeaderAction:     expandSecurityPolicyRuleHeaderAction(data["header_action"].([]interface{})),
 		ForceSendFields:  []string{"Description", "Preview"},
 	}
 }
@@ -722,8 +802,8 @@ func flattenSecurityPolicyRules(rules []*compute.SecurityPolicyRule) []map[strin
 			"match":              flattenMatch(rule.Match),
 			"rate_limit_options": flattenSecurityPolicyRuleRateLimitOptions(rule.RateLimitOptions),
 			"redirect_options":   flattenSecurityPolicyRedirectOptions(rule.RedirectOptions),
+			"header_action":      flattenSecurityPolicyRuleHeaderAction(rule.HeaderAction),
 		}
-
 		rulesSchema = append(rulesSchema, data)
 	}
 	return rulesSchema
@@ -778,8 +858,9 @@ func expandSecurityPolicyAdvancedOptionsConfig(configured []interface{}) *comput
 
 	data := configured[0].(map[string]interface{})
 	return &compute.SecurityPolicyAdvancedOptionsConfig{
-		JsonParsing: data["json_parsing"].(string),
-		LogLevel:    data["log_level"].(string),
+		JsonParsing:      data["json_parsing"].(string),
+		JsonCustomConfig: expandSecurityPolicyAdvancedOptionsConfigJsonCustomConfig(data["json_custom_config"].([]interface{})),
+		LogLevel:         data["log_level"].(string),
 	}
 }
 
@@ -789,8 +870,33 @@ func flattenSecurityPolicyAdvancedOptionsConfig(conf *compute.SecurityPolicyAdva
 	}
 
 	data := map[string]interface{}{
-		"json_parsing": conf.JsonParsing,
-		"log_level":    conf.LogLevel,
+		"json_parsing":       conf.JsonParsing,
+		"json_custom_config": flattenSecurityPolicyAdvancedOptionsConfigJsonCustomConfig(conf.JsonCustomConfig),
+		"log_level":          conf.LogLevel,
+	}
+
+	return []map[string]interface{}{data}
+}
+
+func expandSecurityPolicyAdvancedOptionsConfigJsonCustomConfig(configured []interface{}) *compute.SecurityPolicyAdvancedOptionsConfigJsonCustomConfig {
+	if len(configured) == 0 || configured[0] == nil {
+		// If configuration is unset, return an empty JsonCustomConfig; this ensures the ContentTypes list can be cleared
+		return &compute.SecurityPolicyAdvancedOptionsConfigJsonCustomConfig{}
+	}
+
+	data := configured[0].(map[string]interface{})
+	return &compute.SecurityPolicyAdvancedOptionsConfigJsonCustomConfig{
+		ContentTypes: convertStringArr(data["content_types"].(*schema.Set).List()),
+	}
+}
+
+func flattenSecurityPolicyAdvancedOptionsConfigJsonCustomConfig(conf *compute.SecurityPolicyAdvancedOptionsConfigJsonCustomConfig) []map[string]interface{} {
+	if conf == nil {
+		return nil
+	}
+
+	data := map[string]interface{}{
+		"content_types": schema.NewSet(schema.HashString, convertStringArrToInterface(conf.ContentTypes)),
 	}
 
 	return []map[string]interface{}{data}
@@ -814,8 +920,9 @@ func expandLayer7DdosDefenseConfig(configured []interface{}) *compute.SecurityPo
 
 	data := configured[0].(map[string]interface{})
 	return &compute.SecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfig{
-		Enable:         data["enable"].(bool),
-		RuleVisibility: data["rule_visibility"].(string),
+		Enable:          data["enable"].(bool),
+		RuleVisibility:  data["rule_visibility"].(string),
+		ForceSendFields: []string{"Enable"},
 	}
 }
 
@@ -859,6 +966,7 @@ func expandSecurityPolicyRuleRateLimitOptions(configured []interface{}) *compute
 		EnforceOnKeyName:      data["enforce_on_key_name"].(string),
 		BanDurationSec:        int64(data["ban_duration_sec"].(int)),
 		ExceedRedirectOptions: expandSecurityPolicyRuleRedirectOptions(data["exceed_redirect_options"].([]interface{})),
+		ForceSendFields:       []string{"EnforceOnKey", "EnforceOnKeyName"},
 	}
 }
 
@@ -931,14 +1039,107 @@ func flattenSecurityPolicyRedirectOptions(conf *compute.SecurityPolicyRuleRedire
 	return []map[string]interface{}{data}
 }
 
+func expandSecurityPolicyRecaptchaOptionsConfig(configured []interface{}, d *schema.ResourceData) *compute.SecurityPolicyRecaptchaOptionsConfig {
+	if len(configured) == 0 || configured[0] == nil {
+		return nil
+	}
+
+	data := configured[0].(map[string]interface{})
+
+	return &compute.SecurityPolicyRecaptchaOptionsConfig{
+		RedirectSiteKey: data["redirect_site_key"].(string),
+		ForceSendFields: []string{"RedirectSiteKey"},
+	}
+}
+
+func flattenSecurityPolicyRecaptchaOptionConfig(conf *compute.SecurityPolicyRecaptchaOptionsConfig) []map[string]interface{} {
+	if conf == nil {
+		return nil
+	}
+
+	data := map[string]interface{}{
+		"redirect_site_key": conf.RedirectSiteKey,
+	}
+
+	return []map[string]interface{}{data}
+}
+
+func expandSecurityPolicyRuleHeaderAction(configured []interface{}) *compute.SecurityPolicyRuleHttpHeaderAction {
+	if len(configured) == 0 || configured[0] == nil {
+		// If header action is unset, return an empty object; this ensures the header action can be cleared
+		return &compute.SecurityPolicyRuleHttpHeaderAction{}
+	}
+
+	data := configured[0].(map[string]interface{})
+
+	return &compute.SecurityPolicyRuleHttpHeaderAction{
+		RequestHeadersToAdds: expandSecurityPolicyRequestHeadersToAdds(data["request_headers_to_adds"].([]interface{})),
+	}
+}
+
+func expandSecurityPolicyRequestHeadersToAdds(configured []interface{}) []*compute.SecurityPolicyRuleHttpHeaderActionHttpHeaderOption {
+	transformed := make([]*compute.SecurityPolicyRuleHttpHeaderActionHttpHeaderOption, 0, len(configured))
+
+	for _, raw := range configured {
+		transformed = append(transformed, expandSecurityPolicyRequestHeader(raw))
+	}
+
+	return transformed
+}
+
+func expandSecurityPolicyRequestHeader(configured interface{}) *compute.SecurityPolicyRuleHttpHeaderActionHttpHeaderOption {
+	data := configured.(map[string]interface{})
+
+	return &compute.SecurityPolicyRuleHttpHeaderActionHttpHeaderOption{
+		HeaderName:  data["header_name"].(string),
+		HeaderValue: data["header_value"].(string),
+	}
+}
+
+func flattenSecurityPolicyRuleHeaderAction(conf *compute.SecurityPolicyRuleHttpHeaderAction) []map[string]interface{} {
+	if conf == nil || conf.RequestHeadersToAdds == nil {
+		return nil
+	}
+
+	transformed := map[string]interface{}{
+		"request_headers_to_adds": flattenSecurityPolicyRequestHeadersToAdds(conf.RequestHeadersToAdds),
+	}
+
+	return []map[string]interface{}{transformed}
+}
+
+func flattenSecurityPolicyRequestHeadersToAdds(conf []*compute.SecurityPolicyRuleHttpHeaderActionHttpHeaderOption) []map[string]interface{} {
+	if conf == nil || len(conf) == 0 {
+		return nil
+	}
+
+	transformed := make([]map[string]interface{}, 0, len(conf))
+	for _, raw := range conf {
+		transformed = append(transformed, flattenSecurityPolicyRequestHeader(raw))
+	}
+
+	return transformed
+}
+
+func flattenSecurityPolicyRequestHeader(conf *compute.SecurityPolicyRuleHttpHeaderActionHttpHeaderOption) map[string]interface{} {
+	if conf == nil {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"header_name":  conf.HeaderName,
+		"header_value": conf.HeaderValue,
+	}
+}
+
 func resourceSecurityPolicyStateImporter(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{"projects/(?P<project>[^/]+)/global/securityPolicies/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{"projects/(?P<project>[^/]+)/global/securityPolicies/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/securityPolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/securityPolicies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}

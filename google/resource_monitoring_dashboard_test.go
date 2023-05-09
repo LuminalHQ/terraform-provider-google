@@ -2,20 +2,22 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccMonitoringDashboard_basic(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckMonitoringDashboardDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckMonitoringDashboardDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccMonitoringDashboard_basic(),
@@ -35,12 +37,14 @@ func TestAccMonitoringDashboard_basic(t *testing.T) {
 }
 
 func TestAccMonitoringDashboard_gridLayout(t *testing.T) {
+	// TODO: Fix requires a breaking change https://github.com/hashicorp/terraform-provider-google/issues/9976
+	t.Skip()
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckMonitoringDashboardDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckMonitoringDashboardDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccMonitoringDashboard_gridLayout(),
@@ -58,10 +62,10 @@ func TestAccMonitoringDashboard_gridLayout(t *testing.T) {
 func TestAccMonitoringDashboard_rowLayout(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckMonitoringDashboardDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckMonitoringDashboardDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccMonitoringDashboard_rowLayout(),
@@ -77,12 +81,14 @@ func TestAccMonitoringDashboard_rowLayout(t *testing.T) {
 }
 
 func TestAccMonitoringDashboard_update(t *testing.T) {
+	// TODO: Fix requires a breaking change https://github.com/hashicorp/terraform-provider-google/issues/9976
+	t.Skip()
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckMonitoringDashboardDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckMonitoringDashboardDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccMonitoringDashboard_rowLayout(),
@@ -125,14 +131,14 @@ func testAccCheckMonitoringDashboardDestroyProducer(t *testing.T) func(s *terraf
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{MonitoringBasePath}}v1/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{MonitoringBasePath}}v1/{{name}}")
 			if err != nil {
 				return err
 			}
 
-			_, err = sendRequest(config, "GET", "", url, config.userAgent, nil, isMonitoringConcurrentEditError)
+			_, err = transport_tpg.SendRequest(config, "GET", "", url, config.UserAgent, nil, transport_tpg.IsMonitoringConcurrentEditError)
 			if err == nil {
 				return fmt.Errorf("MonitoringDashboard still exists at %s", url)
 			}

@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"regexp"
 	"testing"
 
@@ -9,12 +10,12 @@ import (
 )
 
 func TestAccDataSourceGoogleOrganization_byFullName(t *testing.T) {
-	orgId := getTestOrgFromEnv(t)
+	orgId := acctest.GetTestOrgFromEnv(t)
 	name := "organizations/" + orgId
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCheckGoogleOrganization_byName(name),
@@ -28,12 +29,12 @@ func TestAccDataSourceGoogleOrganization_byFullName(t *testing.T) {
 }
 
 func TestAccDataSourceGoogleOrganization_byShortName(t *testing.T) {
-	orgId := getTestOrgFromEnv(t)
+	orgId := acctest.GetTestOrgFromEnv(t)
 	name := "organizations/" + orgId
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCheckGoogleOrganization_byName(orgId),
@@ -47,11 +48,11 @@ func TestAccDataSourceGoogleOrganization_byShortName(t *testing.T) {
 }
 
 func TestAccDataSourceGoogleOrganization_byDomain(t *testing.T) {
-	name := randString(t, 16) + ".com"
+	name := RandString(t, 16) + ".com"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config:      testAccCheckGoogleOrganization_byDomain(name),

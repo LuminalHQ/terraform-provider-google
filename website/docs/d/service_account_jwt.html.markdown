@@ -1,7 +1,6 @@
 ---
 subcategory: "Cloud Platform"
 layout: "google"
-page_title: "Google: google_service_account_jwt"
 sidebar_current: "docs-google-service-account-jwt"
 description: |-
   Produces an arbitrary self-signed JWT for service accounts
@@ -23,6 +22,8 @@ data "google_service_account_jwt" "foo" {
     foo: "bar",
     sub: "subject",
   })
+
+  expires_in = 60
 }
 
 output "jwt" {
@@ -36,6 +37,7 @@ The following arguments are supported:
 
 * `target_service_account` (Required) - The email of the service account that will sign the JWT.
 * `payload` (Required) - The JSON-encoded JWT claims set to include in the self-signed JWT.
+* `expires_in` (Optional) - Number of seconds until the JWT expires. If set and non-zero an `exp` claim will be added to the payload derived from the current timestamp plus expires_in seconds.
 * `delegates` (Optional) - Delegate chain of approvals needed to perform full impersonation. Specify the fully qualified service account name.
 
 ## Attributes Reference

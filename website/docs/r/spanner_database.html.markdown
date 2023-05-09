@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Spanner"
-page_title: "Google: google_spanner_database"
 description: |-
   A Cloud Spanner Database which is hosted on a Spanner instance.
 ---
@@ -105,7 +104,7 @@ The following arguments are supported:
   (Optional)
   The dialect of the Cloud Spanner Database.
   If it is not provided, "GOOGLE_STANDARD_SQL" will be used.
-  Possible values are `GOOGLE_STANDARD_SQL` and `POSTGRESQL`.
+  Possible values are: `GOOGLE_STANDARD_SQL`, `POSTGRESQL`.
 
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
@@ -134,7 +133,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -154,4 +153,4 @@ $ terraform import google_spanner_database.default {{instance}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

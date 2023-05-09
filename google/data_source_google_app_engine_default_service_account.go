@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func dataSourceGoogleAppEngineDefaultServiceAccount() *schema.Resource {
+func DataSourceGoogleAppEngineDefaultServiceAccount() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceGoogleAppEngineDefaultServiceAccountRead,
 		Schema: map[string]*schema.Schema{
@@ -31,13 +32,17 @@ func dataSourceGoogleAppEngineDefaultServiceAccount() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"member": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 		},
 	}
 }
 
 func dataSourceGoogleAppEngineDefaultServiceAccountRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -56,7 +61,7 @@ func dataSourceGoogleAppEngineDefaultServiceAccountRead(d *schema.ResourceData, 
 
 	sa, err := config.NewIamClient(userAgent).Projects.ServiceAccounts.Get(serviceAccountName).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Service Account %q", serviceAccountName))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Service Account %q", serviceAccountName))
 	}
 
 	d.SetId(sa.Name)
@@ -74,6 +79,9 @@ func dataSourceGoogleAppEngineDefaultServiceAccountRead(d *schema.ResourceData, 
 	}
 	if err := d.Set("display_name", sa.DisplayName); err != nil {
 		return fmt.Errorf("Error setting display_name: %s", err)
+	}
+	if err := d.Set("member", "serviceAccount:"+sa.Email); err != nil {
+		return fmt.Errorf("Error setting member: %s", err)
 	}
 
 	return nil

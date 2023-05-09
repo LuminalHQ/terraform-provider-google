@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func suppressGkeHubEndpointSelfLinkDiff(_, old, new string, _ *schema.ResourceData) bool {
@@ -34,7 +36,7 @@ func suppressGkeHubEndpointSelfLinkDiff(_, old, new string, _ *schema.ResourceDa
 	return false
 }
 
-func resourceGKEHubMembership() *schema.Resource {
+func ResourceGKEHubMembership() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceGKEHubMembershipCreate,
 		Read:   resourceGKEHubMembershipRead,
@@ -71,7 +73,7 @@ https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity`,
 							Type:     schema.TypeString,
 							Required: true,
 							ForceNew: true,
-							Description: `A JSON Web Token (JWT) issuer URI. 'issuer' must start with 'https://' and // be a valid 
+							Description: `A JSON Web Token (JWT) issuer URI. 'issuer' must start with 'https://' and // be a valid
 with length <2000 characters. For example: 'https://container.googleapis.com/v1/projects/my-project/locations/us-west1/clusters/my-cluster' (must be 'locations' rather than 'zones'). If the cluster is provisioned with Terraform, this is '"https://container.googleapis.com/v1/${google_container_cluster.my-cluster.id}"'.`,
 						},
 					},
@@ -133,8 +135,8 @@ this can be '"//container.googleapis.com/${google_container_cluster.my-cluster.i
 }
 
 func resourceGKEHubMembershipCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -159,7 +161,7 @@ func resourceGKEHubMembershipCreate(d *schema.ResourceData, meta interface{}) er
 		obj["authority"] = authorityProp
 	}
 
-	url, err := replaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships?membershipId={{membership_id}}")
+	url, err := ReplaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships?membershipId={{membership_id}}")
 	if err != nil {
 		return err
 	}
@@ -178,13 +180,13 @@ func resourceGKEHubMembershipCreate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Membership: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/memberships/{{membership_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/memberships/{{membership_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -193,12 +195,13 @@ func resourceGKEHubMembershipCreate(d *schema.ResourceData, meta interface{}) er
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = gKEHubOperationWaitTimeWithResponse(
+	err = GKEHubOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Membership", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Membership: %s", err)
 	}
 
@@ -207,7 +210,7 @@ func resourceGKEHubMembershipCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/global/memberships/{{membership_id}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/global/memberships/{{membership_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -219,13 +222,13 @@ func resourceGKEHubMembershipCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceGKEHubMembershipRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships/{{membership_id}}")
+	url, err := ReplaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships/{{membership_id}}")
 	if err != nil {
 		return err
 	}
@@ -243,9 +246,9 @@ func resourceGKEHubMembershipRead(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("GKEHubMembership %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("GKEHubMembership %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -269,8 +272,8 @@ func resourceGKEHubMembershipRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceGKEHubMembershipUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -297,7 +300,7 @@ func resourceGKEHubMembershipUpdate(d *schema.ResourceData, meta interface{}) er
 		obj["authority"] = authorityProp
 	}
 
-	url, err := replaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships/{{membership_id}}")
+	url, err := ReplaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships/{{membership_id}}")
 	if err != nil {
 		return err
 	}
@@ -312,9 +315,9 @@ func resourceGKEHubMembershipUpdate(d *schema.ResourceData, meta interface{}) er
 	if d.HasChange("authority") {
 		updateMask = append(updateMask, "authority")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -324,7 +327,7 @@ func resourceGKEHubMembershipUpdate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Membership %q: %s", d.Id(), err)
@@ -332,7 +335,7 @@ func resourceGKEHubMembershipUpdate(d *schema.ResourceData, meta interface{}) er
 		log.Printf("[DEBUG] Finished updating Membership %q: %#v", d.Id(), res)
 	}
 
-	err = gKEHubOperationWaitTime(
+	err = GKEHubOperationWaitTime(
 		config, res, project, "Updating Membership", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -344,8 +347,8 @@ func resourceGKEHubMembershipUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceGKEHubMembershipDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -358,7 +361,7 @@ func resourceGKEHubMembershipDelete(d *schema.ResourceData, meta interface{}) er
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships/{{membership_id}}")
+	url, err := ReplaceVars(d, config, "{{GKEHubBasePath}}projects/{{project}}/locations/global/memberships/{{membership_id}}")
 	if err != nil {
 		return err
 	}
@@ -371,12 +374,12 @@ func resourceGKEHubMembershipDelete(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Membership")
+		return transport_tpg.HandleNotFoundError(err, d, "Membership")
 	}
 
-	err = gKEHubOperationWaitTime(
+	err = GKEHubOperationWaitTime(
 		config, res, project, "Deleting Membership", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -389,8 +392,8 @@ func resourceGKEHubMembershipDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceGKEHubMembershipImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/memberships/(?P<membership_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<membership_id>[^/]+)",
 		"(?P<membership_id>[^/]+)",
@@ -399,7 +402,7 @@ func resourceGKEHubMembershipImport(d *schema.ResourceData, meta interface{}) ([
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/memberships/{{membership_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/memberships/{{membership_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -408,15 +411,15 @@ func resourceGKEHubMembershipImport(d *schema.ResourceData, meta interface{}) ([
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenGKEHubMembershipName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGKEHubMembershipLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGKEHubMembershipEndpoint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipEndpoint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -429,7 +432,7 @@ func flattenGKEHubMembershipEndpoint(v interface{}, d *schema.ResourceData, conf
 		flattenGKEHubMembershipEndpointGkeCluster(original["gkeCluster"], d, config)
 	return []interface{}{transformed}
 }
-func flattenGKEHubMembershipEndpointGkeCluster(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipEndpointGkeCluster(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -442,11 +445,11 @@ func flattenGKEHubMembershipEndpointGkeCluster(v interface{}, d *schema.Resource
 		flattenGKEHubMembershipEndpointGkeClusterResourceLink(original["resourceLink"], d, config)
 	return []interface{}{transformed}
 }
-func flattenGKEHubMembershipEndpointGkeClusterResourceLink(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipEndpointGkeClusterResourceLink(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGKEHubMembershipAuthority(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipAuthority(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -459,11 +462,11 @@ func flattenGKEHubMembershipAuthority(v interface{}, d *schema.ResourceData, con
 		flattenGKEHubMembershipAuthorityIssuer(original["issuer"], d, config)
 	return []interface{}{transformed}
 }
-func flattenGKEHubMembershipAuthorityIssuer(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGKEHubMembershipAuthorityIssuer(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandGKEHubMembershipLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandGKEHubMembershipLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -474,7 +477,7 @@ func expandGKEHubMembershipLabels(v interface{}, d TerraformResourceData, config
 	return m, nil
 }
 
-func expandGKEHubMembershipEndpoint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGKEHubMembershipEndpoint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -493,7 +496,7 @@ func expandGKEHubMembershipEndpoint(v interface{}, d TerraformResourceData, conf
 	return transformed, nil
 }
 
-func expandGKEHubMembershipEndpointGkeCluster(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGKEHubMembershipEndpointGkeCluster(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -512,7 +515,7 @@ func expandGKEHubMembershipEndpointGkeCluster(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandGKEHubMembershipEndpointGkeClusterResourceLink(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGKEHubMembershipEndpointGkeClusterResourceLink(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if strings.HasPrefix(v.(string), "//") {
 		return v, nil
 	} else {
@@ -521,7 +524,7 @@ func expandGKEHubMembershipEndpointGkeClusterResourceLink(v interface{}, d Terra
 	}
 }
 
-func expandGKEHubMembershipAuthority(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGKEHubMembershipAuthority(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -540,6 +543,6 @@ func expandGKEHubMembershipAuthority(v interface{}, d TerraformResourceData, con
 	return transformed, nil
 }
 
-func expandGKEHubMembershipAuthorityIssuer(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGKEHubMembershipAuthorityIssuer(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

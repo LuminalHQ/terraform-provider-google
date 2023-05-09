@@ -7,17 +7,18 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccComputeSecurityPolicy_basic(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_basic(spName),
@@ -34,12 +35,12 @@ func TestAccComputeSecurityPolicy_basic(t *testing.T) {
 func TestAccComputeSecurityPolicy_withRule(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRule(spName),
@@ -56,12 +57,12 @@ func TestAccComputeSecurityPolicy_withRule(t *testing.T) {
 func TestAccComputeSecurityPolicy_withRuleExpr(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRuleExpr(spName),
@@ -78,12 +79,12 @@ func TestAccComputeSecurityPolicy_withRuleExpr(t *testing.T) {
 func TestAccComputeSecurityPolicy_update(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRule(spName),
@@ -123,12 +124,12 @@ func TestAccComputeSecurityPolicy_update(t *testing.T) {
 func TestAccComputeSecurityPolicy_withAdvancedOptionsConfig(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_basic(spName),
@@ -161,15 +162,23 @@ func TestAccComputeSecurityPolicy_withAdvancedOptionsConfig(t *testing.T) {
 func TestAccComputeSecurityPolicy_withAdaptiveProtection(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withAdaptiveProtection(spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withAdaptiveProtectionUpdate(spName),
 			},
 			{
 				ResourceName:      "google_compute_security_policy.policy",
@@ -183,12 +192,12 @@ func TestAccComputeSecurityPolicy_withAdaptiveProtection(t *testing.T) {
 func TestAccComputeSecurityPolicy_withRateLimitOptions(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRateLimitOptions(spName),
@@ -205,12 +214,12 @@ func TestAccComputeSecurityPolicy_withRateLimitOptions(t *testing.T) {
 func TestAccComputeSecurityPolicy_withRateLimitWithRedirectOptions(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRateLimitWithRedirectOptions(spName),
@@ -224,9 +233,187 @@ func TestAccComputeSecurityPolicy_withRateLimitWithRedirectOptions(t *testing.T)
 	})
 }
 
+func TestAccComputeSecurityPolicy_withRecaptchaOptionsConfig(t *testing.T) {
+	t.Parallel()
+
+	project := acctest.GetTestProjectFromEnv()
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeSecurityPolicy_basic(spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withRecaptchaOptionsConfig(project, spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withRedirectSiteKeyUpdate(project, spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withEmptyRedirectSiteKey(spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccComputeSecurityPolicy_withHeadAction(t *testing.T) {
+	t.Parallel()
+
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	headerName := fmt.Sprintf("tf-test-header-name-%s", RandString(t, 10))
+	headerNameUpdate := fmt.Sprintf("tf-test-header-name-update-%s", RandString(t, 10))
+	headerValue := fmt.Sprintf("tf-test-header-value-%s", RandString(t, 10))
+	headerValueUpdate := fmt.Sprintf("tf-test-header-value-update-%s", RandString(t, 10))
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeSecurityPolicy_withoutHeadAction(spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withHeadAction(spName, headerName, headerValue),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withHeadAction(spName, headerNameUpdate, headerValueUpdate),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withMultipleHeaders(spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeSecurityPolicy_withoutHeadAction(spName),
+			},
+			{
+				ResourceName:      "google_compute_security_policy.policy",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+func testAccComputeSecurityPolicy_withRecaptchaOptionsConfig(project, spName string) string {
+	return fmt.Sprintf(`
+resource "google_recaptcha_enterprise_key" "primary" {
+  display_name = "test"
+
+  labels = {
+    label-one = "value-one"
+   }
+
+  project = "%s"
+
+  web_settings {
+    integration_type  = "INVISIBLE"
+    allow_all_domains = true
+    allowed_domains   = ["localhost"]
+  }
+}
+
+resource "google_compute_security_policy" "policy" {
+  name        = "%s"
+  description = "basic security policy"
+  type        = "CLOUD_ARMOR"
+
+  recaptcha_options_config {
+    redirect_site_key = google_recaptcha_enterprise_key.primary.name
+  }
+}
+`, project, spName)
+}
+
+func testAccComputeSecurityPolicy_withRedirectSiteKeyUpdate(project, spName string) string {
+	return fmt.Sprintf(`
+resource "google_recaptcha_enterprise_key" "primary1" {
+  display_name = "test"
+
+  labels = {
+    label-one = "value-one"
+   }
+
+  project = "%s"
+
+  web_settings {
+    integration_type  = "INVISIBLE"
+    allow_all_domains = true
+    allowed_domains   = ["localhost"]
+  }
+}
+
+resource "google_compute_security_policy" "policy" {
+  name        = "%s"
+  description = "basic security policy"
+  type        = "CLOUD_ARMOR"
+
+  recaptcha_options_config {
+    redirect_site_key = google_recaptcha_enterprise_key.primary1.name
+  }
+}
+`, project, spName)
+}
+
+func testAccComputeSecurityPolicy_withEmptyRedirectSiteKey(spName string) string {
+	return fmt.Sprintf(`
+resource "google_compute_security_policy" "policy" {
+  name        = "%s"
+  description = "basic security policy"
+  type        = "CLOUD_ARMOR"
+
+  recaptcha_options_config {
+    redirect_site_key = ""
+  }
+}
+`, spName)
+}
+
 func testAccCheckComputeSecurityPolicyDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
-		config := googleProviderConfig(t)
+		config := GoogleProviderConfig(t)
 
 		for _, rs := range s.RootModule().Resources {
 			if rs.Type != "google_compute_security_policy" {
@@ -235,7 +422,7 @@ func testAccCheckComputeSecurityPolicyDestroyProducer(t *testing.T) func(s *terr
 
 			pol := rs.Primary.Attributes["name"]
 
-			_, err := config.NewComputeClient(config.userAgent).SecurityPolicies.Get(config.Project, pol).Do()
+			_, err := config.NewComputeClient(config.UserAgent).SecurityPolicies.Get(config.Project, pol).Do()
 			if err == nil {
 				return fmt.Errorf("Security policy %q still exists", pol)
 			}
@@ -415,6 +602,120 @@ resource "google_compute_security_policy" "policy" {
 `, spName)
 }
 
+func testAccComputeSecurityPolicy_withoutHeadAction(spName string) string {
+	return fmt.Sprintf(`
+resource "google_compute_security_policy" "policy" {
+  name = "%s"
+
+  rule {
+    action   = "allow"
+    priority = "2147483647"
+    match {
+      versioned_expr = "SRC_IPS_V1"
+      config {
+        src_ip_ranges = ["*"]
+      }
+    }
+      description = "default rule"
+	}
+
+  rule {
+    action   = "allow"
+    priority = "1000"
+    match {
+      expr {
+        expression = "request.path.matches(\"/login.html\") && token.recaptcha_session.score < 0.2"
+      }
+    }
+  }
+}
+`, spName)
+}
+
+func testAccComputeSecurityPolicy_withHeadAction(spName, headerName, headerValue string) string {
+	return fmt.Sprintf(`
+resource "google_compute_security_policy" "policy" {
+  name = "%s"
+
+  rule {
+    action   = "allow"
+    priority = "2147483647"
+    match {
+      versioned_expr = "SRC_IPS_V1"
+      config {
+        src_ip_ranges = ["*"]
+      }
+    }
+    description = "default rule"
+  }
+
+  rule {
+    action   = "allow"
+    priority = "1000"
+    match {
+      expr {
+        expression = "request.path.matches(\"/login.html\") && token.recaptcha_session.score < 0.2"
+      }
+    }
+
+    header_action {
+      request_headers_to_adds {
+        header_name  = "%s"
+        header_value = "%s"
+      }
+    }
+  }
+}
+`, spName, headerName, headerValue)
+}
+
+func testAccComputeSecurityPolicy_withMultipleHeaders(spName string) string {
+	return fmt.Sprintf(`
+resource "google_compute_security_policy" "policy" {
+  name = "%s"
+
+  rule {
+    action   = "allow"
+    priority = "2147483647"
+    match {
+      versioned_expr = "SRC_IPS_V1"
+      config {
+        src_ip_ranges = ["*"]
+      }
+    }
+    description = "default rule"
+  }
+
+  rule {
+    action   = "allow"
+    priority = "1000"
+    match {
+      expr {
+        expression = "request.path.matches(\"/login.html\") && token.recaptcha_session.score < 0.2"
+      }
+    }
+
+    header_action {
+      request_headers_to_adds {
+        header_name  = "reCAPTCHA-Warning"
+        header_value = "high"
+      }
+
+      request_headers_to_adds {
+        header_name  = "X-Hello"
+        header_value = "World"
+      }
+
+      request_headers_to_adds {
+        header_name  = "X-Resource"
+        header_value = "test"
+      }
+    }
+  }
+}
+`, spName)
+}
+
 func testAccComputeSecurityPolicy_withAdvancedOptionsConfig(spName string) string {
 	return fmt.Sprintf(`
 resource "google_compute_security_policy" "policy" {
@@ -423,6 +724,14 @@ resource "google_compute_security_policy" "policy" {
 
   advanced_options_config {
     json_parsing = "STANDARD"
+    json_custom_config {
+      content_types = [
+        "application/json",
+        "application/vnd.api+json",
+        "application/vnd.collection+json",
+        "application/vnd.hyper+json"
+      ]
+    }
     log_level    = "VERBOSE"
   }
 }
@@ -440,6 +749,22 @@ resource "google_compute_security_policy" "policy" {
       enable = true
       rule_visibility = "STANDARD"
 	}
+  }
+}
+`, spName)
+}
+
+func testAccComputeSecurityPolicy_withAdaptiveProtectionUpdate(spName string) string {
+	return fmt.Sprintf(`
+resource "google_compute_security_policy" "policy" {
+  name        = "%s"
+  description = "updated description"
+
+  adaptive_protection_config {
+    layer_7_ddos_defense_config {
+      enable = false
+      rule_visibility = "STANDARD"
+    }
   }
 }
 `, spName)
@@ -538,12 +863,12 @@ resource "google_compute_security_policy" "policy" {
 func TestAccComputeSecurityPolicy_withRedirectOptionsRecaptcha(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRedirectOptionsRecaptcha(spName),
@@ -560,12 +885,12 @@ func TestAccComputeSecurityPolicy_withRedirectOptionsRecaptcha(t *testing.T) {
 func TestAccComputeSecurityPolicy_withRedirectOptionsUpdate(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRedirectOptionsRecaptcha(spName),
@@ -590,12 +915,12 @@ func TestAccComputeSecurityPolicy_withRedirectOptionsUpdate(t *testing.T) {
 func TestAccComputeSecurityPolicy_withRedirectOptionsExternal(t *testing.T) {
 	t.Parallel()
 
-	spName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	spName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeSecurityPolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeSecurityPolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeSecurityPolicy_withRedirectOptionsExternal(spName),

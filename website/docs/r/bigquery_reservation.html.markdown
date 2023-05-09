@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "BigQuery Reservation"
-page_title: "Google: google_bigquery_reservation"
 description: |-
   A reservation is a mechanism used to guarantee BigQuery slots to users.
 ---
@@ -25,7 +24,7 @@ A reservation is a mechanism used to guarantee BigQuery slots to users.
 
 To get more information about Reservation, see:
 
-* [API documentation](https://cloud.google.com/bigquery/docs/reference/reservations/rest/v1beta1/projects.locations.reservations/create)
+* [API documentation](https://cloud.google.com/bigquery/docs/reference/reservations/rest/v1/projects.locations.reservations/create)
 * How-to Guides
     * [Introduction to Reservations](https://cloud.google.com/bigquery/docs/reservations-intro)
 
@@ -40,11 +39,16 @@ To get more information about Reservation, see:
 ```hcl
 resource "google_bigquery_reservation" "reservation" {
 	name           = "my-reservation"
-	location       = "asia-northeast1"
+	location       = "us-west2"
 	// Set to 0 for testing purposes
 	// In reality this would be larger than zero
-	slot_capacity  = 0
-	ignore_idle_slots = false
+	slot_capacity     = 0
+	edition = "STANDARD"
+	ignore_idle_slots = true
+	concurrency       = 0
+	autoscale {
+   	  max_slots = 100
+    }
 }
 ```
 
@@ -72,6 +76,24 @@ The following arguments are supported:
   the same admin project. If true, a query using this reservation will execute with the slot
   capacity specified above at most.
 
+* `concurrency` -
+  (Optional)
+  Maximum number of queries that are allowed to run concurrently in this reservation. This is a soft limit due to asynchronous nature of the system and various optimizations for small queries. Default value is 0 which means that concurrency will be automatically set based on the reservation size.
+
+* `multi_region_auxiliary` -
+  (Optional)
+  Applicable only for reservations located within one of the BigQuery multi-regions (US or EU).
+  If set to true, this reservation is placed in the organization's secondary region which is designated for disaster recovery purposes. If false, this reservation is placed in the organization's default region.
+
+* `edition` -
+  (Optional)
+  The edition type. Valid values are STANDARD, ENTERPRISE, ENTERPRISE_PLUS
+
+* `autoscale` -
+  (Optional)
+  The configuration parameters for the auto scaling feature.
+  Structure is [documented below](#nested_autoscale).
+
 * `location` -
   (Optional)
   The geographic location where the transfer config should reside.
@@ -80,6 +102,16 @@ The following arguments are supported:
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
+
+<a name="nested_autoscale"></a>The `autoscale` block supports:
+
+* `current_slots` -
+  (Output)
+  The slot capacity added to this reservation when autoscale happens. Will be between [0, max_slots].
+
+* `max_slots` -
+  (Optional)
+  Number of slots to be scaled when needed.
 
 ## Attributes Reference
 
@@ -91,7 +123,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -110,4 +142,4 @@ $ terraform import google_bigquery_reservation.default {{location}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

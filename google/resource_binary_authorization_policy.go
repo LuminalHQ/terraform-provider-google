@@ -23,9 +23,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func defaultBinaryAuthorizationPolicy(project string) map[string]interface{} {
+func DefaultBinaryAuthorizationPolicy(project string) map[string]interface{} {
 	return map[string]interface{}{
 		"name": fmt.Sprintf("projects/%s/policy", project),
 		"admissionWhitelistPatterns": []interface{}{
@@ -40,7 +44,7 @@ func defaultBinaryAuthorizationPolicy(project string) map[string]interface{} {
 	}
 }
 
-func resourceBinaryAuthorizationPolicy() *schema.Resource {
+func ResourceBinaryAuthorizationPolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceBinaryAuthorizationPolicyCreate,
 		Read:   resourceBinaryAuthorizationPolicyRead,
@@ -69,19 +73,19 @@ rule.`,
 						"enforcement_mode": {
 							Type:         schema.TypeString,
 							Required:     true,
-							ValidateFunc: validateEnum([]string{"ENFORCED_BLOCK_AND_AUDIT_LOG", "DRYRUN_AUDIT_LOG_ONLY"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ENFORCED_BLOCK_AND_AUDIT_LOG", "DRYRUN_AUDIT_LOG_ONLY"}),
 							Description:  `The action when a pod creation is denied by the admission rule. Possible values: ["ENFORCED_BLOCK_AND_AUDIT_LOG", "DRYRUN_AUDIT_LOG_ONLY"]`,
 						},
 						"evaluation_mode": {
 							Type:         schema.TypeString,
 							Required:     true,
-							ValidateFunc: validateEnum([]string{"ALWAYS_ALLOW", "REQUIRE_ATTESTATION", "ALWAYS_DENY"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ALWAYS_ALLOW", "REQUIRE_ATTESTATION", "ALWAYS_DENY"}),
 							Description:  `How this admission rule will be evaluated. Possible values: ["ALWAYS_ALLOW", "REQUIRE_ATTESTATION", "ALWAYS_DENY"]`,
 						},
 						"require_attestations_by": {
 							Type:             schema.TypeSet,
 							Optional:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description: `The resource names of the attestors that must attest to a
 container image. If the attestor is in a different project from the
 policy, it should be specified in the format 'projects/*/attestors/*'.
@@ -94,7 +98,7 @@ specifies REQUIRE_ATTESTATION, otherwise it must be empty.`,
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
 							},
-							Set: selfLinkNameHash,
+							Set: tpgresource.SelfLinkNameHash,
 						},
 					},
 				},
@@ -140,19 +144,19 @@ A location is either a compute zone (e.g. 'us-central1-a') or a region
 						"enforcement_mode": {
 							Type:         schema.TypeString,
 							Required:     true,
-							ValidateFunc: validateEnum([]string{"ENFORCED_BLOCK_AND_AUDIT_LOG", "DRYRUN_AUDIT_LOG_ONLY"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ENFORCED_BLOCK_AND_AUDIT_LOG", "DRYRUN_AUDIT_LOG_ONLY"}),
 							Description:  `The action when a pod creation is denied by the admission rule. Possible values: ["ENFORCED_BLOCK_AND_AUDIT_LOG", "DRYRUN_AUDIT_LOG_ONLY"]`,
 						},
 						"evaluation_mode": {
 							Type:         schema.TypeString,
 							Required:     true,
-							ValidateFunc: validateEnum([]string{"ALWAYS_ALLOW", "REQUIRE_ATTESTATION", "ALWAYS_DENY"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ALWAYS_ALLOW", "REQUIRE_ATTESTATION", "ALWAYS_DENY"}),
 							Description:  `How this admission rule will be evaluated. Possible values: ["ALWAYS_ALLOW", "REQUIRE_ATTESTATION", "ALWAYS_DENY"]`,
 						},
 						"require_attestations_by": {
 							Type:             schema.TypeSet,
 							Optional:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description: `The resource names of the attestors that must attest to a
 container image. If the attestor is in a different project from the
 policy, it should be specified in the format 'projects/*/attestors/*'.
@@ -165,7 +169,7 @@ specifies REQUIRE_ATTESTATION, otherwise it must be empty.`,
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
 							},
-							Set: selfLinkNameHash,
+							Set: tpgresource.SelfLinkNameHash,
 						},
 					},
 				},
@@ -185,12 +189,12 @@ specifies REQUIRE_ATTESTATION, otherwise it must be empty.`,
 					}
 					at := copy["require_attestations_by"].(*schema.Set)
 					if at != nil {
-						t := convertAndMapStringArr(at.List(), GetResourceNameFromSelfLink)
-						copy["require_attestations_by"] = schema.NewSet(selfLinkNameHash, convertStringArrToInterface(t))
+						t := convertAndMapStringArr(at.List(), tpgresource.GetResourceNameFromSelfLink)
+						copy["require_attestations_by"] = schema.NewSet(tpgresource.SelfLinkNameHash, convertStringArrToInterface(t))
 					}
 					var buf bytes.Buffer
-					schema.SerializeResourceForHash(&buf, copy, resourceBinaryAuthorizationPolicy().Schema["cluster_admission_rules"].Elem.(*schema.Resource))
-					return hashcode(buf.String())
+					schema.SerializeResourceForHash(&buf, copy, ResourceBinaryAuthorizationPolicy().Schema["cluster_admission_rules"].Elem.(*schema.Resource))
+					return tpgresource.Hashcode(buf.String())
 				},
 			},
 			"description": {
@@ -202,7 +206,7 @@ specifies REQUIRE_ATTESTATION, otherwise it must be empty.`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"ENABLE", "DISABLE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ENABLE", "DISABLE", ""}),
 				Description: `Controls the evaluation of a Google-maintained global admission policy
 for common system-level images. Images not covered by the global
 policy will be subject to the project admission policy. Possible values: ["ENABLE", "DISABLE"]`,
@@ -219,8 +223,8 @@ policy will be subject to the project admission policy. Possible values: ["ENABL
 }
 
 func resourceBinaryAuthorizationPolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -257,7 +261,7 @@ func resourceBinaryAuthorizationPolicyCreate(d *schema.ResourceData, meta interf
 		obj["defaultAdmissionRule"] = defaultAdmissionRuleProp
 	}
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
 	if err != nil {
 		return err
 	}
@@ -276,13 +280,13 @@ func resourceBinaryAuthorizationPolicyCreate(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Policy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -294,13 +298,13 @@ func resourceBinaryAuthorizationPolicyCreate(d *schema.ResourceData, meta interf
 }
 
 func resourceBinaryAuthorizationPolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
 	if err != nil {
 		return err
 	}
@@ -318,9 +322,9 @@ func resourceBinaryAuthorizationPolicyRead(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("BinaryAuthorizationPolicy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("BinaryAuthorizationPolicy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -347,8 +351,8 @@ func resourceBinaryAuthorizationPolicyRead(d *schema.ResourceData, meta interfac
 }
 
 func resourceBinaryAuthorizationPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -393,7 +397,7 @@ func resourceBinaryAuthorizationPolicyUpdate(d *schema.ResourceData, meta interf
 		obj["defaultAdmissionRule"] = defaultAdmissionRuleProp
 	}
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
 	if err != nil {
 		return err
 	}
@@ -405,7 +409,7 @@ func resourceBinaryAuthorizationPolicyUpdate(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Policy %q: %s", d.Id(), err)
@@ -417,8 +421,8 @@ func resourceBinaryAuthorizationPolicyUpdate(d *schema.ResourceData, meta interf
 }
 
 func resourceBinaryAuthorizationPolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -431,13 +435,13 @@ func resourceBinaryAuthorizationPolicyDelete(d *schema.ResourceData, meta interf
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/policy")
 	if err != nil {
 		return err
 	}
 
 	var obj map[string]interface{}
-	obj = defaultBinaryAuthorizationPolicy(d.Get("project").(string))
+	obj = DefaultBinaryAuthorizationPolicy(d.Get("project").(string))
 	log.Printf("[DEBUG] Deleting Policy %q", d.Id())
 
 	// err == nil indicates that the billing_project value was found
@@ -445,9 +449,9 @@ func resourceBinaryAuthorizationPolicyDelete(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Policy")
+		return transport_tpg.HandleNotFoundError(err, d, "Policy")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Policy %q: %#v", d.Id(), res)
@@ -455,8 +459,8 @@ func resourceBinaryAuthorizationPolicyDelete(d *schema.ResourceData, meta interf
 }
 
 func resourceBinaryAuthorizationPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)",
 		"(?P<project>[^/]+)",
 	}, d, config); err != nil {
@@ -464,7 +468,7 @@ func resourceBinaryAuthorizationPolicyImport(d *schema.ResourceData, meta interf
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -473,15 +477,15 @@ func resourceBinaryAuthorizationPolicyImport(d *schema.ResourceData, meta interf
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenBinaryAuthorizationPolicyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationPolicyGlobalPolicyEvaluationMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyGlobalPolicyEvaluationMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationPolicyAdmissionWhitelistPatterns(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyAdmissionWhitelistPatterns(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -499,11 +503,11 @@ func flattenBinaryAuthorizationPolicyAdmissionWhitelistPatterns(v interface{}, d
 	}
 	return transformed
 }
-func flattenBinaryAuthorizationPolicyAdmissionWhitelistPatternsNamePattern(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyAdmissionWhitelistPatternsNamePattern(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationPolicyClusterAdmissionRules(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyClusterAdmissionRules(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -520,22 +524,22 @@ func flattenBinaryAuthorizationPolicyClusterAdmissionRules(v interface{}, d *sch
 	}
 	return transformed
 }
-func flattenBinaryAuthorizationPolicyClusterAdmissionRulesEvaluationMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyClusterAdmissionRulesEvaluationMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationPolicyClusterAdmissionRulesRequireAttestationsBy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyClusterAdmissionRulesRequireAttestationsBy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return schema.NewSet(selfLinkNameHash, v.([]interface{}))
+	return schema.NewSet(tpgresource.SelfLinkNameHash, v.([]interface{}))
 }
 
-func flattenBinaryAuthorizationPolicyClusterAdmissionRulesEnforcementMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyClusterAdmissionRulesEnforcementMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationPolicyDefaultAdmissionRule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyDefaultAdmissionRule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -552,30 +556,30 @@ func flattenBinaryAuthorizationPolicyDefaultAdmissionRule(v interface{}, d *sche
 		flattenBinaryAuthorizationPolicyDefaultAdmissionRuleEnforcementMode(original["enforcementMode"], d, config)
 	return []interface{}{transformed}
 }
-func flattenBinaryAuthorizationPolicyDefaultAdmissionRuleEvaluationMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyDefaultAdmissionRuleEvaluationMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationPolicyDefaultAdmissionRuleRequireAttestationsBy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyDefaultAdmissionRuleRequireAttestationsBy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return schema.NewSet(selfLinkNameHash, v.([]interface{}))
+	return schema.NewSet(tpgresource.SelfLinkNameHash, v.([]interface{}))
 }
 
-func flattenBinaryAuthorizationPolicyDefaultAdmissionRuleEnforcementMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationPolicyDefaultAdmissionRuleEnforcementMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandBinaryAuthorizationPolicyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationPolicyGlobalPolicyEvaluationMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyGlobalPolicyEvaluationMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationPolicyAdmissionWhitelistPatterns(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyAdmissionWhitelistPatterns(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -597,11 +601,11 @@ func expandBinaryAuthorizationPolicyAdmissionWhitelistPatterns(v interface{}, d 
 	return req, nil
 }
 
-func expandBinaryAuthorizationPolicyAdmissionWhitelistPatternsNamePattern(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyAdmissionWhitelistPatternsNamePattern(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationPolicyClusterAdmissionRules(v interface{}, d TerraformResourceData, config *Config) (map[string]interface{}, error) {
+func expandBinaryAuthorizationPolicyClusterAdmissionRules(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]interface{}, error) {
 	if v == nil {
 		return map[string]interface{}{}, nil
 	}
@@ -640,11 +644,11 @@ func expandBinaryAuthorizationPolicyClusterAdmissionRules(v interface{}, d Terra
 	return m, nil
 }
 
-func expandBinaryAuthorizationPolicyClusterAdmissionRulesEvaluationMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyClusterAdmissionRulesEvaluationMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationPolicyClusterAdmissionRulesRequireAttestationsBy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyClusterAdmissionRulesRequireAttestationsBy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	r := regexp.MustCompile("projects/(.+)/attestors/(.+)")
 
 	// It's possible that all entries in the list will specify a project, in
@@ -671,11 +675,11 @@ func expandBinaryAuthorizationPolicyClusterAdmissionRulesRequireAttestationsBy(v
 	}), nil
 }
 
-func expandBinaryAuthorizationPolicyClusterAdmissionRulesEnforcementMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyClusterAdmissionRulesEnforcementMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationPolicyDefaultAdmissionRule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyDefaultAdmissionRule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -708,11 +712,11 @@ func expandBinaryAuthorizationPolicyDefaultAdmissionRule(v interface{}, d Terraf
 	return transformed, nil
 }
 
-func expandBinaryAuthorizationPolicyDefaultAdmissionRuleEvaluationMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyDefaultAdmissionRuleEvaluationMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationPolicyDefaultAdmissionRuleRequireAttestationsBy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyDefaultAdmissionRuleRequireAttestationsBy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	r := regexp.MustCompile("projects/(.+)/attestors/(.+)")
 
 	// It's possible that all entries in the list will specify a project, in
@@ -739,6 +743,6 @@ func expandBinaryAuthorizationPolicyDefaultAdmissionRuleRequireAttestationsBy(v 
 	}), nil
 }
 
-func expandBinaryAuthorizationPolicyDefaultAdmissionRuleEnforcementMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationPolicyDefaultAdmissionRuleEnforcementMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

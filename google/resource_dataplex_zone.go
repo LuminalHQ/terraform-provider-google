@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	dataplex "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/dataplex"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceDataplexZone() *schema.Resource {
+func ResourceDataplexZone() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataplexZoneCreate,
 		Read:   resourceDataplexZoneRead,
@@ -163,6 +165,7 @@ func DataplexZoneDiscoverySpecSchema() *schema.Resource {
 
 			"csv_options": {
 				Type:        schema.TypeList,
+				Computed:    true,
 				Optional:    true,
 				Description: "Optional. Configuration for CSV data.",
 				MaxItems:    1,
@@ -185,6 +188,7 @@ func DataplexZoneDiscoverySpecSchema() *schema.Resource {
 
 			"json_options": {
 				Type:        schema.TypeList,
+				Computed:    true,
 				Optional:    true,
 				Description: "Optional. Configuration for Json data.",
 				MaxItems:    1,
@@ -287,7 +291,7 @@ func DataplexZoneAssetStatusSchema() *schema.Resource {
 }
 
 func resourceDataplexZoneCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -312,7 +316,7 @@ func resourceDataplexZoneCreate(d *schema.ResourceData, meta interface{}) error 
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -321,8 +325,8 @@ func resourceDataplexZoneCreate(d *schema.ResourceData, meta interface{}) error 
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -344,7 +348,7 @@ func resourceDataplexZoneCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDataplexZoneRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -363,7 +367,7 @@ func resourceDataplexZoneRead(d *schema.ResourceData, meta interface{}) error {
 		Project:       dcl.String(project),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -372,8 +376,8 @@ func resourceDataplexZoneRead(d *schema.ResourceData, meta interface{}) error {
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -434,7 +438,7 @@ func resourceDataplexZoneRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 func resourceDataplexZoneUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -453,7 +457,7 @@ func resourceDataplexZoneUpdate(d *schema.ResourceData, meta interface{}) error 
 		Project:       dcl.String(project),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -463,8 +467,8 @@ func resourceDataplexZoneUpdate(d *schema.ResourceData, meta interface{}) error 
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -486,7 +490,7 @@ func resourceDataplexZoneUpdate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDataplexZoneDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -506,7 +510,7 @@ func resourceDataplexZoneDelete(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	log.Printf("[DEBUG] Deleting Zone %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -515,8 +519,8 @@ func resourceDataplexZoneDelete(d *schema.ResourceData, meta interface{}) error 
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -531,9 +535,9 @@ func resourceDataplexZoneDelete(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDataplexZoneImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/lakes/(?P<lake>[^/]+)/zones/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<lake>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<lake>[^/]+)/(?P<name>[^/]+)",
@@ -589,11 +593,11 @@ func flattenDataplexZoneDiscoverySpec(obj *dataplex.ZoneDiscoverySpec) interface
 
 func expandDataplexZoneDiscoverySpecCsvOptions(o interface{}) *dataplex.ZoneDiscoverySpecCsvOptions {
 	if o == nil {
-		return dataplex.EmptyZoneDiscoverySpecCsvOptions
+		return nil
 	}
 	objArr := o.([]interface{})
 	if len(objArr) == 0 || objArr[0] == nil {
-		return dataplex.EmptyZoneDiscoverySpecCsvOptions
+		return nil
 	}
 	obj := objArr[0].(map[string]interface{})
 	return &dataplex.ZoneDiscoverySpecCsvOptions{
@@ -621,11 +625,11 @@ func flattenDataplexZoneDiscoverySpecCsvOptions(obj *dataplex.ZoneDiscoverySpecC
 
 func expandDataplexZoneDiscoverySpecJsonOptions(o interface{}) *dataplex.ZoneDiscoverySpecJsonOptions {
 	if o == nil {
-		return dataplex.EmptyZoneDiscoverySpecJsonOptions
+		return nil
 	}
 	objArr := o.([]interface{})
 	if len(objArr) == 0 || objArr[0] == nil {
-		return dataplex.EmptyZoneDiscoverySpecJsonOptions
+		return nil
 	}
 	obj := objArr[0].(map[string]interface{})
 	return &dataplex.ZoneDiscoverySpecJsonOptions{

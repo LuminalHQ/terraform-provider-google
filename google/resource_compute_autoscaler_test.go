@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -10,15 +11,15 @@ import (
 func TestAccComputeAutoscaler_update(t *testing.T) {
 	t.Parallel()
 
-	var itName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var tpName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var igmName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var autoscalerName = fmt.Sprintf("tf-test-%s", randString(t, 10))
+	var itName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var tpName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var igmName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var autoscalerName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeAutoscalerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeAutoscalerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeAutoscaler_basic(itName, tpName, igmName, autoscalerName),
@@ -43,15 +44,15 @@ func TestAccComputeAutoscaler_update(t *testing.T) {
 func TestAccComputeAutoscaler_multicondition(t *testing.T) {
 	t.Parallel()
 
-	var itName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var tpName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var igmName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var autoscalerName = fmt.Sprintf("tf-test-%s", randString(t, 10))
+	var itName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var tpName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var igmName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var autoscalerName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeAutoscalerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeAutoscalerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeAutoscaler_multicondition(itName, tpName, igmName, autoscalerName),
@@ -68,15 +69,15 @@ func TestAccComputeAutoscaler_multicondition(t *testing.T) {
 func TestAccComputeAutoscaler_scaleDownControl(t *testing.T) {
 	t.Parallel()
 
-	var itName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var tpName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var igmName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var autoscalerName = fmt.Sprintf("tf-test-%s", randString(t, 10))
+	var itName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var tpName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var igmName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var autoscalerName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeAutoscalerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeAutoscalerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeAutoscaler_scaleDownControl(itName, tpName, igmName, autoscalerName),
@@ -93,15 +94,15 @@ func TestAccComputeAutoscaler_scaleDownControl(t *testing.T) {
 func TestAccComputeAutoscaler_scalingSchedule(t *testing.T) {
 	t.Parallel()
 
-	var itName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var tpName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var igmName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var autoscalerName = fmt.Sprintf("tf-test-%s", randString(t, 10))
+	var itName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var tpName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var igmName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var autoscalerName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeAutoscalerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeAutoscalerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeAutoscaler_scalingSchedule(itName, tpName, igmName, autoscalerName),
@@ -118,15 +119,15 @@ func TestAccComputeAutoscaler_scalingSchedule(t *testing.T) {
 func TestAccComputeAutoscaler_scaleInControl(t *testing.T) {
 	t.Parallel()
 
-	var itName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var tpName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var igmName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var autoscalerName = fmt.Sprintf("tf-test-%s", randString(t, 10))
+	var itName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var tpName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var igmName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var autoscalerName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeAutoscalerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeAutoscalerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeAutoscaler_scaleInControl(itName, tpName, igmName, autoscalerName),
@@ -143,15 +144,15 @@ func TestAccComputeAutoscaler_scaleInControl(t *testing.T) {
 func TestAccComputeAutoscaler_scaleInControlFixed(t *testing.T) {
 	t.Parallel()
 
-	var itName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var tpName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var igmName = fmt.Sprintf("tf-test-%s", randString(t, 10))
-	var autoscalerName = fmt.Sprintf("tf-test-%s", randString(t, 10))
+	var itName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var tpName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var igmName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	var autoscalerName = fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeAutoscalerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeAutoscalerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeAutoscaler_scaleInControlFixed(itName, tpName, igmName, autoscalerName),

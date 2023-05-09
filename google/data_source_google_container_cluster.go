@@ -1,18 +1,22 @@
 package google
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func dataSourceGoogleContainerCluster() *schema.Resource {
+func DataSourceGoogleContainerCluster() *schema.Resource {
 	// Generate datasource schema from resource
-	dsSchema := datasourceSchemaFromResourceSchema(resourceContainerCluster().Schema)
+	dsSchema := tpgresource.DatasourceSchemaFromResourceSchema(ResourceContainerCluster().Schema)
 
 	// Set 'Required' schema elements
-	addRequiredFieldsToSchema(dsSchema, "name")
+	tpgresource.AddRequiredFieldsToSchema(dsSchema, "name")
 
 	// Set 'Optional' schema elements
-	addOptionalFieldsToSchema(dsSchema, "project", "location")
+	tpgresource.AddOptionalFieldsToSchema(dsSchema, "project", "location")
 
 	return &schema.Resource{
 		Read:   datasourceContainerClusterRead,
@@ -21,7 +25,7 @@ func dataSourceGoogleContainerCluster() *schema.Resource {
 }
 
 func datasourceContainerClusterRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	clusterName := d.Get("name").(string)
 
@@ -35,7 +39,17 @@ func datasourceContainerClusterRead(d *schema.ResourceData, meta interface{}) er
 		return err
 	}
 
-	d.SetId(containerClusterFullName(project, location, clusterName))
+	id := containerClusterFullName(project, location, clusterName)
 
-	return resourceContainerClusterRead(d, meta)
+	d.SetId(id)
+
+	if err := resourceContainerClusterRead(d, meta); err != nil {
+		return err
+	}
+
+	if d.Id() == "" {
+		return fmt.Errorf("%s not found", id)
+	}
+
+	return nil
 }

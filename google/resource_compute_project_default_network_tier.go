@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"log"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func resourceComputeProjectDefaultNetworkTier() *schema.Resource {
+func ResourceComputeProjectDefaultNetworkTier() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeProjectDefaultNetworkTierCreateOrUpdate,
 		Read:   resourceComputeProjectDefaultNetworkTierRead,
@@ -49,8 +50,8 @@ func resourceComputeProjectDefaultNetworkTier() *schema.Resource {
 }
 
 func resourceComputeProjectDefaultNetworkTierCreateOrUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -69,7 +70,7 @@ func resourceComputeProjectDefaultNetworkTierCreateOrUpdate(d *schema.ResourceDa
 	}
 
 	log.Printf("[DEBUG] SetDefaultNetworkTier: %d (%s)", op.Id, op.SelfLink)
-	err = computeOperationWaitTime(config, op, projectID, "SetDefaultNetworkTier", userAgent, d.Timeout(schema.TimeoutCreate))
+	err = ComputeOperationWaitTime(config, op, projectID, "SetDefaultNetworkTier", userAgent, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("SetDefaultNetworkTier failed: %s", err)
 	}
@@ -80,8 +81,8 @@ func resourceComputeProjectDefaultNetworkTierCreateOrUpdate(d *schema.ResourceDa
 }
 
 func resourceComputeProjectDefaultNetworkTierRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func resourceComputeProjectDefaultNetworkTierRead(d *schema.ResourceData, meta i
 
 	project, err := config.NewComputeClient(userAgent).Projects.Get(projectId).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Project data for project %q", projectId))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Project data for project %q", projectId))
 	}
 
 	err = d.Set("network_tier", project.DefaultNetworkTier)

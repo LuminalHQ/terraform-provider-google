@@ -1,6 +1,5 @@
 ---
 subcategory: "Cloud Storage"
-page_title: "Google: google_storage_bucket_object"
 description: |-
   Creates a new object inside a specified bucket
 ---
@@ -23,6 +22,16 @@ Example creating a public object in an existing `image-store` bucket.
 resource "google_storage_bucket_object" "picture" {
   name   = "butterfly01"
   source = "/images/nature/garden-tiger-moth.jpg"
+  bucket = "image-store"
+}
+```
+
+Example creating an empty folder in an existing `image-store` bucket.
+
+```hcl
+resource "google_storage_bucket_object" "empty_folder" {
+  name   = "empty_folder/" # folder name should end with '/'
+  content = " "            # content is ignored but should be non-empty
   bucket = "image-store"
 }
 ```
@@ -60,6 +69,12 @@ One of the following is required:
 * `customer_encryption` - (Optional) Enables object encryption with Customer-Supplied Encryption Key (CSEK). [Google [documentation about](#nested_customer_encryption) CSEK.](https://cloud.google.com/storage/docs/encryption/customer-supplied-keys)
     Structure is documented below.
 
+* `event_based_hold` - (Optional) Whether an object is under [event-based hold](https://cloud.google.com/storage/docs/object-holds#hold-types). Event-based hold is a way to retain objects until an event occurs, which is signified by the hold's release (i.e. this value is set to false). After being released (set to false), such objects will be subject to bucket-level retention (if any).
+
+* `temporary_hold` - (Optional) Whether an object is under [temporary hold](https://cloud.google.com/storage/docs/object-holds#hold-types). While this flag is set to true, the object is protected against deletion and overwrites.
+
+* `detect_md5hash` - (Optional) Detect changes to local file or changes made outside of Terraform to the file stored on the server. MD5 hash of the data, encoded using [base64](https://datatracker.ietf.org/doc/html/rfc4648#section-4). This field is not present for [composite objects](https://cloud.google.com/storage/docs/composite-objects). For more information about using the MD5 hash, see [Hashes and ETags: Best Practices](https://cloud.google.com/storage/docs/hashes-etags#json-api).
+
 * `storage_class` - (Optional) The [StorageClass](https://cloud.google.com/storage/docs/storage-classes) of the new bucket object.
     Supported values include: `MULTI_REGIONAL`, `REGIONAL`, `NEARLINE`, `COLDLINE`, `ARCHIVE`. If not provided, this defaults to the bucket's default
     storage class or to a [standard](https://cloud.google.com/storage/docs/storage-classes#standard) class.
@@ -93,7 +108,7 @@ exported:
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options: configuration options:
 
 - `create` - Default is 4 minutes.
 - `update` - Default is 4 minutes.

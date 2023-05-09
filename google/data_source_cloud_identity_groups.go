@@ -2,15 +2,17 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"google.golang.org/api/cloudidentity/v1"
 )
 
-func dataSourceGoogleCloudIdentityGroups() *schema.Resource {
+func DataSourceGoogleCloudIdentityGroups() *schema.Resource {
 	// Generate datasource schema from resource
-	dsSchema := datasourceSchemaFromResourceSchema(resourceCloudIdentityGroup().Schema)
+	dsSchema := tpgresource.DatasourceSchemaFromResourceSchema(ResourceCloudIdentityGroup().Schema)
 
 	return &schema.Resource{
 		Read: dataSourceGoogleCloudIdentityGroupsRead,
@@ -39,8 +41,8 @@ groups or customers/{customer_id} for Google Groups.`,
 }
 
 func dataSourceGoogleCloudIdentityGroupsRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -63,7 +65,7 @@ func dataSourceGoogleCloudIdentityGroupsRead(d *schema.ResourceData, meta interf
 			groupsCall.Header().Set("X-Goog-User-Project", billingProject)
 		}
 	}
-	err = groupsCall.Pages(config.context, func(resp *cloudidentity.ListGroupsResponse) error {
+	err = groupsCall.Pages(config.Context, func(resp *cloudidentity.ListGroupsResponse) error {
 		for _, group := range resp.Groups {
 			result = append(result, map[string]interface{}{
 				"name":         group.Name,
@@ -77,7 +79,7 @@ func dataSourceGoogleCloudIdentityGroupsRead(d *schema.ResourceData, meta interf
 		return nil
 	})
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroups %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroups %q", d.Id()))
 	}
 
 	if err := d.Set("groups", result); err != nil {

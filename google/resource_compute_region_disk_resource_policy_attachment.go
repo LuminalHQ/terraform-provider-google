@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceComputeRegionDiskResourcePolicyAttachment() *schema.Resource {
+func ResourceComputeRegionDiskResourcePolicyAttachment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeRegionDiskResourcePolicyAttachmentCreate,
 		Read:   resourceComputeRegionDiskResourcePolicyAttachmentRead,
@@ -73,8 +76,8 @@ creation. Do not specify the self link.`,
 }
 
 func resourceComputeRegionDiskResourcePolicyAttachmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -92,7 +95,7 @@ func resourceComputeRegionDiskResourcePolicyAttachmentCreate(d *schema.ResourceD
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{disk}}/addResourcePolicies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{disk}}/addResourcePolicies")
 	if err != nil {
 		return err
 	}
@@ -111,19 +114,19 @@ func resourceComputeRegionDiskResourcePolicyAttachmentCreate(d *schema.ResourceD
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating RegionDiskResourcePolicyAttachment: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{project}}/{{region}}/{{disk}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{region}}/{{disk}}/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating RegionDiskResourcePolicyAttachment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -139,13 +142,13 @@ func resourceComputeRegionDiskResourcePolicyAttachmentCreate(d *schema.ResourceD
 }
 
 func resourceComputeRegionDiskResourcePolicyAttachmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{disk}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{disk}}")
 	if err != nil {
 		return err
 	}
@@ -163,9 +166,9 @@ func resourceComputeRegionDiskResourcePolicyAttachmentRead(d *schema.ResourceDat
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeRegionDiskResourcePolicyAttachment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeRegionDiskResourcePolicyAttachment %q", d.Id()))
 	}
 
 	res, err = flattenNestedComputeRegionDiskResourcePolicyAttachment(d, meta, res)
@@ -204,8 +207,8 @@ func resourceComputeRegionDiskResourcePolicyAttachmentRead(d *schema.ResourceDat
 }
 
 func resourceComputeRegionDiskResourcePolicyAttachmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -218,7 +221,7 @@ func resourceComputeRegionDiskResourcePolicyAttachmentDelete(d *schema.ResourceD
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{disk}}/removeResourcePolicies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{disk}}/removeResourcePolicies")
 	if err != nil {
 		return err
 	}
@@ -247,12 +250,12 @@ func resourceComputeRegionDiskResourcePolicyAttachmentDelete(d *schema.ResourceD
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "RegionDiskResourcePolicyAttachment")
+		return transport_tpg.HandleNotFoundError(err, d, "RegionDiskResourcePolicyAttachment")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting RegionDiskResourcePolicyAttachment", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -265,8 +268,8 @@ func resourceComputeRegionDiskResourcePolicyAttachmentDelete(d *schema.ResourceD
 }
 
 func resourceComputeRegionDiskResourcePolicyAttachmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/disks/(?P<disk>[^/]+)/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<disk>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<disk>[^/]+)/(?P<name>[^/]+)",
@@ -276,7 +279,7 @@ func resourceComputeRegionDiskResourcePolicyAttachmentImport(d *schema.ResourceD
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{project}}/{{region}}/{{disk}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{region}}/{{disk}}/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -285,16 +288,16 @@ func resourceComputeRegionDiskResourcePolicyAttachmentImport(d *schema.ResourceD
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNestedComputeRegionDiskResourcePolicyAttachmentName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedComputeRegionDiskResourcePolicyAttachmentName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandNestedComputeRegionDiskResourcePolicyAttachmentName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedComputeRegionDiskResourcePolicyAttachmentName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 func resourceComputeRegionDiskResourcePolicyAttachmentEncoder(d *schema.ResourceData, meta interface{}, obj map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return nil, err
@@ -340,11 +343,11 @@ func flattenNestedComputeRegionDiskResourcePolicyAttachment(d *schema.ResourceDa
 }
 
 func resourceComputeRegionDiskResourcePolicyAttachmentFindNestedObjectInList(d *schema.ResourceData, meta interface{}, items []interface{}) (index int, item map[string]interface{}, err error) {
-	expectedName, err := expandNestedComputeRegionDiskResourcePolicyAttachmentName(d.Get("name"), d, meta.(*Config))
+	expectedName, err := expandNestedComputeRegionDiskResourcePolicyAttachmentName(d.Get("name"), d, meta.(*transport_tpg.Config))
 	if err != nil {
 		return -1, nil, err
 	}
-	expectedFlattenedName := flattenNestedComputeRegionDiskResourcePolicyAttachmentName(expectedName, d, meta.(*Config))
+	expectedFlattenedName := flattenNestedComputeRegionDiskResourcePolicyAttachmentName(expectedName, d, meta.(*transport_tpg.Config))
 
 	// Search list for this resource.
 	for idx, itemRaw := range items {
@@ -362,7 +365,7 @@ func resourceComputeRegionDiskResourcePolicyAttachmentFindNestedObjectInList(d *
 			return -1, nil, err
 		}
 
-		itemName := flattenNestedComputeRegionDiskResourcePolicyAttachmentName(item["name"], d, meta.(*Config))
+		itemName := flattenNestedComputeRegionDiskResourcePolicyAttachmentName(item["name"], d, meta.(*transport_tpg.Config))
 		// isEmptyValue check so that if one is nil and the other is "", that's considered a match
 		if !(isEmptyValue(reflect.ValueOf(itemName)) && isEmptyValue(reflect.ValueOf(expectedFlattenedName))) && !reflect.DeepEqual(itemName, expectedFlattenedName) {
 			log.Printf("[DEBUG] Skipping item with name= %#v, looking for %#v)", itemName, expectedFlattenedName)
@@ -374,6 +377,6 @@ func resourceComputeRegionDiskResourcePolicyAttachmentFindNestedObjectInList(d *
 	return -1, nil, nil
 }
 func resourceComputeRegionDiskResourcePolicyAttachmentDecoder(d *schema.ResourceData, meta interface{}, res map[string]interface{}) (map[string]interface{}, error) {
-	res["name"] = GetResourceNameFromSelfLink(res["name"].(string))
+	res["name"] = tpgresource.GetResourceNameFromSelfLink(res["name"].(string))
 	return res, nil
 }

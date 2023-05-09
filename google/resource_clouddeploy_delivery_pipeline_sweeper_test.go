@@ -22,6 +22,8 @@ import (
 
 	clouddeploy "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/clouddeploy"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func init() {
@@ -34,7 +36,7 @@ func init() {
 func testSweepClouddeployDeliveryPipeline(region string) error {
 	log.Print("[INFO][SWEEPER_LOG] Starting sweeper for ClouddeployDeliveryPipeline")
 
-	config, err := sharedConfigForRegion(region)
+	config, err := acctest.SharedConfigForRegion(region)
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] error getting shared config for region: %s", err)
 		return err
@@ -47,7 +49,7 @@ func testSweepClouddeployDeliveryPipeline(region string) error {
 	}
 
 	t := &testing.T{}
-	billingId := getTestBillingAccountFromEnv(t)
+	billingId := acctest.GetTestBillingAccountFromEnv(t)
 
 	// Setup variables to be used for Delete arguments.
 	d := map[string]string{
@@ -58,7 +60,7 @@ func testSweepClouddeployDeliveryPipeline(region string) error {
 		"billing_account": billingId,
 	}
 
-	client := NewDCLClouddeployClient(config, config.userAgent, "", 0)
+	client := transport_tpg.NewDCLClouddeployClient(config, config.UserAgent, "", 0)
 	err = client.DeleteAllDeliveryPipeline(context.Background(), d["project"], d["location"], isDeletableClouddeployDeliveryPipeline)
 	if err != nil {
 		return err
@@ -67,5 +69,5 @@ func testSweepClouddeployDeliveryPipeline(region string) error {
 }
 
 func isDeletableClouddeployDeliveryPipeline(r *clouddeploy.DeliveryPipeline) bool {
-	return isSweepableTestResource(*r.Name)
+	return acctest.IsSweepableTestResource(*r.Name)
 }

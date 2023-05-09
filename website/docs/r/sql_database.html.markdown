@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud SQL"
-page_title: "Google: google_sql_database"
 description: |-
   Represents a SQL database inside the Cloud SQL instance, hosted in
   Google's cloud.
@@ -47,6 +46,33 @@ resource "google_sql_database_instance" "instance" {
   database_version = "MYSQL_8_0"
   settings {
     tier = "db-f1-micro"
+  }
+
+  deletion_protection  = "true"
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=sql_database_deletion_policy&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Sql Database Deletion Policy
+
+
+```hcl
+resource "google_sql_database" "database_deletion_policy" {
+  name     = "my-database"
+  instance = google_sql_database_instance.instance.name
+  deletion_policy = "ABANDON"
+}
+
+# See versions at https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sql_database_instance#database_version
+resource "google_sql_database_instance" "instance" {
+  name             = "my-database-instance"
+  region           = "us-central1"
+  database_version = "POSTGRES_14"
+  settings {
+    tier = "db-g1-small"
   }
 
   deletion_protection  = "true"
@@ -91,6 +117,11 @@ The following arguments are supported:
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
+* `deletion_policy` - (Optional) The deletion policy for the database. Setting ABANDON allows the resource
+to be abandoned rather than deleted. This is useful for Postgres, where databases cannot be
+deleted from the API if there are users other than cloudsqlsuperuser with access. Possible
+values are: "ABANDON", "DELETE". Defaults to "DELETE".
+
 
 ## Attributes Reference
 
@@ -103,7 +134,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -124,4 +155,4 @@ $ terraform import google_sql_database.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

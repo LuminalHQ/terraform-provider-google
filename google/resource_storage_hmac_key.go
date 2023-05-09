@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceStorageHmacKey() *schema.Resource {
+func ResourceStorageHmacKey() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceStorageHmacKeyCreate,
 		Read:   resourceStorageHmacKeyRead,
@@ -50,7 +53,7 @@ func resourceStorageHmacKey() *schema.Resource {
 			"state": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"ACTIVE", "INACTIVE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ACTIVE", "INACTIVE", ""}),
 				Description:  `The state of the key. Can be set to one of ACTIVE, INACTIVE. Default value: "ACTIVE" Possible values: ["ACTIVE", "INACTIVE"]`,
 				Default:      "ACTIVE",
 			},
@@ -87,8 +90,8 @@ func resourceStorageHmacKey() *schema.Resource {
 }
 
 func resourceStorageHmacKeyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -107,7 +110,7 @@ func resourceStorageHmacKeyCreate(d *schema.ResourceData, meta interface{}) erro
 		obj["state"] = stateProp
 	}
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys?serviceAccountEmail={{service_account_email}}")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys?serviceAccountEmail={{service_account_email}}")
 	if err != nil {
 		return err
 	}
@@ -126,13 +129,13 @@ func resourceStorageHmacKeyCreate(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating HmacKey: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/hmacKeys/{{access_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/hmacKeys/{{access_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -159,7 +162,7 @@ func resourceStorageHmacKeyCreate(d *schema.ResourceData, meta interface{}) erro
 		return fmt.Errorf("Error setting access_id: %s", err)
 	}
 
-	id, err = replaceVars(d, config, "projects/{{project}}/hmacKeys/{{access_id}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/hmacKeys/{{access_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -178,9 +181,9 @@ func resourceStorageHmacKeyCreate(d *schema.ResourceData, meta interface{}) erro
 
 func resourceStorageHmacKeyPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+		url, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 		if err != nil {
 			return nil, err
 		}
@@ -198,12 +201,12 @@ func resourceStorageHmacKeyPollRead(d *schema.ResourceData, meta interface{}) Po
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 		if err != nil {
 			return res, err
 		}
@@ -220,13 +223,13 @@ func resourceStorageHmacKeyPollRead(d *schema.ResourceData, meta interface{}) Po
 }
 
 func resourceStorageHmacKeyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 	if err != nil {
 		return err
 	}
@@ -244,9 +247,9 @@ func resourceStorageHmacKeyRead(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("StorageHmacKey %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("StorageHmacKey %q", d.Id()))
 	}
 
 	res, err = resourceStorageHmacKeyDecoder(d, meta, res)
@@ -285,8 +288,8 @@ func resourceStorageHmacKeyRead(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceStorageHmacKeyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -304,7 +307,7 @@ func resourceStorageHmacKeyUpdate(d *schema.ResourceData, meta interface{}) erro
 	if d.HasChange("state") {
 		obj := make(map[string]interface{})
 
-		getUrl, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+		getUrl, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 		if err != nil {
 			return err
 		}
@@ -314,9 +317,9 @@ func resourceStorageHmacKeyUpdate(d *schema.ResourceData, meta interface{}) erro
 			billingProject = bp
 		}
 
-		getRes, err := sendRequest(config, "GET", billingProject, getUrl, userAgent, nil)
+		getRes, err := transport_tpg.SendRequest(config, "GET", billingProject, getUrl, userAgent, nil)
 		if err != nil {
-			return handleNotFoundError(err, d, fmt.Sprintf("StorageHmacKey %q", d.Id()))
+			return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("StorageHmacKey %q", d.Id()))
 		}
 
 		obj["etag"] = getRes["etag"]
@@ -328,7 +331,7 @@ func resourceStorageHmacKeyUpdate(d *schema.ResourceData, meta interface{}) erro
 			obj["state"] = stateProp
 		}
 
-		url, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+		url, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 		if err != nil {
 			return err
 		}
@@ -338,7 +341,7 @@ func resourceStorageHmacKeyUpdate(d *schema.ResourceData, meta interface{}) erro
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating HmacKey %q: %s", d.Id(), err)
 		} else {
@@ -353,8 +356,8 @@ func resourceStorageHmacKeyUpdate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceStorageHmacKeyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -367,33 +370,33 @@ func resourceStorageHmacKeyDelete(d *schema.ResourceData, meta interface{}) erro
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 	if err != nil {
 		return err
 	}
 
 	var obj map[string]interface{}
-	getUrl, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+	getUrl, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 	if err != nil {
 		return err
 	}
 
-	getRes, err := sendRequest(config, "GET", project, getUrl, userAgent, nil)
+	getRes, err := transport_tpg.SendRequest(config, "GET", project, getUrl, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("StorageHmacKey %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("StorageHmacKey %q", d.Id()))
 	}
 
 	// HmacKeys need to be INACTIVE to be deleted and the API doesn't accept noop
 	// updates
 	if v := getRes["state"]; v == "ACTIVE" {
 		getRes["state"] = "INACTIVE"
-		updateUrl, err := replaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
+		updateUrl, err := ReplaceVars(d, config, "{{StorageBasePath}}projects/{{project}}/hmacKeys/{{access_id}}")
 		if err != nil {
 			return err
 		}
 
 		log.Printf("[DEBUG] Deactivating HmacKey %q: %#v", d.Id(), getRes)
-		_, err = sendRequestWithTimeout(config, "PUT", project, updateUrl, userAgent, getRes, d.Timeout(schema.TimeoutUpdate))
+		_, err = transport_tpg.SendRequestWithTimeout(config, "PUT", project, updateUrl, userAgent, getRes, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error deactivating HmacKey %q: %s", d.Id(), err)
 		}
@@ -405,9 +408,9 @@ func resourceStorageHmacKeyDelete(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "HmacKey")
+		return transport_tpg.HandleNotFoundError(err, d, "HmacKey")
 	}
 
 	log.Printf("[DEBUG] Finished deleting HmacKey %q: %#v", d.Id(), res)
@@ -415,8 +418,8 @@ func resourceStorageHmacKeyDelete(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceStorageHmacKeyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/hmacKeys/(?P<access_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<access_id>[^/]+)",
 		"(?P<access_id>[^/]+)",
@@ -425,7 +428,7 @@ func resourceStorageHmacKeyImport(d *schema.ResourceData, meta interface{}) ([]*
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/hmacKeys/{{access_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/hmacKeys/{{access_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -434,31 +437,31 @@ func resourceStorageHmacKeyImport(d *schema.ResourceData, meta interface{}) ([]*
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenStorageHmacKeyServiceAccountEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageHmacKeyServiceAccountEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageHmacKeyState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageHmacKeyState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageHmacKeyAccessId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageHmacKeyAccessId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageHmacKeyTimeCreated(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageHmacKeyTimeCreated(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageHmacKeyUpdated(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageHmacKeyUpdated(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandStorageHmacKeyServiceAccountEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandStorageHmacKeyServiceAccountEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandStorageHmacKeyState(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandStorageHmacKeyState(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

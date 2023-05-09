@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_router_peer"
 description: |-
   BGP information that must be configured into the routing stack to
   establish BGP peering.
@@ -83,6 +82,120 @@ resource "google_compute_router_peer" "peer" {
   }
 }
 ```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=router_peer_router_appliance&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Router Peer Router Appliance
+
+
+```hcl
+resource "google_compute_network" "network" {
+  name                    = "my-router-net"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "subnetwork" {
+  name          = "my-router-sub"
+  network       = google_compute_network.network.self_link
+  ip_cidr_range = "10.0.0.0/16"
+  region        = "us-central1"
+}
+
+resource "google_compute_address" "addr_intf" {
+  name         = "my-router-addr-intf"
+  region       = google_compute_subnetwork.subnetwork.region
+  subnetwork   = google_compute_subnetwork.subnetwork.id
+  address_type = "INTERNAL"
+}
+
+resource "google_compute_address" "addr_intf_redundant" {
+  name         = "my-router-addr-intf-red"
+  region       = google_compute_subnetwork.subnetwork.region
+  subnetwork   = google_compute_subnetwork.subnetwork.id
+  address_type = "INTERNAL"
+}
+
+resource "google_compute_address" "addr_peer" {
+  name         = "my-router-addr-peer"
+  region       = google_compute_subnetwork.subnetwork.region
+  subnetwork   = google_compute_subnetwork.subnetwork.id
+  address_type = "INTERNAL"
+}
+
+resource "google_compute_instance" "instance" {
+  name           = "router-appliance"
+  zone           = "us-central1-a"
+  machine_type   = "e2-medium"
+  can_ip_forward = true
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-11"
+    }
+  }
+
+  network_interface {
+    network_ip = google_compute_address.addr_peer.address
+    subnetwork = google_compute_subnetwork.subnetwork.self_link
+  }
+}
+
+resource "google_network_connectivity_hub" "hub" {
+  name = "my-router-hub"
+}
+
+resource "google_network_connectivity_spoke" "spoke" {
+  name     = "my-router-spoke"
+  location = google_compute_subnetwork.subnetwork.region
+  hub      = google_network_connectivity_hub.hub.id
+
+  linked_router_appliance_instances {
+    instances {
+      virtual_machine = google_compute_instance.instance.self_link
+      ip_address      = google_compute_address.addr_peer.address
+    }
+    site_to_site_data_transfer = false
+  }
+}
+
+resource "google_compute_router" "router" {
+  name    = "my-router-router"
+  region  = google_compute_subnetwork.subnetwork.region
+  network = google_compute_network.network.self_link
+  bgp {
+    asn = 64514
+  }
+}
+
+resource "google_compute_router_interface" "interface_redundant" {
+  name               = "my-router-intf-red"
+  region             = google_compute_router.router.region
+  router             = google_compute_router.router.name
+  subnetwork         = google_compute_subnetwork.subnetwork.self_link
+  private_ip_address = google_compute_address.addr_intf_redundant.address
+}
+
+resource "google_compute_router_interface" "interface" {
+  name                = "my-router-intf"
+  region              = google_compute_router.router.region
+  router              = google_compute_router.router.name
+  subnetwork          = google_compute_subnetwork.subnetwork.self_link
+  private_ip_address  = google_compute_address.addr_intf.address
+  redundant_interface = google_compute_router_interface.interface_redundant.name
+}
+
+resource "google_compute_router_peer" "peer" {
+  name                      = "my-router-peer"
+  router                    = google_compute_router.router.name
+  region                    = google_compute_router.router.region
+  interface                 = google_compute_router_interface.interface.name
+  router_appliance_instance = google_compute_instance.instance.self_link
+  peer_asn                  = 65513
+  peer_ip_address           = google_compute_address.addr_peer.address
+}
+```
 
 ## Argument Reference
 
@@ -136,7 +249,7 @@ The following arguments are supported:
   User-specified flag to indicate which mode to use for advertisement.
   Valid values of this enum field are: `DEFAULT`, `CUSTOM`
   Default value is `DEFAULT`.
-  Possible values are `DEFAULT` and `CUSTOM`.
+  Possible values are: `DEFAULT`, `CUSTOM`.
 
 * `advertised_groups` -
   (Optional)
@@ -172,6 +285,31 @@ The following arguments are supported:
   If set to true, the peer connection can be established with routing information.
   The default is true.
 
+* `router_appliance_instance` -
+  (Optional)
+  The URI of the VM instance that is used as third-party router appliances
+  such as Next Gen Firewalls, Virtual Routers, or Router Appliances.
+  The VM instance must be located in zones contained in the same region as
+  this Cloud Router. The VM instance is the peer side of the BGP session.
+
+* `enable_ipv6` -
+  (Optional)
+  Enable IPv6 traffic over BGP Peer. If not specified, it is disabled by default.
+
+* `ipv6_nexthop_address` -
+  (Optional)
+  IPv6 address of the interface inside Google Cloud Platform.
+  The address must be in the range 2600:2d00:0:2::/64 or 2600:2d00:0:3::/64.
+  If you do not specify the next hop addresses, Google Cloud automatically
+  assigns unused addresses from the 2600:2d00:0:2::/64 or 2600:2d00:0:3::/64 range for you.
+
+* `peer_ipv6_nexthop_address` -
+  (Optional)
+  IPv6 address of the BGP interface outside Google Cloud Platform.
+  The address must be in the range 2600:2d00:0:2::/64 or 2600:2d00:0:3::/64.
+  If you do not specify the next hop addresses, Google Cloud automatically
+  assigns unused addresses from the 2600:2d00:0:2::/64 or 2600:2d00:0:3::/64 range for you.
+
 * `region` -
   (Optional)
   Region where the router and BgpPeer reside.
@@ -201,7 +339,7 @@ The following arguments are supported:
   for this BGP peer. If set to `PASSIVE`, the Cloud Router will wait
   for the peer router to initiate the BFD session for this BGP peer.
   If set to `DISABLED`, BFD is disabled for this BGP peer.
-  Possible values are `ACTIVE`, `DISABLED`, and `PASSIVE`.
+  Possible values are: `ACTIVE`, `DISABLED`, `PASSIVE`.
 
 * `min_transmit_interval` -
   (Optional)
@@ -246,7 +384,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -266,4 +404,4 @@ $ terraform import google_compute_router_peer.default {{router}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

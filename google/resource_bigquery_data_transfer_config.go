@@ -22,7 +22,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 var sensitiveParams = []string{"secret_access_key"}
@@ -38,7 +41,41 @@ func sensitiveParamCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, v
 	return nil
 }
 
-func resourceBigqueryDataTransferConfig() *schema.Resource {
+// This customizeDiff is to use ForceNew for params fields data_path_template and
+// destination_table_name_template only if the value of "data_source_id" is "google_cloud_storage".
+func ParamsCustomizeDiffFunc(diff TerraformResourceDiff) error {
+	old, new := diff.GetChange("params")
+	dsId := diff.Get("data_source_id").(string)
+	oldParams := old.(map[string]interface{})
+	newParams := new.(map[string]interface{})
+	var err error
+
+	if dsId == "google_cloud_storage" {
+		if oldParams["data_path_template"] != nil && newParams["data_path_template"] != nil && oldParams["data_path_template"].(string) != newParams["data_path_template"].(string) {
+			err = diff.ForceNew("params")
+			if err != nil {
+				return fmt.Errorf("ForceNew failed for params, old - %v and new - %v", oldParams, newParams)
+			}
+			return nil
+		}
+
+		if oldParams["destination_table_name_template"] != nil && newParams["destination_table_name_template"] != nil && oldParams["destination_table_name_template"].(string) != newParams["destination_table_name_template"].(string) {
+			err = diff.ForceNew("params")
+			if err != nil {
+				return fmt.Errorf("ForceNew failed for params, old - %v and new - %v", oldParams, newParams)
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func paramsCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, v interface{}) error {
+	return ParamsCustomizeDiffFunc(diff)
+}
+
+func ResourceBigqueryDataTransferConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceBigqueryDataTransferConfigCreate,
 		Read:   resourceBigqueryDataTransferConfigRead,
@@ -55,7 +92,7 @@ func resourceBigqueryDataTransferConfig() *schema.Resource {
 			Delete: schema.DefaultTimeout(20 * time.Minute),
 		},
 
-		CustomizeDiff: sensitiveParamCustomizeDiff,
+		CustomizeDiff: customdiff.All(sensitiveParamCustomizeDiff, paramsCustomizeDiff),
 
 		Schema: map[string]*schema.Schema{
 			"data_source_id": {
@@ -230,8 +267,8 @@ The name is ignored when creating a transfer config.`,
 }
 
 func resourceBigqueryDataTransferConfigCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -303,7 +340,7 @@ func resourceBigqueryDataTransferConfigCreate(d *schema.ResourceData, meta inter
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{BigqueryDataTransferBasePath}}projects/{{project}}/locations/{{location}}/transferConfigs?serviceAccountName={{service_account_name}}")
+	url, err := ReplaceVars(d, config, "{{BigqueryDataTransferBasePath}}projects/{{project}}/locations/{{location}}/transferConfigs?serviceAccountName={{service_account_name}}")
 	if err != nil {
 		return err
 	}
@@ -322,7 +359,7 @@ func resourceBigqueryDataTransferConfigCreate(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), iamMemberMissing)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IamMemberMissing)
 	if err != nil {
 		return fmt.Errorf("Error creating Config: %s", err)
 	}
@@ -331,7 +368,7 @@ func resourceBigqueryDataTransferConfigCreate(d *schema.ResourceData, meta inter
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -361,13 +398,13 @@ func resourceBigqueryDataTransferConfigCreate(d *schema.ResourceData, meta inter
 }
 
 func resourceBigqueryDataTransferConfigRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{BigqueryDataTransferBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{BigqueryDataTransferBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -385,9 +422,9 @@ func resourceBigqueryDataTransferConfigRead(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, iamMemberMissing)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IamMemberMissing)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("BigqueryDataTransferConfig %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("BigqueryDataTransferConfig %q", d.Id()))
 	}
 
 	res, err = resourceBigqueryDataTransferConfigDecoder(d, meta, res)
@@ -444,8 +481,8 @@ func resourceBigqueryDataTransferConfigRead(d *schema.ResourceData, meta interfa
 }
 
 func resourceBigqueryDataTransferConfigUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -519,7 +556,7 @@ func resourceBigqueryDataTransferConfigUpdate(d *schema.ResourceData, meta inter
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{BigqueryDataTransferBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{BigqueryDataTransferBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -562,9 +599,9 @@ func resourceBigqueryDataTransferConfigUpdate(d *schema.ResourceData, meta inter
 	if d.HasChange("params") {
 		updateMask = append(updateMask, "params")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -574,7 +611,7 @@ func resourceBigqueryDataTransferConfigUpdate(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), iamMemberMissing)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.IamMemberMissing)
 
 	if err != nil {
 		return fmt.Errorf("Error updating Config %q: %s", d.Id(), err)
@@ -586,8 +623,8 @@ func resourceBigqueryDataTransferConfigUpdate(d *schema.ResourceData, meta inter
 }
 
 func resourceBigqueryDataTransferConfigDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -600,7 +637,7 @@ func resourceBigqueryDataTransferConfigDelete(d *schema.ResourceData, meta inter
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{BigqueryDataTransferBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{BigqueryDataTransferBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -613,9 +650,9 @@ func resourceBigqueryDataTransferConfigDelete(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), iamMemberMissing)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IamMemberMissing)
 	if err != nil {
-		return handleNotFoundError(err, d, "Config")
+		return transport_tpg.HandleNotFoundError(err, d, "Config")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Config %q: %#v", d.Id(), res)
@@ -624,37 +661,37 @@ func resourceBigqueryDataTransferConfigDelete(d *schema.ResourceData, meta inter
 
 func resourceBigqueryDataTransferConfigImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenBigqueryDataTransferConfigDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigDestinationDatasetId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigDestinationDatasetId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigDataSourceId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigDataSourceId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigScheduleOptions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigScheduleOptions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -671,19 +708,19 @@ func flattenBigqueryDataTransferConfigScheduleOptions(v interface{}, d *schema.R
 		flattenBigqueryDataTransferConfigScheduleOptionsEndTime(original["endTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenBigqueryDataTransferConfigScheduleOptionsDisableAutoScheduling(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigScheduleOptionsDisableAutoScheduling(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigScheduleOptionsStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigScheduleOptionsStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigScheduleOptionsEndTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigScheduleOptionsEndTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigEmailPreferences(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigEmailPreferences(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -696,18 +733,18 @@ func flattenBigqueryDataTransferConfigEmailPreferences(v interface{}, d *schema.
 		flattenBigqueryDataTransferConfigEmailPreferencesEnableFailureEmail(original["enableFailureEmail"], d, config)
 	return []interface{}{transformed}
 }
-func flattenBigqueryDataTransferConfigEmailPreferencesEnableFailureEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigEmailPreferencesEnableFailureEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigNotificationPubsubTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigNotificationPubsubTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigDataRefreshWindowDays(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigDataRefreshWindowDays(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -721,11 +758,11 @@ func flattenBigqueryDataTransferConfigDataRefreshWindowDays(v interface{}, d *sc
 	return v // let terraform core handle it otherwise
 }
 
-func flattenBigqueryDataTransferConfigDisabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigDisabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBigqueryDataTransferConfigParams(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBigqueryDataTransferConfigParams(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -739,23 +776,23 @@ func flattenBigqueryDataTransferConfigParams(v interface{}, d *schema.ResourceDa
 	return res
 }
 
-func expandBigqueryDataTransferConfigDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigDestinationDatasetId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigDestinationDatasetId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigDataSourceId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigDataSourceId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigScheduleOptions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigScheduleOptions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -788,19 +825,19 @@ func expandBigqueryDataTransferConfigScheduleOptions(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandBigqueryDataTransferConfigScheduleOptionsDisableAutoScheduling(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigScheduleOptionsDisableAutoScheduling(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigScheduleOptionsStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigScheduleOptionsStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigScheduleOptionsEndTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigScheduleOptionsEndTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigEmailPreferences(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigEmailPreferences(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -819,23 +856,23 @@ func expandBigqueryDataTransferConfigEmailPreferences(v interface{}, d Terraform
 	return transformed, nil
 }
 
-func expandBigqueryDataTransferConfigEmailPreferencesEnableFailureEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigEmailPreferencesEnableFailureEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigNotificationPubsubTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigNotificationPubsubTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigDataRefreshWindowDays(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigDataRefreshWindowDays(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigDisabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBigqueryDataTransferConfigDisabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBigqueryDataTransferConfigParams(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandBigqueryDataTransferConfigParams(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}

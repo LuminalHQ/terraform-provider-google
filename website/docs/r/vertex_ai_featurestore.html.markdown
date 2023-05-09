@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Vertex AI"
-page_title: "Google: google_vertex_ai_featurestore"
 description: |-
   A collection of DataItems and Annotations on them.
 ---
@@ -22,26 +21,18 @@ description: |-
 
 A collection of DataItems and Annotations on them.
 
-~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
-See [Provider Versions](https://terraform.io/docs/providers/google/guides/provider_versions.html) for more details on beta resources.
 
 To get more information about Featurestore, see:
 
-* [API documentation](https://cloud.google.com/vertex-ai/docs/reference/rest/v1beta1/projects.locations.featurestores)
+* [API documentation](https://cloud.google.com/vertex-ai/docs/reference/rest/v1/projects.locations.featurestores)
 * How-to Guides
     * [Official Documentation](https://cloud.google.com/vertex-ai/docs)
 
-<div class = "oics-button" style="float: right; margin: 0 0 -15px">
-  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=vertex_ai_featurestore&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
-    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
-  </a>
-</div>
 ## Example Usage - Vertex Ai Featurestore
 
 
 ```hcl
 resource "google_vertex_ai_featurestore" "featurestore" {
-  provider = google-beta
   name     = "terraform"
   labels = {
     foo = "bar"
@@ -49,6 +40,52 @@ resource "google_vertex_ai_featurestore" "featurestore" {
   region   = "us-central1"
   online_serving_config {
     fixed_node_count = 2
+  }
+  encryption_spec {
+    kms_key_name = "kms-name"
+  }
+  force_destroy = true
+}
+```
+## Example Usage - Vertex Ai Featurestore With Beta Fields
+
+
+```hcl
+resource "google_vertex_ai_featurestore" "featurestore" {
+  provider = google-beta
+  name     = "terraform2"
+  labels = {
+    foo = "bar"
+  }
+  region   = "us-central1"
+  online_serving_config {
+    fixed_node_count = 2
+  }
+  encryption_spec {
+    kms_key_name = "kms-name"
+  }
+  online_storage_ttl_days = 30
+  force_destroy = true
+}
+```
+## Example Usage - Vertex Ai Featurestore Scaling
+
+
+```hcl
+resource "google_vertex_ai_featurestore" "featurestore" {
+  name     = "terraform3"
+  labels = {
+    foo = "bar"
+  }
+  region   = "us-central1"
+  online_serving_config {
+    scaling {
+      min_node_count = 2
+      max_node_count = 10
+    }
+  }
+  encryption_spec {
+    kms_key_name = "kms-name"
   }
   force_destroy = true
 }
@@ -76,6 +113,15 @@ The following arguments are supported:
   Config for online serving resources.
   Structure is [documented below](#nested_online_serving_config).
 
+* `online_storage_ttl_days` -
+  (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
+  TTL in days for feature values that will be stored in online serving storage. The Feature Store online storage periodically removes obsolete feature values older than onlineStorageTtlDays since the feature generation time. Note that onlineStorageTtlDays should be less than or equal to offlineStorageTtlDays for each EntityType under a featurestore. If not set, default to 4000 days
+
+* `encryption_spec` -
+  (Optional)
+  If set, both of the online and offline data storage will be secured by this key.
+  Structure is [documented below](#nested_encryption_spec).
+
 * `region` -
   (Optional)
   The region of the dataset. eg us-central1
@@ -88,8 +134,30 @@ The following arguments are supported:
 <a name="nested_online_serving_config"></a>The `online_serving_config` block supports:
 
 * `fixed_node_count` -
-  (Required)
+  (Optional)
   The number of nodes for each cluster. The number of nodes will not scale automatically but can be scaled manually by providing different values when updating.
+
+* `scaling` -
+  (Optional)
+  Online serving scaling configuration. Only one of fixedNodeCount and scaling can be set. Setting one will reset the other.
+  Structure is [documented below](#nested_scaling).
+
+
+<a name="nested_scaling"></a>The `scaling` block supports:
+
+* `min_node_count` -
+  (Required)
+  The minimum number of nodes to scale down to. Must be greater than or equal to 1.
+
+* `max_node_count` -
+  (Required)
+  The maximum number of nodes to scale up to. Must be greater than minNodeCount, and less than or equal to 10 times of 'minNodeCount'.
+
+<a name="nested_encryption_spec"></a>The `encryption_spec` block supports:
+
+* `kms_key_name` -
+  (Required)
+  The Cloud KMS resource identifier of the customer managed encryption key used to protect a resource. Has the form: projects/my-project/locations/my-region/keyRings/my-kr/cryptoKeys/my-key. The key needs to be in the same region as where the compute resource is created.
 
 ## Attributes Reference
 
@@ -110,7 +178,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -130,4 +198,4 @@ $ terraform import google_vertex_ai_featurestore.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceAccessApprovalOrganizationSettings() *schema.Resource {
+func ResourceAccessApprovalOrganizationSettings() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAccessApprovalOrganizationSettingsCreate,
 		Read:   resourceAccessApprovalOrganizationSettingsRead,
@@ -126,7 +129,7 @@ func accessapprovalOrganizationSettingsEnrolledServicesSchema() *schema.Resource
 			"enrollment_level": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"BLOCK_ALL", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"BLOCK_ALL", ""}),
 				Description:  `The enrollment level of the service. Default value: "BLOCK_ALL" Possible values: ["BLOCK_ALL"]`,
 				Default:      "BLOCK_ALL",
 			},
@@ -135,8 +138,8 @@ func accessapprovalOrganizationSettingsEnrolledServicesSchema() *schema.Resource
 }
 
 func resourceAccessApprovalOrganizationSettingsCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -161,7 +164,7 @@ func resourceAccessApprovalOrganizationSettingsCreate(d *schema.ResourceData, me
 		obj["activeKeyVersion"] = activeKeyVersionProp
 	}
 
-	url, err := replaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
+	url, err := ReplaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
 	if err != nil {
 		return err
 	}
@@ -187,13 +190,13 @@ func resourceAccessApprovalOrganizationSettingsCreate(d *schema.ResourceData, me
 	if d.HasChange("active_key_version") {
 		updateMask = append(updateMask, "activeKeyVersion")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating OrganizationSettings: %s", err)
 	}
@@ -202,7 +205,7 @@ func resourceAccessApprovalOrganizationSettingsCreate(d *schema.ResourceData, me
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "organizations/{{organization_id}}/accessApprovalSettings")
+	id, err := ReplaceVars(d, config, "organizations/{{organization_id}}/accessApprovalSettings")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -214,13 +217,13 @@ func resourceAccessApprovalOrganizationSettingsCreate(d *schema.ResourceData, me
 }
 
 func resourceAccessApprovalOrganizationSettingsRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
+	url, err := ReplaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
 	if err != nil {
 		return err
 	}
@@ -232,9 +235,9 @@ func resourceAccessApprovalOrganizationSettingsRead(d *schema.ResourceData, meta
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AccessApprovalOrganizationSettings %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AccessApprovalOrganizationSettings %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenAccessApprovalOrganizationSettingsName(res["name"], d, config)); err != nil {
@@ -263,8 +266,8 @@ func resourceAccessApprovalOrganizationSettingsRead(d *schema.ResourceData, meta
 }
 
 func resourceAccessApprovalOrganizationSettingsUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -291,7 +294,7 @@ func resourceAccessApprovalOrganizationSettingsUpdate(d *schema.ResourceData, me
 		obj["activeKeyVersion"] = activeKeyVersionProp
 	}
 
-	url, err := replaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
+	url, err := ReplaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
 	if err != nil {
 		return err
 	}
@@ -310,9 +313,9 @@ func resourceAccessApprovalOrganizationSettingsUpdate(d *schema.ResourceData, me
 	if d.HasChange("active_key_version") {
 		updateMask = append(updateMask, "activeKeyVersion")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -322,7 +325,7 @@ func resourceAccessApprovalOrganizationSettingsUpdate(d *schema.ResourceData, me
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating OrganizationSettings %q: %s", d.Id(), err)
@@ -334,8 +337,8 @@ func resourceAccessApprovalOrganizationSettingsUpdate(d *schema.ResourceData, me
 }
 
 func resourceAccessApprovalOrganizationSettingsDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -345,7 +348,7 @@ func resourceAccessApprovalOrganizationSettingsDelete(d *schema.ResourceData, me
 	obj["enrolledServices"] = []string{}
 	obj["activeKeyVersion"] = ""
 
-	url, err := replaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
+	url, err := ReplaceVars(d, config, "{{AccessApprovalBasePath}}organizations/{{organization_id}}/accessApprovalSettings")
 	if err != nil {
 		return err
 	}
@@ -357,14 +360,14 @@ func resourceAccessApprovalOrganizationSettingsDelete(d *schema.ResourceData, me
 	updateMask = append(updateMask, "enrolledServices")
 	updateMask = append(updateMask, "activeKeyVersion")
 
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", "", url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", "", url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error emptying OrganizationSettings %q: %s", d.Id(), err)
@@ -376,8 +379,8 @@ func resourceAccessApprovalOrganizationSettingsDelete(d *schema.ResourceData, me
 }
 
 func resourceAccessApprovalOrganizationSettingsImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"organizations/(?P<organization_id>[^/]+)/accessApprovalSettings",
 		"(?P<organization_id>[^/]+)",
 	}, d, config); err != nil {
@@ -385,7 +388,7 @@ func resourceAccessApprovalOrganizationSettingsImport(d *schema.ResourceData, me
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "organizations/{{organization_id}}/accessApprovalSettings")
+	id, err := ReplaceVars(d, config, "organizations/{{organization_id}}/accessApprovalSettings")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -394,18 +397,18 @@ func resourceAccessApprovalOrganizationSettingsImport(d *schema.ResourceData, me
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAccessApprovalOrganizationSettingsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessApprovalOrganizationSettingsNotificationEmails(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsNotificationEmails(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenAccessApprovalOrganizationSettingsEnrolledServices(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsEnrolledServices(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -424,36 +427,36 @@ func flattenAccessApprovalOrganizationSettingsEnrolledServices(v interface{}, d 
 	}
 	return transformed
 }
-func flattenAccessApprovalOrganizationSettingsEnrolledServicesCloudProduct(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsEnrolledServicesCloudProduct(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessApprovalOrganizationSettingsEnrolledServicesEnrollmentLevel(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsEnrolledServicesEnrollmentLevel(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessApprovalOrganizationSettingsEnrolledAncestor(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsEnrolledAncestor(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessApprovalOrganizationSettingsActiveKeyVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsActiveKeyVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessApprovalOrganizationSettingsAncestorHasActiveKeyVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsAncestorHasActiveKeyVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessApprovalOrganizationSettingsInvalidKeyVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessApprovalOrganizationSettingsInvalidKeyVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAccessApprovalOrganizationSettingsNotificationEmails(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessApprovalOrganizationSettingsNotificationEmails(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandAccessApprovalOrganizationSettingsEnrolledServices(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessApprovalOrganizationSettingsEnrolledServices(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -483,14 +486,14 @@ func expandAccessApprovalOrganizationSettingsEnrolledServices(v interface{}, d T
 	return req, nil
 }
 
-func expandAccessApprovalOrganizationSettingsEnrolledServicesCloudProduct(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessApprovalOrganizationSettingsEnrolledServicesCloudProduct(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessApprovalOrganizationSettingsEnrolledServicesEnrollmentLevel(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessApprovalOrganizationSettingsEnrolledServicesEnrollmentLevel(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessApprovalOrganizationSettingsActiveKeyVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessApprovalOrganizationSettingsActiveKeyVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

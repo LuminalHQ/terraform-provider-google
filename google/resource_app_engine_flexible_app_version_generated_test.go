@@ -21,21 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccAppEngineFlexibleAppVersion_appEngineFlexibleAppVersionExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"org_id":          getTestOrgFromEnv(t),
-		"billing_account": getTestBillingAccountFromEnv(t),
-		"random_suffix":   randString(t, 10),
+		"org_id":          acctest.GetTestOrgFromEnv(t),
+		"billing_account": acctest.GetTestBillingAccountFromEnv(t),
+		"random_suffix":   RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckAppEngineFlexibleAppVersionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckAppEngineFlexibleAppVersionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAppEngineFlexibleAppVersion_appEngineFlexibleAppVersionExample(context),
@@ -71,10 +73,28 @@ resource "google_project_service" "service" {
   disable_dependent_services = false
 }
 
+resource "google_service_account" "custom_service_account" {
+  project      = google_project_service.service.project
+  account_id   = "tf-test-my-account%{random_suffix}"
+  display_name = "Custom Service Account"
+}
+
 resource "google_project_iam_member" "gae_api" {
   project = google_project_service.service.project
   role    = "roles/compute.networkUser"
-  member  = "serviceAccount:service-${google_project.my_project.number}@gae-api-prod.google.com.iam.gserviceaccount.com"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
+}
+
+resource "google_project_iam_member" "logs_writer" {
+  project = google_project_service.service.project
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
+}
+
+resource "google_project_iam_member" "storage_viewer" {
+  project = google_project_service.service.project
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
 }
 
 resource "google_app_engine_flexible_app_version" "myapp_v1" {
@@ -125,6 +145,7 @@ resource "google_app_engine_flexible_app_version" "myapp_v1" {
   }
 
   noop_on_destroy = true
+  service_account = google_service_account.custom_service_account.email
 }
 
 resource "google_storage_bucket" "bucket" {

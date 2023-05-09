@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Apigee"
-page_title: "Google: google_apigee_environment"
 description: |-
   An `Environment` in Apigee.
 ---
@@ -61,7 +60,7 @@ resource "google_apigee_organization" "apigee_org" {
 }
 
 resource "google_apigee_environment" "env" {
-  name         = "tf-test%{random_suffix}"
+  name         = "my-environment"
   description  = "Apigee Environment"
   display_name = "environment-1"
   org_id       = google_apigee_organization.apigee_org.id
@@ -103,14 +102,38 @@ The following arguments are supported:
   Managing the deployment of API proxy or shared flow revisions;
   Creating, updating, or deleting resource files;
   Creating, updating, or deleting target servers.
-  Possible values are `DEPLOYMENT_TYPE_UNSPECIFIED`, `PROXY`, and `ARCHIVE`.
+  Possible values are: `DEPLOYMENT_TYPE_UNSPECIFIED`, `PROXY`, `ARCHIVE`.
 
 * `api_proxy_type` -
   (Optional)
   Optional. API Proxy type supported by the environment. The type can be set when creating
   the Environment and cannot be changed.
-  Possible values are `API_PROXY_TYPE_UNSPECIFIED`, `PROGRAMMABLE`, and `CONFIGURABLE`.
+  Possible values are: `API_PROXY_TYPE_UNSPECIFIED`, `PROGRAMMABLE`, `CONFIGURABLE`.
 
+* `node_config` -
+  (Optional)
+  NodeConfig for setting the min/max number of nodes associated with the environment.
+  Structure is [documented below](#nested_node_config).
+
+
+<a name="nested_node_config"></a>The `node_config` block supports:
+
+* `min_node_count` -
+  (Optional)
+  The minimum total number of gateway nodes that the is reserved for all instances that
+  has the specified environment. If not specified, the default is determined by the
+  recommended minimum number of nodes for that gateway.
+
+* `max_node_count` -
+  (Optional)
+  The maximum total number of gateway nodes that the is reserved for all instances that
+  has the specified environment. If not specified, the default is determined by the
+  recommended maximum number of nodes for that gateway.
+
+* `current_aggregate_node_count` -
+  (Output)
+  The current total number of gateway nodes that each environment currently has across
+  all instances.
 
 ## Attributes Reference
 
@@ -122,7 +145,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 30 minutes.
 - `update` - Default is 20 minutes.

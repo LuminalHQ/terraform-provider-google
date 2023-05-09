@@ -1,6 +1,5 @@
 ---
 subcategory: "BigQuery"
-page_title: "Google: google_bigquery_default_service_account"
 description: |-
   Get the email address of the project's BigQuery service account
 ---
@@ -42,3 +41,5 @@ The following attributes are exported:
 
 * `email` - The email address of the service account. This value is often used to refer to the service account
 in order to grant IAM permissions.
+
+* `member` - The Identity of the service account in the form `serviceAccount:{email}`. This value is often used to refer to the service account in order to grant IAM permissions.

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Access Context Manager (VPC Service Controls)"
-page_title: "Google: google_access_context_manager_access_level"
 description: |-
   An AccessLevel is a label that can be applied to requests to GCP services,
   along with a list of requirements necessary for the label to be applied.
@@ -103,7 +102,7 @@ The following arguments are supported:
 
 * `custom` -
   (Optional)
-  Custom access level conditions are set using the Cloud Common Expression Language to represent the necessary conditions for the level to apply to a request. 
+  Custom access level conditions are set using the Cloud Common Expression Language to represent the necessary conditions for the level to apply to a request.
   See CEL spec at: https://github.com/google/cel-spec.
   Structure is [documented below](#nested_custom).
 
@@ -118,7 +117,7 @@ The following arguments are supported:
   OR is used, at least one Condition in conditions must be satisfied
   for the AccessLevel to be applied.
   Default value is `AND`.
-  Possible values are `AND` and `OR`.
+  Possible values are: `AND`, `OR`.
 
 * `conditions` -
   (Required)
@@ -190,13 +189,13 @@ The following arguments are supported:
   (Optional)
   A list of allowed encryptions statuses.
   An empty list allows all statuses.
-  Each value may be one of `ENCRYPTION_UNSPECIFIED`, `ENCRYPTION_UNSUPPORTED`, `UNENCRYPTED`, and `ENCRYPTED`.
+  Each value may be one of: `ENCRYPTION_UNSPECIFIED`, `ENCRYPTION_UNSUPPORTED`, `UNENCRYPTED`, `ENCRYPTED`.
 
 * `allowed_device_management_levels` -
   (Optional)
   A list of allowed device management levels.
   An empty list allows all management levels.
-  Each value may be one of `MANAGEMENT_UNSPECIFIED`, `NONE`, `BASIC`, and `COMPLETE`.
+  Each value may be one of: `MANAGEMENT_UNSPECIFIED`, `NONE`, `BASIC`, `COMPLETE`.
 
 * `os_constraints` -
   (Optional)
@@ -228,14 +227,14 @@ The following arguments are supported:
 * `os_type` -
   (Required)
   The operating system type of the device.
-  Possible values are `OS_UNSPECIFIED`, `DESKTOP_MAC`, `DESKTOP_WINDOWS`, `DESKTOP_LINUX`, `DESKTOP_CHROME_OS`, `ANDROID`, and `IOS`.
+  Possible values are: `OS_UNSPECIFIED`, `DESKTOP_MAC`, `DESKTOP_WINDOWS`, `DESKTOP_LINUX`, `DESKTOP_CHROME_OS`, `ANDROID`, `IOS`.
 
 <a name="nested_custom"></a>The `custom` block supports:
 
 * `expr` -
   (Required)
   Represents a textual expression in the Common Expression Language (CEL) syntax. CEL is a C-like expression language.
-  This page details the objects and attributes that are used to the build the CEL expressions for 
+  This page details the objects and attributes that are used to the build the CEL expressions for
   custom access levels - https://cloud.google.com/access-context-manager/docs/custom-access-level-spec.
   Structure is [documented below](#nested_expr).
 
@@ -268,7 +267,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

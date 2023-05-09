@@ -4,14 +4,18 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func dataSourceGoogleProject() *schema.Resource {
+func DataSourceGoogleProject() *schema.Resource {
 	// Generate datasource schema from resource
-	dsSchema := datasourceSchemaFromResourceSchema(resourceGoogleProject().Schema)
+	dsSchema := tpgresource.DatasourceSchemaFromResourceSchema(ResourceGoogleProject().Schema)
 
-	addOptionalFieldsToSchema(dsSchema, "project_id")
+	tpgresource.AddOptionalFieldsToSchema(dsSchema, "project_id")
 
+	dsSchema["project_id"].ValidateFunc = verify.ValidateDSProjectID()
 	return &schema.Resource{
 		Read:   datasourceGoogleProjectRead,
 		Schema: dsSchema,
@@ -19,7 +23,7 @@ func dataSourceGoogleProject() *schema.Resource {
 }
 
 func datasourceGoogleProjectRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	if v, ok := d.GetOk("project_id"); ok {
 		project := v.(string)
@@ -32,5 +36,15 @@ func datasourceGoogleProjectRead(d *schema.ResourceData, meta interface{}) error
 		d.SetId(fmt.Sprintf("projects/%s", project))
 	}
 
-	return resourceGoogleProjectRead(d, meta)
+	id := d.Id()
+
+	if err := resourceGoogleProjectRead(d, meta); err != nil {
+		return err
+	}
+
+	if d.Id() == "" {
+		return fmt.Errorf("%s not found or not in ACTIVE state", id)
+	}
+
+	return nil
 }

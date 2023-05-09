@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "BigQuery Data Transfer"
-page_title: "Google: google_bigquery_data_transfer_config"
 description: |-
   Represents a data transfer configuration.
 ---
@@ -30,8 +29,9 @@ To get more information about Config, see:
 * How-to Guides
     * [Official Documentation](https://cloud.google.com/bigquery/docs/reference/datatransfer/rest/)
 
-~> **Warning:** All arguments including `sensitive_params.secret_access_key` will be stored in the raw
-state as plain-text. [Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `sensitive_params.secret_access_key`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
 
 ## Example Usage - Bigquerydatatransfer Config Scheduled Query
 
@@ -42,7 +42,7 @@ data "google_project" "project" {
 
 resource "google_project_iam_member" "permissions" {
   project = data.google_project.project.project_id
-  role   = "roles/iam.serviceAccountShortTermTokenMinter"
+  role   = "roles/iam.serviceAccountTokenCreator"
   member = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-bigquerydatatransfer.iam.gserviceaccount.com"
 }
 
@@ -217,7 +217,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -234,4 +234,4 @@ $ terraform import google_bigquery_data_transfer_config.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

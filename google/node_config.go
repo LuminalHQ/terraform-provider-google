@@ -3,6 +3,9 @@ package google
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+
 	"google.golang.org/api/container/v1"
 )
 
@@ -14,6 +17,36 @@ var defaultOauthScopes = []string{
 	"https://www.googleapis.com/auth/service.management.readonly",
 	"https://www.googleapis.com/auth/servicecontrol",
 	"https://www.googleapis.com/auth/trace.append",
+}
+
+func schemaLoggingVariant() *schema.Schema {
+	return &schema.Schema{
+		Type:         schema.TypeString,
+		Optional:     true,
+		Description:  `Type of logging agent that is used as the default value for node pools in the cluster. Valid values include DEFAULT and MAX_THROUGHPUT.`,
+		Default:      "DEFAULT",
+		ValidateFunc: validation.StringInSlice([]string{"DEFAULT", "MAX_THROUGHPUT"}, false),
+	}
+}
+
+func schemaGcfsConfig(forceNew bool) *schema.Schema {
+	return &schema.Schema{
+		Type:        schema.TypeList,
+		Optional:    true,
+		MaxItems:    1,
+		Description: `GCFS configuration for this node.`,
+		ForceNew:    forceNew,
+		Elem: &schema.Resource{
+			Schema: map[string]*schema.Schema{
+				"enabled": {
+					Type:        schema.TypeBool,
+					Required:    true,
+					ForceNew:    forceNew,
+					Description: `Whether or not GCFS is enabled`,
+				},
+			},
+		},
+	}
 }
 
 func schemaNodeConfig() *schema.Schema {
@@ -64,7 +97,7 @@ func schemaNodeConfig() *schema.Schema {
 								Type:             schema.TypeString,
 								Required:         true,
 								ForceNew:         true,
-								DiffSuppressFunc: compareSelfLinkOrResourceName,
+								DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 								Description:      `The accelerator type resource name.`,
 							},
 							"gpu_partition_size": {
@@ -72,6 +105,30 @@ func schemaNodeConfig() *schema.Schema {
 								Optional:    true,
 								ForceNew:    true,
 								Description: `Size of partitions to create on the GPU. Valid values are described in the NVIDIA mig user guide (https://docs.nvidia.com/datacenter/tesla/mig-user-guide/#partitioning)`,
+							},
+							"gpu_sharing_config": {
+								Type:        schema.TypeList,
+								MaxItems:    1,
+								Optional:    true,
+								ForceNew:    true,
+								ConfigMode:  schema.SchemaConfigModeAttr,
+								Description: `Configuration for GPU sharing.`,
+								Elem: &schema.Resource{
+									Schema: map[string]*schema.Schema{
+										"gpu_sharing_strategy": {
+											Type:        schema.TypeString,
+											Required:    true,
+											ForceNew:    true,
+											Description: `The type of GPU sharing strategy to enable on the GPU node. Possible values are described in the API package (https://pkg.go.dev/google.golang.org/api/container/v1#GPUSharingConfig)`,
+										},
+										"max_shared_clients_per_gpu": {
+											Type:        schema.TypeInt,
+											Required:    true,
+											ForceNew:    true,
+											Description: `The maximum number of containers that can share a GPU.`,
+										},
+									},
+								},
 							},
 						},
 					},
@@ -81,7 +138,7 @@ func schemaNodeConfig() *schema.Schema {
 					Type:             schema.TypeString,
 					Optional:         true,
 					Computed:         true,
-					DiffSuppressFunc: caseDiffSuppress,
+					DiffSuppressFunc: tpgresource.CaseDiffSuppress,
 					Description:      `The image type to use for this node. Note that for a given image type, the latest version of it will be used.`,
 				},
 
@@ -90,9 +147,15 @@ func schemaNodeConfig() *schema.Schema {
 					Optional: true,
 					// Computed=true because GKE Sandbox will automatically add labels to nodes that can/cannot run sandboxed pods.
 					Computed:    true,
-					ForceNew:    true,
 					Elem:        &schema.Schema{Type: schema.TypeString},
 					Description: `The map of Kubernetes labels (key/value pairs) to be applied to each node. These will added in addition to any default label(s) that Kubernetes may apply to the node.`,
+				},
+
+				"resource_labels": {
+					Type:        schema.TypeMap,
+					Optional:    true,
+					Elem:        &schema.Schema{Type: schema.TypeString},
+					Description: `The GCE resource labels (a map of key/value pairs) to be applied to the node pool.`,
 				},
 
 				"local_ssd_count": {
@@ -104,23 +167,47 @@ func schemaNodeConfig() *schema.Schema {
 					Description:  `The number of local SSD disks to be attached to the node.`,
 				},
 
-				"gcfs_config": {
+				"logging_variant": schemaLoggingVariant(),
+
+				"ephemeral_storage_local_ssd_config": {
 					Type:        schema.TypeList,
 					Optional:    true,
 					MaxItems:    1,
-					Description: `GCFS configuration for this node.`,
+					Description: `Parameters for the ephemeral storage filesystem. If unspecified, ephemeral storage is backed by the boot disk.`,
 					ForceNew:    true,
 					Elem: &schema.Resource{
 						Schema: map[string]*schema.Schema{
-							"enabled": {
-								Type:        schema.TypeBool,
-								Required:    true,
-								ForceNew:    true,
-								Description: `Whether or not GCFS is enabled`,
+							"local_ssd_count": {
+								Type:         schema.TypeInt,
+								Required:     true,
+								ForceNew:     true,
+								ValidateFunc: validation.IntAtLeast(0),
+								Description:  `Number of local SSDs to use to back ephemeral storage. Uses NVMe interfaces. Each local SSD must be 375 or 3000 GB in size, and all local SSDs must share the same size.`,
 							},
 						},
 					},
 				},
+
+				"local_nvme_ssd_block_config": {
+					Type:        schema.TypeList,
+					Optional:    true,
+					MaxItems:    1,
+					Description: `Parameters for raw-block local NVMe SSDs.`,
+					ForceNew:    true,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"local_ssd_count": {
+								Type:         schema.TypeInt,
+								Required:     true,
+								ForceNew:     true,
+								ValidateFunc: validation.IntAtLeast(0),
+								Description:  `Number of raw-block local NVMe SSD disks to be attached to the node. Each local SSD is 375 GB in size.`,
+							},
+						},
+					},
+				},
+
+				"gcfs_config": schemaGcfsConfig(true),
 
 				"gvnic": {
 					Type:        schema.TypeList,
@@ -174,11 +261,11 @@ func schemaNodeConfig() *schema.Schema {
 					Elem: &schema.Schema{
 						Type: schema.TypeString,
 						StateFunc: func(v interface{}) string {
-							return canonicalizeServiceScope(v.(string))
+							return tpgresource.CanonicalizeServiceScope(v.(string))
 						},
 					},
 					DiffSuppressFunc: containerClusterAddedScopesSuppress,
-					Set:              stringScopeHashcode,
+					Set:              tpgresource.StringScopeHashcode,
 				},
 
 				"preemptible": {
@@ -188,7 +275,39 @@ func schemaNodeConfig() *schema.Schema {
 					Default:     false,
 					Description: `Whether the nodes are created as preemptible VM instances.`,
 				},
-
+				"reservation_affinity": {
+					Type:        schema.TypeList,
+					Optional:    true,
+					MaxItems:    1,
+					Description: `The reservation affinity configuration for the node pool.`,
+					ForceNew:    true,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"consume_reservation_type": {
+								Type:         schema.TypeString,
+								Required:     true,
+								ForceNew:     true,
+								Description:  `Corresponds to the type of reservation consumption.`,
+								ValidateFunc: validation.StringInSlice([]string{"UNSPECIFIED", "NO_RESERVATION", "ANY_RESERVATION", "SPECIFIC_RESERVATION"}, false),
+							},
+							"key": {
+								Type:        schema.TypeString,
+								Optional:    true,
+								ForceNew:    true,
+								Description: `The label key of a reservation resource.`,
+							},
+							"values": {
+								Type:        schema.TypeSet,
+								Description: "The label values of the reservation resource.",
+								ForceNew:    true,
+								Optional:    true,
+								Elem: &schema.Schema{
+									Type: schema.TypeString,
+								},
+							},
+						},
+					},
+				},
 				"spot": {
 					Type:        schema.TypeBool,
 					Optional:    true,
@@ -208,7 +327,6 @@ func schemaNodeConfig() *schema.Schema {
 				"tags": {
 					Type:        schema.TypeList,
 					Optional:    true,
-					ForceNew:    true,
 					Elem:        &schema.Schema{Type: schema.TypeString},
 					Description: `The list of instance tags applied to all nodes.`,
 				},
@@ -299,15 +417,101 @@ func schemaNodeConfig() *schema.Schema {
 					ForceNew:    true,
 					Description: `The Customer Managed Encryption Key used to encrypt the boot disk attached to each node in the node pool.`,
 				},
+				// Note that AtLeastOneOf can't be set because this schema is reused by
+				// two different resources.
+				"kubelet_config": {
+					Type:        schema.TypeList,
+					Optional:    true,
+					MaxItems:    1,
+					Description: `Node kubelet configs.`,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"cpu_manager_policy": {
+								Type:         schema.TypeString,
+								Required:     true,
+								ValidateFunc: validation.StringInSlice([]string{"static", "none", ""}, false),
+								Description:  `Control the CPU management policy on the node.`,
+							},
+							"cpu_cfs_quota": {
+								Type:        schema.TypeBool,
+								Optional:    true,
+								Description: `Enable CPU CFS quota enforcement for containers that specify CPU limits.`,
+							},
+							"cpu_cfs_quota_period": {
+								Type:        schema.TypeString,
+								Optional:    true,
+								Description: `Set the CPU CFS quota period value 'cpu.cfs_period_us'.`,
+							},
+							"pod_pids_limit": {
+								Type:        schema.TypeInt,
+								Optional:    true,
+								Description: `Controls the maximum number of processes allowed to run in a pod.`,
+							},
+						},
+					},
+				},
+
+				"linux_node_config": {
+					Type:        schema.TypeList,
+					Optional:    true,
+					MaxItems:    1,
+					Description: `Parameters that can be configured on Linux nodes.`,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"sysctls": {
+								Type:        schema.TypeMap,
+								Required:    true,
+								Elem:        &schema.Schema{Type: schema.TypeString},
+								Description: `The Linux kernel parameters to be applied to the nodes and all pods running on the nodes.`,
+							},
+						},
+					},
+				},
 				"node_group": {
 					Type:        schema.TypeString,
 					Optional:    true,
 					ForceNew:    true,
 					Description: `Setting this field will assign instances of this pool to run on the specified node group. This is useful for running workloads on sole tenant nodes.`,
 				},
+
+				"advanced_machine_features": {
+					Type:        schema.TypeList,
+					Optional:    true,
+					MaxItems:    1,
+					Description: `Specifies options for controlling advanced machine features.`,
+					ForceNew:    true,
+					Elem: &schema.Resource{
+						Schema: map[string]*schema.Schema{
+							"threads_per_core": {
+								Type:        schema.TypeInt,
+								Required:    true,
+								ForceNew:    true,
+								Description: `The number of threads per physical core. To disable simultaneous multithreading (SMT) set this to 1. If unset, the maximum number of threads supported per core by the underlying processor is assumed.`,
+							},
+						},
+					},
+				},
 			},
 		},
 	}
+}
+
+func expandNodeConfigDefaults(configured interface{}) *container.NodeConfigDefaults {
+	configs := configured.([]interface{})
+	if len(configs) == 0 || configs[0] == nil {
+		return nil
+	}
+	config := configs[0].(map[string]interface{})
+
+	nodeConfigDefaults := &container.NodeConfigDefaults{}
+	if variant, ok := config["logging_variant"]; ok {
+		nodeConfigDefaults.LoggingConfig = &container.NodePoolLoggingConfig{
+			VariantConfig: &container.LoggingVariantConfig{
+				Variant: variant.(string),
+			},
+		}
+	}
+	return nodeConfigDefaults
 }
 
 func expandNodeConfig(v interface{}) *container.NodeConfig {
@@ -334,11 +538,21 @@ func expandNodeConfig(v interface{}) *container.NodeConfig {
 			if data["count"].(int) == 0 {
 				continue
 			}
-			guestAccelerators = append(guestAccelerators, &container.AcceleratorConfig{
+			guestAcceleratorConfig := &container.AcceleratorConfig{
 				AcceleratorCount: int64(data["count"].(int)),
 				AcceleratorType:  data["type"].(string),
 				GpuPartitionSize: data["gpu_partition_size"].(string),
-			})
+			}
+
+			if v, ok := data["gpu_sharing_config"]; ok && len(v.([]interface{})) > 0 {
+				gpuSharingConfig := data["gpu_sharing_config"].([]interface{})[0].(map[string]interface{})
+				guestAcceleratorConfig.GpuSharingConfig = &container.GPUSharingConfig{
+					GpuSharingStrategy:     gpuSharingConfig["gpu_sharing_strategy"].(string),
+					MaxSharedClientsPerGpu: int64(gpuSharingConfig["max_shared_clients_per_gpu"].(int)),
+				}
+			}
+
+			guestAccelerators = append(guestAccelerators, guestAcceleratorConfig)
 		}
 		nc.Accelerators = guestAccelerators
 	}
@@ -355,6 +569,28 @@ func expandNodeConfig(v interface{}) *container.NodeConfig {
 		nc.LocalSsdCount = int64(v.(int))
 	}
 
+	if v, ok := nodeConfig["logging_variant"]; ok {
+		nc.LoggingConfig = &container.NodePoolLoggingConfig{
+			VariantConfig: &container.LoggingVariantConfig{
+				Variant: v.(string),
+			},
+		}
+	}
+
+	if v, ok := nodeConfig["local_nvme_ssd_block_config"]; ok && len(v.([]interface{})) > 0 {
+		conf := v.([]interface{})[0].(map[string]interface{})
+		nc.LocalNvmeSsdBlockConfig = &container.LocalNvmeSsdBlockConfig{
+			LocalSsdCount: int64(conf["local_ssd_count"].(int)),
+		}
+	}
+
+	if v, ok := nodeConfig["ephemeral_storage_local_ssd_config"]; ok && len(v.([]interface{})) > 0 {
+		conf := v.([]interface{})[0].(map[string]interface{})
+		nc.EphemeralStorageLocalSsdConfig = &container.EphemeralStorageLocalSsdConfig{
+			LocalSsdCount: int64(conf["local_ssd_count"].(int)),
+		}
+	}
+
 	if v, ok := nodeConfig["gcfs_config"]; ok && len(v.([]interface{})) > 0 {
 		conf := v.([]interface{})[0].(map[string]interface{})
 		nc.GcfsConfig = &container.GcfsConfig{
@@ -369,11 +605,26 @@ func expandNodeConfig(v interface{}) *container.NodeConfig {
 		}
 	}
 
+	if v, ok := nodeConfig["reservation_affinity"]; ok && len(v.([]interface{})) > 0 {
+		conf := v.([]interface{})[0].(map[string]interface{})
+		valuesSet := conf["values"].(*schema.Set)
+		values := make([]string, valuesSet.Len())
+		for i, value := range valuesSet.List() {
+			values[i] = value.(string)
+		}
+
+		nc.ReservationAffinity = &container.ReservationAffinity{
+			ConsumeReservationType: conf["consume_reservation_type"].(string),
+			Key:                    conf["key"].(string),
+			Values:                 values,
+		}
+	}
+
 	if scopes, ok := nodeConfig["oauth_scopes"]; ok {
 		scopesSet := scopes.(*schema.Set)
 		scopes := make([]string, scopesSet.Len())
 		for i, scope := range scopesSet.List() {
-			scopes[i] = canonicalizeServiceScope(scope.(string))
+			scopes[i] = tpgresource.CanonicalizeServiceScope(scope.(string))
 		}
 
 		nc.OauthScopes = scopes
@@ -401,6 +652,14 @@ func expandNodeConfig(v interface{}) *container.NodeConfig {
 			m[k] = val.(string)
 		}
 		nc.Labels = m
+	}
+
+	if v, ok := nodeConfig["resource_labels"]; ok {
+		m := make(map[string]string)
+		for k, val := range v.(map[string]interface{}) {
+			m[k] = val.(string)
+		}
+		nc.ResourceLabels = m
 	}
 
 	if v, ok := nodeConfig["tags"]; ok {
@@ -455,8 +714,23 @@ func expandNodeConfig(v interface{}) *container.NodeConfig {
 		nc.BootDiskKmsKey = v.(string)
 	}
 
+	if v, ok := nodeConfig["kubelet_config"]; ok {
+		nc.KubeletConfig = expandKubeletConfig(v)
+	}
+
+	if v, ok := nodeConfig["linux_node_config"]; ok {
+		nc.LinuxNodeConfig = expandLinuxNodeConfig(v)
+	}
+
 	if v, ok := nodeConfig["node_group"]; ok {
 		nc.NodeGroup = v.(string)
+	}
+
+	if v, ok := nodeConfig["advanced_machine_features"]; ok && len(v.([]interface{})) > 0 {
+		advanced_machine_features := v.([]interface{})[0].(map[string]interface{})
+		nc.AdvancedMachineFeatures = &container.AdvancedMachineFeatures{
+			ThreadsPerCore: int64(advanced_machine_features["threads_per_core"].(int)),
+		}
 	}
 
 	return nc
@@ -481,6 +755,68 @@ func expandWorkloadMetadataConfig(v interface{}) *container.WorkloadMetadataConf
 	return wmc
 }
 
+func expandKubeletConfig(v interface{}) *container.NodeKubeletConfig {
+	if v == nil {
+		return nil
+	}
+	ls := v.([]interface{})
+	if len(ls) == 0 {
+		return nil
+	}
+	cfg := ls[0].(map[string]interface{})
+	kConfig := &container.NodeKubeletConfig{}
+	if cpuManagerPolicy, ok := cfg["cpu_manager_policy"]; ok {
+		kConfig.CpuManagerPolicy = cpuManagerPolicy.(string)
+	}
+	if cpuCfsQuota, ok := cfg["cpu_cfs_quota"]; ok {
+		kConfig.CpuCfsQuota = cpuCfsQuota.(bool)
+		kConfig.ForceSendFields = append(kConfig.ForceSendFields, "CpuCfsQuota")
+	}
+	if cpuCfsQuotaPeriod, ok := cfg["cpu_cfs_quota_period"]; ok {
+		kConfig.CpuCfsQuotaPeriod = cpuCfsQuotaPeriod.(string)
+	}
+	if podPidsLimit, ok := cfg["pod_pids_limit"]; ok {
+		kConfig.PodPidsLimit = int64(podPidsLimit.(int))
+	}
+	return kConfig
+}
+
+func expandLinuxNodeConfig(v interface{}) *container.LinuxNodeConfig {
+	if v == nil {
+		return nil
+	}
+	ls := v.([]interface{})
+	if len(ls) == 0 {
+		return nil
+	}
+	cfg := ls[0].(map[string]interface{})
+	sysCfgRaw, ok := cfg["sysctls"]
+	if !ok {
+		return nil
+	}
+	m := make(map[string]string)
+	for k, v := range sysCfgRaw.(map[string]interface{}) {
+		m[k] = v.(string)
+	}
+	return &container.LinuxNodeConfig{
+		Sysctls: m,
+	}
+}
+
+func flattenNodeConfigDefaults(c *container.NodeConfigDefaults) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, 1)
+
+	if c == nil {
+		return result
+	}
+
+	result = append(result, map[string]interface{}{})
+
+	result[0]["logging_variant"] = flattenLoggingVariant(c.LoggingConfig)
+
+	return result
+}
+
 func flattenNodeConfig(c *container.NodeConfig) []map[string]interface{} {
 	config := make([]map[string]interface{}, 0, 1)
 
@@ -489,43 +825,70 @@ func flattenNodeConfig(c *container.NodeConfig) []map[string]interface{} {
 	}
 
 	config = append(config, map[string]interface{}{
-		"machine_type":             c.MachineType,
-		"disk_size_gb":             c.DiskSizeGb,
-		"disk_type":                c.DiskType,
-		"guest_accelerator":        flattenContainerGuestAccelerators(c.Accelerators),
-		"local_ssd_count":          c.LocalSsdCount,
-		"gcfs_config":              flattenGcfsConfig(c.GcfsConfig),
-		"gvnic":                    flattenGvnic(c.Gvnic),
-		"service_account":          c.ServiceAccount,
-		"metadata":                 c.Metadata,
-		"image_type":               c.ImageType,
-		"labels":                   c.Labels,
-		"tags":                     c.Tags,
-		"preemptible":              c.Preemptible,
-		"spot":                     c.Spot,
-		"min_cpu_platform":         c.MinCpuPlatform,
-		"shielded_instance_config": flattenShieldedInstanceConfig(c.ShieldedInstanceConfig),
-		"taint":                    flattenTaints(c.Taints),
-		"workload_metadata_config": flattenWorkloadMetadataConfig(c.WorkloadMetadataConfig),
-		"boot_disk_kms_key":        c.BootDiskKmsKey,
-		"node_group":               c.NodeGroup,
+		"machine_type":                       c.MachineType,
+		"disk_size_gb":                       c.DiskSizeGb,
+		"disk_type":                          c.DiskType,
+		"guest_accelerator":                  flattenContainerGuestAccelerators(c.Accelerators),
+		"local_ssd_count":                    c.LocalSsdCount,
+		"logging_variant":                    flattenLoggingVariant(c.LoggingConfig),
+		"local_nvme_ssd_block_config":        flattenLocalNvmeSsdBlockConfig(c.LocalNvmeSsdBlockConfig),
+		"ephemeral_storage_local_ssd_config": flattenEphemeralStorageLocalSsdConfig(c.EphemeralStorageLocalSsdConfig),
+		"gcfs_config":                        flattenGcfsConfig(c.GcfsConfig),
+		"gvnic":                              flattenGvnic(c.Gvnic),
+		"reservation_affinity":               flattenGKEReservationAffinity(c.ReservationAffinity),
+		"service_account":                    c.ServiceAccount,
+		"metadata":                           c.Metadata,
+		"image_type":                         c.ImageType,
+		"labels":                             c.Labels,
+		"resource_labels":                    c.ResourceLabels,
+		"tags":                               c.Tags,
+		"preemptible":                        c.Preemptible,
+		"spot":                               c.Spot,
+		"min_cpu_platform":                   c.MinCpuPlatform,
+		"shielded_instance_config":           flattenShieldedInstanceConfig(c.ShieldedInstanceConfig),
+		"taint":                              flattenTaints(c.Taints),
+		"workload_metadata_config":           flattenWorkloadMetadataConfig(c.WorkloadMetadataConfig),
+		"boot_disk_kms_key":                  c.BootDiskKmsKey,
+		"kubelet_config":                     flattenKubeletConfig(c.KubeletConfig),
+		"linux_node_config":                  flattenLinuxNodeConfig(c.LinuxNodeConfig),
+		"node_group":                         c.NodeGroup,
+		"advanced_machine_features":          flattenAdvancedMachineFeaturesConfig(c.AdvancedMachineFeatures),
 	})
 
 	if len(c.OauthScopes) > 0 {
-		config[0]["oauth_scopes"] = schema.NewSet(stringScopeHashcode, convertStringArrToInterface(c.OauthScopes))
+		config[0]["oauth_scopes"] = schema.NewSet(tpgresource.StringScopeHashcode, convertStringArrToInterface(c.OauthScopes))
 	}
 
 	return config
 }
 
+func flattenAdvancedMachineFeaturesConfig(c *container.AdvancedMachineFeatures) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	if c != nil {
+		result = append(result, map[string]interface{}{
+			"threads_per_core": c.ThreadsPerCore,
+		})
+	}
+	return result
+}
+
 func flattenContainerGuestAccelerators(c []*container.AcceleratorConfig) []map[string]interface{} {
 	result := []map[string]interface{}{}
 	for _, accel := range c {
-		result = append(result, map[string]interface{}{
+		accelerator := map[string]interface{}{
 			"count":              accel.AcceleratorCount,
 			"type":               accel.AcceleratorType,
 			"gpu_partition_size": accel.GpuPartitionSize,
-		})
+		}
+		if accel.GpuSharingConfig != nil {
+			accelerator["gpu_sharing_config"] = []map[string]interface{}{
+				{
+					"gpu_sharing_strategy":       accel.GpuSharingConfig.GpuSharingStrategy,
+					"max_shared_clients_per_gpu": accel.GpuSharingConfig.MaxSharedClientsPerGpu,
+				},
+			}
+		}
+		result = append(result, accelerator)
 	}
 	return result
 }
@@ -539,6 +902,34 @@ func flattenShieldedInstanceConfig(c *container.ShieldedInstanceConfig) []map[st
 		})
 	}
 	return result
+}
+
+func flattenLocalNvmeSsdBlockConfig(c *container.LocalNvmeSsdBlockConfig) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	if c != nil {
+		result = append(result, map[string]interface{}{
+			"local_ssd_count": c.LocalSsdCount,
+		})
+	}
+	return result
+}
+
+func flattenEphemeralStorageLocalSsdConfig(c *container.EphemeralStorageLocalSsdConfig) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	if c != nil {
+		result = append(result, map[string]interface{}{
+			"local_ssd_count": c.LocalSsdCount,
+		})
+	}
+	return result
+}
+
+func flattenLoggingVariant(c *container.NodePoolLoggingConfig) string {
+	variant := "DEFAULT"
+	if c != nil && c.VariantConfig != nil && c.VariantConfig.Variant != "" {
+		variant = c.VariantConfig.Variant
+	}
+	return variant
 }
 
 func flattenGcfsConfig(c *container.GcfsConfig) []map[string]interface{} {
@@ -561,6 +952,18 @@ func flattenGvnic(c *container.VirtualNIC) []map[string]interface{} {
 	return result
 }
 
+func flattenGKEReservationAffinity(c *container.ReservationAffinity) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	if c != nil {
+		result = append(result, map[string]interface{}{
+			"consume_reservation_type": c.ConsumeReservationType,
+			"key":                      c.Key,
+			"values":                   c.Values,
+		})
+	}
+	return result
+}
+
 func flattenTaints(c []*container.NodeTaint) []map[string]interface{} {
 	result := []map[string]interface{}{}
 	for _, taint := range c {
@@ -578,6 +981,29 @@ func flattenWorkloadMetadataConfig(c *container.WorkloadMetadataConfig) []map[st
 	if c != nil {
 		result = append(result, map[string]interface{}{
 			"mode": c.Mode,
+		})
+	}
+	return result
+}
+
+func flattenKubeletConfig(c *container.NodeKubeletConfig) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	if c != nil {
+		result = append(result, map[string]interface{}{
+			"cpu_cfs_quota":        c.CpuCfsQuota,
+			"cpu_cfs_quota_period": c.CpuCfsQuotaPeriod,
+			"cpu_manager_policy":   c.CpuManagerPolicy,
+			"pod_pids_limit":       c.PodPidsLimit,
+		})
+	}
+	return result
+}
+
+func flattenLinuxNodeConfig(c *container.LinuxNodeConfig) []map[string]interface{} {
+	result := []map[string]interface{}{}
+	if c != nil {
+		result = append(result, map[string]interface{}{
+			"sysctls": c.Sysctls,
 		})
 	}
 	return result

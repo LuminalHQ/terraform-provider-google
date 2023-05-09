@@ -1,11 +1,10 @@
 ---
 subcategory: "Cloud IAM"
-page_title: "Google: google_iam_workload_identity_pool_provider"
 description: |-
   Get a IAM workload identity pool provider from Google Cloud
 ---
 
-# google\_iam\_workload_\identity\_pool\_provider
+# google\_iam\_workload\_identity\_pool\_provider
 
 Get a IAM workload identity provider from Google Cloud by its id.
 
@@ -36,4 +35,4 @@ The following arguments are supported:
     is not provided, the provider project is used.
 
 ## Attributes Reference
-See [google_iam_workload_identity_pool_provider](https://www.terraform.io/docs/providers/google/r/iam_workload_identity_pool_provider.html) resource for details of all the available attributes.
+See [google_iam_workload_identity_pool_provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/iam_workload_identity_pool_provider) resource for details of all the available attributes.

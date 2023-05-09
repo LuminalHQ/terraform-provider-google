@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 func sslSettingsDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
@@ -38,7 +41,7 @@ func sslSettingsDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
 	return false
 }
 
-func resourceAppEngineDomainMapping() *schema.Resource {
+func ResourceAppEngineDomainMapping() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAppEngineDomainMappingCreate,
 		Read:   resourceAppEngineDomainMappingRead,
@@ -65,7 +68,7 @@ func resourceAppEngineDomainMapping() *schema.Resource {
 			"override_strategy": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"STRICT", "OVERRIDE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"STRICT", "OVERRIDE", ""}),
 				Description: `Whether the domain creation should override any existing mappings for this domain.
 By default, overrides are rejected. Default value: "STRICT" Possible values: ["STRICT", "OVERRIDE"]`,
 				Default: "STRICT",
@@ -81,7 +84,7 @@ By default, overrides are rejected. Default value: "STRICT" Possible values: ["S
 						"ssl_management_type": {
 							Type:         schema.TypeString,
 							Required:     true,
-							ValidateFunc: validateEnum([]string{"AUTOMATIC", "MANUAL"}),
+							ValidateFunc: verify.ValidateEnum([]string{"AUTOMATIC", "MANUAL"}),
 							Description: `SSL management type for this domain. If 'AUTOMATIC', a managed certificate is automatically provisioned.
 If 'MANUAL', 'certificateId' must be manually specified in order to configure SSL for this domain. Possible values: ["AUTOMATIC", "MANUAL"]`,
 						},
@@ -133,7 +136,7 @@ configuration in order to serve the application via this domain mapping.`,
 						"type": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"A", "AAAA", "CNAME", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"A", "AAAA", "CNAME", ""}),
 							Description:  `Resource record type. Example: 'AAAA'. Possible values: ["A", "AAAA", "CNAME"]`,
 						},
 					},
@@ -151,8 +154,8 @@ configuration in order to serve the application via this domain mapping.`,
 }
 
 func resourceAppEngineDomainMappingCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -171,14 +174,14 @@ func resourceAppEngineDomainMappingCreate(d *schema.ResourceData, meta interface
 		obj["id"] = idProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings")
 	if err != nil {
 		return err
 	}
@@ -197,13 +200,13 @@ func resourceAppEngineDomainMappingCreate(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating DomainMapping: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "apps/{{project}}/domainMappings/{{domain_name}}")
+	id, err := ReplaceVars(d, config, "apps/{{project}}/domainMappings/{{domain_name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -212,12 +215,13 @@ func resourceAppEngineDomainMappingCreate(d *schema.ResourceData, meta interface
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = appEngineOperationWaitTimeWithResponse(
+	err = AppEngineOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating DomainMapping", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create DomainMapping: %s", err)
 	}
 
@@ -226,7 +230,7 @@ func resourceAppEngineDomainMappingCreate(d *schema.ResourceData, meta interface
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "apps/{{project}}/domainMappings/{{domain_name}}")
+	id, err = ReplaceVars(d, config, "apps/{{project}}/domainMappings/{{domain_name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -238,13 +242,13 @@ func resourceAppEngineDomainMappingCreate(d *schema.ResourceData, meta interface
 }
 
 func resourceAppEngineDomainMappingRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings/{{domain_name}}")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings/{{domain_name}}")
 	if err != nil {
 		return err
 	}
@@ -262,9 +266,9 @@ func resourceAppEngineDomainMappingRead(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AppEngineDomainMapping %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AppEngineDomainMapping %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -288,8 +292,8 @@ func resourceAppEngineDomainMappingRead(d *schema.ResourceData, meta interface{}
 }
 
 func resourceAppEngineDomainMappingUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -310,14 +314,14 @@ func resourceAppEngineDomainMappingUpdate(d *schema.ResourceData, meta interface
 		obj["sslSettings"] = sslSettingsProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings/{{domain_name}}")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings/{{domain_name}}")
 	if err != nil {
 		return err
 	}
@@ -329,9 +333,9 @@ func resourceAppEngineDomainMappingUpdate(d *schema.ResourceData, meta interface
 		updateMask = append(updateMask, "ssl_settings.certificate_id",
 			"ssl_settings.ssl_management_type")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -341,7 +345,7 @@ func resourceAppEngineDomainMappingUpdate(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating DomainMapping %q: %s", d.Id(), err)
@@ -349,7 +353,7 @@ func resourceAppEngineDomainMappingUpdate(d *schema.ResourceData, meta interface
 		log.Printf("[DEBUG] Finished updating DomainMapping %q: %#v", d.Id(), res)
 	}
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Updating DomainMapping", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -361,8 +365,8 @@ func resourceAppEngineDomainMappingUpdate(d *schema.ResourceData, meta interface
 }
 
 func resourceAppEngineDomainMappingDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -375,14 +379,14 @@ func resourceAppEngineDomainMappingDelete(d *schema.ResourceData, meta interface
 	}
 	billingProject = project
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings/{{domain_name}}")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/domainMappings/{{domain_name}}")
 	if err != nil {
 		return err
 	}
@@ -395,12 +399,12 @@ func resourceAppEngineDomainMappingDelete(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "DomainMapping")
+		return transport_tpg.HandleNotFoundError(err, d, "DomainMapping")
 	}
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Deleting DomainMapping", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -413,8 +417,8 @@ func resourceAppEngineDomainMappingDelete(d *schema.ResourceData, meta interface
 }
 
 func resourceAppEngineDomainMappingImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"apps/(?P<project>[^/]+)/domainMappings/(?P<domain_name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<domain_name>[^/]+)",
 		"(?P<domain_name>[^/]+)",
@@ -423,7 +427,7 @@ func resourceAppEngineDomainMappingImport(d *schema.ResourceData, meta interface
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "apps/{{project}}/domainMappings/{{domain_name}}")
+	id, err := ReplaceVars(d, config, "apps/{{project}}/domainMappings/{{domain_name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -432,11 +436,11 @@ func resourceAppEngineDomainMappingImport(d *schema.ResourceData, meta interface
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAppEngineDomainMappingName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingSslSettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingSslSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -453,19 +457,19 @@ func flattenAppEngineDomainMappingSslSettings(v interface{}, d *schema.ResourceD
 		flattenAppEngineDomainMappingSslSettingsPendingManagedCertificateId(original["pendingManagedCertificateId"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAppEngineDomainMappingSslSettingsCertificateId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingSslSettingsCertificateId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingSslSettingsSslManagementType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingSslSettingsSslManagementType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingSslSettingsPendingManagedCertificateId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingSslSettingsPendingManagedCertificateId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingResourceRecords(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingResourceRecords(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -485,23 +489,23 @@ func flattenAppEngineDomainMappingResourceRecords(v interface{}, d *schema.Resou
 	}
 	return transformed
 }
-func flattenAppEngineDomainMappingResourceRecordsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingResourceRecordsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingResourceRecordsRrdata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingResourceRecordsRrdata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingResourceRecordsType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingResourceRecordsType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineDomainMappingDomainName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineDomainMappingDomainName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAppEngineDomainMappingSslSettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineDomainMappingSslSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -534,18 +538,18 @@ func expandAppEngineDomainMappingSslSettings(v interface{}, d TerraformResourceD
 	return transformed, nil
 }
 
-func expandAppEngineDomainMappingSslSettingsCertificateId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineDomainMappingSslSettingsCertificateId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineDomainMappingSslSettingsSslManagementType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineDomainMappingSslSettingsSslManagementType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineDomainMappingSslSettingsPendingManagedCertificateId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineDomainMappingSslSettingsPendingManagedCertificateId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineDomainMappingDomainName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineDomainMappingDomainName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

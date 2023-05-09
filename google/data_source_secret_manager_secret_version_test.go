@@ -3,6 +3,7 @@ package google
 import (
 	"errors"
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -12,12 +13,12 @@ import (
 func TestAccDatasourceSecretManagerSecretVersion_basic(t *testing.T) {
 	t.Parallel()
 
-	randomString := randString(t, 10)
+	randomString := RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckSecretManagerSecretVersionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckSecretManagerSecretVersionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDatasourceSecretManagerSecretVersion_basic(randomString),
@@ -32,12 +33,12 @@ func TestAccDatasourceSecretManagerSecretVersion_basic(t *testing.T) {
 func TestAccDatasourceSecretManagerSecretVersion_latest(t *testing.T) {
 	t.Parallel()
 
-	randomString := randString(t, 10)
+	randomString := RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckSecretManagerSecretVersionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckSecretManagerSecretVersionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDatasourceSecretManagerSecretVersion_latest(randomString),

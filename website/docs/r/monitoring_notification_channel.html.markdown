@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud (Stackdriver) Monitoring"
-page_title: "Google: google_monitoring_notification_channel"
 description: |-
   A NotificationChannel is a medium through which an alert is delivered
   when a policy violation is detected.
@@ -46,8 +45,9 @@ To get more information about NotificationChannel, see:
     * [Notification Options](https://cloud.google.com/monitoring/support/notification-options)
     * [Monitoring API Documentation](https://cloud.google.com/monitoring/api/v3/)
 
-~> **Warning:** All arguments including `sensitive_labels.auth_token`, `sensitive_labels.password`, and `sensitive_labels.service_key` will be stored in the raw
-state as plain-text. [Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `sensitive_labels.auth_token`, `sensitive_labels.password`, `sensitive_labels.service_key`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=notification_channel_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
@@ -64,6 +64,7 @@ resource "google_monitoring_notification_channel" "basic" {
   labels = {
     email_address = "fake_email@blahblah.com"
   }
+  force_delete = false
 }
 ```
 ## Example Usage - Notification Channel Sensitive
@@ -133,6 +134,12 @@ The following arguments are supported:
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
+* `force_delete` - (Optional) If true, the notification channel will be deleted regardless
+of its use in alert policies (the policies will be updated
+to remove the channel). If false, channels that are still
+referenced by an existing alerting policy will fail to be
+deleted in a delete operation.
+
 
 <a name="nested_sensitive_labels"></a>The `sensitive_labels` block supports:
 
@@ -169,7 +176,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -186,4 +193,4 @@ $ terraform import google_monitoring_notification_channel.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

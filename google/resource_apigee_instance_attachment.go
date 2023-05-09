@@ -21,9 +21,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceApigeeInstanceAttachment() *schema.Resource {
+func ResourceApigeeInstanceAttachment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceApigeeInstanceAttachmentCreate,
 		Read:   resourceApigeeInstanceAttachmentRead,
@@ -63,8 +65,8 @@ in the format 'organisations/{{org_name}}/instances/{{instance_name}}'.`,
 }
 
 func resourceApigeeInstanceAttachmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -77,14 +79,14 @@ func resourceApigeeInstanceAttachmentCreate(d *schema.ResourceData, meta interfa
 		obj["environment"] = environmentProp
 	}
 
-	lockName, err := replaceVars(d, config, "apigeeInstanceAttachments")
+	lockName, err := ReplaceVars(d, config, "apigeeInstanceAttachments")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{instance_id}}/attachments")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{instance_id}}/attachments")
 	if err != nil {
 		return err
 	}
@@ -97,13 +99,13 @@ func resourceApigeeInstanceAttachmentCreate(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating InstanceAttachment: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{instance_id}}/attachments/{{name}}")
+	id, err := ReplaceVars(d, config, "{{instance_id}}/attachments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -112,12 +114,13 @@ func resourceApigeeInstanceAttachmentCreate(d *schema.ResourceData, meta interfa
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = apigeeOperationWaitTimeWithResponse(
+	err = ApigeeOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating InstanceAttachment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create InstanceAttachment: %s", err)
 	}
 
@@ -126,7 +129,7 @@ func resourceApigeeInstanceAttachmentCreate(d *schema.ResourceData, meta interfa
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{instance_id}}/attachments/{{name}}")
+	id, err = ReplaceVars(d, config, "{{instance_id}}/attachments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -138,13 +141,13 @@ func resourceApigeeInstanceAttachmentCreate(d *schema.ResourceData, meta interfa
 }
 
 func resourceApigeeInstanceAttachmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{instance_id}}/attachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{instance_id}}/attachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -156,9 +159,9 @@ func resourceApigeeInstanceAttachmentRead(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ApigeeInstanceAttachment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ApigeeInstanceAttachment %q", d.Id()))
 	}
 
 	if err := d.Set("environment", flattenApigeeInstanceAttachmentEnvironment(res["environment"], d, config)); err != nil {
@@ -172,22 +175,22 @@ func resourceApigeeInstanceAttachmentRead(d *schema.ResourceData, meta interface
 }
 
 func resourceApigeeInstanceAttachmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	lockName, err := replaceVars(d, config, "apigeeInstanceAttachments")
+	lockName, err := ReplaceVars(d, config, "apigeeInstanceAttachments")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{instance_id}}/attachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{instance_id}}/attachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -200,12 +203,12 @@ func resourceApigeeInstanceAttachmentDelete(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "InstanceAttachment")
+		return transport_tpg.HandleNotFoundError(err, d, "InstanceAttachment")
 	}
 
-	err = apigeeOperationWaitTime(
+	err = ApigeeOperationWaitTime(
 		config, res, "Deleting InstanceAttachment", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -218,10 +221,10 @@ func resourceApigeeInstanceAttachmentDelete(d *schema.ResourceData, meta interfa
 }
 
 func resourceApigeeInstanceAttachmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats cannot import fields with forward slashes in their value
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"(?P<instance_id>.+)/attachments/(?P<name>.+)",
 		"(?P<instance_id>.+)/(?P<name>.+)",
 	}, d, config); err != nil {
@@ -229,7 +232,7 @@ func resourceApigeeInstanceAttachmentImport(d *schema.ResourceData, meta interfa
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{instance_id}}/attachments/{{name}}")
+	id, err := ReplaceVars(d, config, "{{instance_id}}/attachments/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -238,14 +241,14 @@ func resourceApigeeInstanceAttachmentImport(d *schema.ResourceData, meta interfa
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenApigeeInstanceAttachmentEnvironment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceAttachmentEnvironment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceAttachmentName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceAttachmentName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandApigeeInstanceAttachmentEnvironment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceAttachmentEnvironment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

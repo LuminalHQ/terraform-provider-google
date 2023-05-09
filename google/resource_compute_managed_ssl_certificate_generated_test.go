@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccComputeManagedSslCertificate_managedSslCertificateBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeManagedSslCertificateDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeManagedSslCertificateDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeManagedSslCertificate_managedSslCertificateBasicExample(context),
@@ -101,38 +104,25 @@ resource "google_compute_http_health_check" "default" {
   timeout_sec        = 1
 }
 
-resource "google_dns_managed_zone" "zone" {
-  name     = "dnszone%{random_suffix}"
-  dns_name = "sslcert.tf-test.club."
-}
-
 resource "google_compute_global_forwarding_rule" "default" {
   name       = "tf-test-forwarding-rule%{random_suffix}"
   target     = google_compute_target_https_proxy.default.id
   port_range = 443
 }
-
-resource "google_dns_record_set" "set" {
-  name         = "sslcert.tf-test.club."
-  type         = "A"
-  ttl          = 3600
-  managed_zone = google_dns_managed_zone.zone.name
-  rrdatas      = [google_compute_global_forwarding_rule.default.ip_address]
-}
 `, context)
 }
 
 func TestAccComputeManagedSslCertificate_managedSslCertificateRecreationExample(t *testing.T) {
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		ExternalProviders: map[string]resource.ExternalProvider{
 			"random": {},
 			"time":   {},
@@ -232,9 +222,9 @@ func testAccCheckComputeManagedSslCertificateDestroyProducer(t *testing.T) func(
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -245,7 +235,7 @@ func testAccCheckComputeManagedSslCertificateDestroyProducer(t *testing.T) func(
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("ComputeManagedSslCertificate still exists at %s", url)
 			}

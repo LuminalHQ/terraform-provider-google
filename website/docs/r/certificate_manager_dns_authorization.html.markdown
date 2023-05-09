@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Certificate manager"
-page_title: "Google: google_certificate_manager_dns_authorization"
 description: |-
   DnsAuthorization represents a HTTP-reachable backend for a DnsAuthorization.
 ---
@@ -23,8 +22,6 @@ description: |-
 DnsAuthorization represents a HTTP-reachable backend for a DnsAuthorization.
 
 
-
-~> **Warning:** These resources require allow-listing to use, and are not openly available to all Cloud customers. Engage with your Cloud account team to discuss how to onboard.
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=certificate_manager_dns_authorization_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
@@ -103,19 +100,22 @@ In addition to the arguments listed above, the following computed attributes are
 <a name="nested_dns_resource_record"></a>The `dns_resource_record` block contains:
 
 * `name` -
+  (Output)
   Fully qualified name of the DNS Resource Record.
   E.g. `_acme-challenge.example.com`.
 
 * `type` -
+  (Output)
   Type of the DNS Resource Record.
 
 * `data` -
+  (Output)
   Data of the DNS Resource Record.
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -134,4 +134,4 @@ $ terraform import google_certificate_manager_dns_authorization.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

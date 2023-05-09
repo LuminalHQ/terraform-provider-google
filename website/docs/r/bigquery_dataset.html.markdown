@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "BigQuery"
-page_title: "Google: google_bigquery_dataset"
 description: |-
   Datasets allow you to organize and control access to your tables.
 ---
@@ -29,7 +28,7 @@ To get more information about Dataset, see:
 * How-to Guides
     * [Datasets Intro](https://cloud.google.com/bigquery/docs/datasets-intro)
 
-~> **Warning:** You must specify the role field using the legacy format `OWNER` instead of `roles/bigquery.dataOwner`. 
+~> **Warning:** You must specify the role field using the legacy format `OWNER` instead of `roles/bigquery.dataOwner`.
 The API does accept both formats but it will always return the legacy format which results in Terraform
 showing permanent diff on each plan and apply operation.
 
@@ -161,6 +160,49 @@ resource "google_service_account" "bqowner" {
   account_id = "bqowner"
 }
 ```
+## Example Usage - Bigquery Dataset Authorized Routine
+
+
+```hcl
+resource "google_bigquery_dataset" "public" {
+  dataset_id  = "public_dataset"
+  description = "This dataset is public"
+}
+
+resource "google_bigquery_routine" "public" {
+  dataset_id      = google_bigquery_dataset.public.dataset_id
+  routine_id      = "public_routine"
+  routine_type    = "TABLE_VALUED_FUNCTION"
+  language        = "SQL"
+  definition_body = <<-EOS
+    SELECT 1 + value AS value
+  EOS
+  arguments {
+    name          = "value"
+    argument_kind = "FIXED_TYPE"
+    data_type     = jsonencode({ "typeKind" = "INT64" })
+  }
+  return_table_type = jsonencode({ "columns" = [
+    { "name" = "value", "type" = { "typeKind" = "INT64" } },
+  ] })
+}
+
+resource "google_bigquery_dataset" "private" {
+  dataset_id  = "private_dataset"
+  description = "This dataset is private"
+  access {
+    role          = "OWNER"
+    user_by_email = "my@service-account.com"
+  }
+  access {
+    routine {
+      project_id = google_bigquery_routine.public.project
+      dataset_id = google_bigquery_routine.public.dataset_id
+      routine_id = google_bigquery_routine.public.routine_id
+    }
+  }
+}
+```
 
 ## Argument Reference
 
@@ -176,6 +218,10 @@ The following arguments are supported:
 
 - - -
 
+
+* `max_time_travel_hours` -
+  (Optional)
+  Defines the time travel window in hours. The value can be from 48 to 168 hours (2 to 7 days).
 
 * `access` -
   (Optional)
@@ -247,6 +293,24 @@ The following arguments are supported:
   this value, unless table creation request (or query) overrides the key.
   Structure is [documented below](#nested_default_encryption_configuration).
 
+* `is_case_insensitive` -
+  (Optional)
+  TRUE if the dataset and its table names are case-insensitive, otherwise FALSE.
+  By default, this is FALSE, which means the dataset and its table names are
+  case-sensitive. This field does not affect routine references.
+
+* `default_collation` -
+  (Optional)
+  Defines the default collation specification of future tables created
+  in the dataset. If a table is created in this dataset without table-level
+  default collation, then the table inherits the dataset default collation,
+  which is applied to the string fields that do not have explicit collation
+  specified. A change to this field affects only tables created afterwards,
+  and does not alter the existing tables.
+  The following values are supported:
+  - 'und:ci': undetermined locale, case insensitive.
+  - '': empty string. Default to case-sensitive behavior.
+
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
@@ -305,6 +369,15 @@ destroying the resource will fail if tables are present.
   Grants all resources of particular types in a particular dataset read access to the current dataset.
   Structure is [documented below](#nested_dataset).
 
+* `routine` -
+  (Optional)
+  A routine from a different dataset to grant access to. Queries
+  executed against that routine will have read access to tables in
+  this dataset. The role field is not required when this field is
+  set. If that routine is updated by any user, access to the routine
+  needs to be granted again via an update operation.
+  Structure is [documented below](#nested_routine).
+
 
 <a name="nested_view"></a>The `view` block supports:
 
@@ -345,6 +418,22 @@ destroying the resource will fail if tables are present.
   (Required)
   The ID of the project containing this table.
 
+<a name="nested_routine"></a>The `routine` block supports:
+
+* `dataset_id` -
+  (Required)
+  The ID of the dataset containing this table.
+
+* `project_id` -
+  (Required)
+  The ID of the project containing this table.
+
+* `routine_id` -
+  (Required)
+  The ID of the routine. The ID must contain only letters (a-z,
+  A-Z), numbers (0-9), or underscores (_). The maximum length
+  is 256 characters.
+
 <a name="nested_default_encryption_configuration"></a>The `default_encryption_configuration` block supports:
 
 * `kms_key_name` -
@@ -375,7 +464,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -394,4 +483,4 @@ $ terraform import google_bigquery_dataset.default {{dataset_id}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

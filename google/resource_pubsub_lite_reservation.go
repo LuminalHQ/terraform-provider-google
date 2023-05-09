@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourcePubsubLiteReservation() *schema.Resource {
+func ResourcePubsubLiteReservation() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePubsubLiteReservationCreate,
 		Read:   resourcePubsubLiteReservationRead,
@@ -46,7 +49,7 @@ func resourcePubsubLiteReservation() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `Name of the reservation.`,
 			},
 			"throughput_capacity": {
@@ -73,8 +76,8 @@ messages.`,
 }
 
 func resourcePubsubLiteReservationCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -87,7 +90,7 @@ func resourcePubsubLiteReservationCreate(d *schema.ResourceData, meta interface{
 		obj["throughputCapacity"] = throughputCapacityProp
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations?reservationId={{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations?reservationId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -106,13 +109,13 @@ func resourcePubsubLiteReservationCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Reservation: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/reservations/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/reservations/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -124,13 +127,13 @@ func resourcePubsubLiteReservationCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourcePubsubLiteReservationRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -148,9 +151,9 @@ func resourcePubsubLiteReservationRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("PubsubLiteReservation %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("PubsubLiteReservation %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -165,8 +168,8 @@ func resourcePubsubLiteReservationRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourcePubsubLiteReservationUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -187,7 +190,7 @@ func resourcePubsubLiteReservationUpdate(d *schema.ResourceData, meta interface{
 		obj["throughputCapacity"] = throughputCapacityProp
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -198,9 +201,9 @@ func resourcePubsubLiteReservationUpdate(d *schema.ResourceData, meta interface{
 	if d.HasChange("throughput_capacity") {
 		updateMask = append(updateMask, "throughputCapacity")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -210,7 +213,7 @@ func resourcePubsubLiteReservationUpdate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Reservation %q: %s", d.Id(), err)
@@ -222,8 +225,8 @@ func resourcePubsubLiteReservationUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourcePubsubLiteReservationDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -236,7 +239,7 @@ func resourcePubsubLiteReservationDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{region}}/reservations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -249,9 +252,9 @@ func resourcePubsubLiteReservationDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Reservation")
+		return transport_tpg.HandleNotFoundError(err, d, "Reservation")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Reservation %q: %#v", d.Id(), res)
@@ -259,8 +262,8 @@ func resourcePubsubLiteReservationDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourcePubsubLiteReservationImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<region>[^/]+)/reservations/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -270,7 +273,7 @@ func resourcePubsubLiteReservationImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/reservations/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/reservations/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -279,10 +282,10 @@ func resourcePubsubLiteReservationImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenPubsubLiteReservationThroughputCapacity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubLiteReservationThroughputCapacity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -296,6 +299,6 @@ func flattenPubsubLiteReservationThroughputCapacity(v interface{}, d *schema.Res
 	return v // let terraform core handle it otherwise
 }
 
-func expandPubsubLiteReservationThroughputCapacity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubLiteReservationThroughputCapacity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

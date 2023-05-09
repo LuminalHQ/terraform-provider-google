@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceAccessContextManagerAccessPolicy() *schema.Resource {
+func ResourceAccessContextManagerAccessPolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAccessContextManagerAccessPolicyCreate,
 		Read:   resourceAccessContextManagerAccessPolicyRead,
@@ -85,8 +88,8 @@ Format: folders/{{folder_id}} or projects/{{project_id}}`,
 }
 
 func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -111,7 +114,7 @@ func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta
 		obj["scopes"] = scopesProp
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies")
 	if err != nil {
 		return err
 	}
@@ -124,13 +127,13 @@ func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating AccessPolicy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -139,12 +142,13 @@ func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = accessContextManagerOperationWaitTimeWithResponse(
+	err = AccessContextManagerOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating AccessPolicy", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create AccessPolicy: %s", err)
 	}
 
@@ -153,7 +157,7 @@ func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{name}}")
+	id, err = ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -164,7 +168,7 @@ func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta
 	// a map[string]interface, so let's do that.
 
 	resp := res["response"].(map[string]interface{})
-	name := GetResourceNameFromSelfLink(resp["name"].(string))
+	name := tpgresource.GetResourceNameFromSelfLink(resp["name"].(string))
 	log.Printf("[DEBUG] Setting AccessPolicy name, id to %s", name)
 	if err := d.Set("name", name); err != nil {
 		return fmt.Errorf("Error setting name: %s", err)
@@ -177,13 +181,13 @@ func resourceAccessContextManagerAccessPolicyCreate(d *schema.ResourceData, meta
 }
 
 func resourceAccessContextManagerAccessPolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -195,9 +199,9 @@ func resourceAccessContextManagerAccessPolicyRead(d *schema.ResourceData, meta i
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AccessContextManagerAccessPolicy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AccessContextManagerAccessPolicy %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenAccessContextManagerAccessPolicyName(res["name"], d, config)); err != nil {
@@ -223,8 +227,8 @@ func resourceAccessContextManagerAccessPolicyRead(d *schema.ResourceData, meta i
 }
 
 func resourceAccessContextManagerAccessPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -245,7 +249,7 @@ func resourceAccessContextManagerAccessPolicyUpdate(d *schema.ResourceData, meta
 		obj["scopes"] = scopesProp
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -260,9 +264,9 @@ func resourceAccessContextManagerAccessPolicyUpdate(d *schema.ResourceData, meta
 	if d.HasChange("scopes") {
 		updateMask = append(updateMask, "scopes")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -272,7 +276,7 @@ func resourceAccessContextManagerAccessPolicyUpdate(d *schema.ResourceData, meta
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating AccessPolicy %q: %s", d.Id(), err)
@@ -280,7 +284,7 @@ func resourceAccessContextManagerAccessPolicyUpdate(d *schema.ResourceData, meta
 		log.Printf("[DEBUG] Finished updating AccessPolicy %q: %#v", d.Id(), res)
 	}
 
-	err = accessContextManagerOperationWaitTime(
+	err = AccessContextManagerOperationWaitTime(
 		config, res, "Updating AccessPolicy", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -292,15 +296,15 @@ func resourceAccessContextManagerAccessPolicyUpdate(d *schema.ResourceData, meta
 }
 
 func resourceAccessContextManagerAccessPolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}accessPolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -313,12 +317,12 @@ func resourceAccessContextManagerAccessPolicyDelete(d *schema.ResourceData, meta
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "AccessPolicy")
+		return transport_tpg.HandleNotFoundError(err, d, "AccessPolicy")
 	}
 
-	err = accessContextManagerOperationWaitTime(
+	err = AccessContextManagerOperationWaitTime(
 		config, res, "Deleting AccessPolicy", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -331,15 +335,15 @@ func resourceAccessContextManagerAccessPolicyDelete(d *schema.ResourceData, meta
 }
 
 func resourceAccessContextManagerAccessPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<name>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -348,41 +352,41 @@ func resourceAccessContextManagerAccessPolicyImport(d *schema.ResourceData, meta
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAccessContextManagerAccessPolicyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessPolicyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenAccessContextManagerAccessPolicyCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessPolicyCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessPolicyUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessPolicyUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessPolicyParent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessPolicyParent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessPolicyTitle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessPolicyTitle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessPolicyScopes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessPolicyScopes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAccessContextManagerAccessPolicyParent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessPolicyParent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessPolicyTitle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessPolicyTitle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessPolicyScopes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessPolicyScopes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

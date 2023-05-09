@@ -23,9 +23,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceKMSSecretCiphertext() *schema.Resource {
+func ResourceKMSSecretCiphertext() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceKMSSecretCiphertextCreate,
 		Read:   resourceKMSSecretCiphertextRead,
@@ -69,8 +71,8 @@ Format: ''projects/{{project}}/locations/{{location}}/keyRings/{{keyRing}}/crypt
 }
 
 func resourceKMSSecretCiphertextCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -89,7 +91,7 @@ func resourceKMSSecretCiphertextCreate(d *schema.ResourceData, meta interface{})
 		obj["additionalAuthenticatedData"] = additionalAuthenticatedDataProp
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{crypto_key}}:encrypt")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{crypto_key}}:encrypt")
 	if err != nil {
 		return err
 	}
@@ -106,13 +108,13 @@ func resourceKMSSecretCiphertextCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating SecretCiphertext: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{crypto_key}}/{{ciphertext}}")
+	id, err := ReplaceVars(d, config, "{{crypto_key}}/{{ciphertext}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -127,7 +129,7 @@ func resourceKMSSecretCiphertextCreate(d *schema.ResourceData, meta interface{})
 		return fmt.Errorf("Error setting ciphertext: %s", err)
 	}
 
-	id, err = replaceVars(d, config, "{{crypto_key}}/{{ciphertext}}")
+	id, err = ReplaceVars(d, config, "{{crypto_key}}/{{ciphertext}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -139,13 +141,13 @@ func resourceKMSSecretCiphertextCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceKMSSecretCiphertextRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{crypto_key}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{crypto_key}}")
 	if err != nil {
 		return err
 	}
@@ -161,9 +163,9 @@ func resourceKMSSecretCiphertextRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("KMSSecretCiphertext %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("KMSSecretCiphertext %q", d.Id()))
 	}
 
 	res, err = resourceKMSSecretCiphertextDecoder(d, meta, res)
@@ -190,7 +192,7 @@ func resourceKMSSecretCiphertextDelete(d *schema.ResourceData, meta interface{})
 	return nil
 }
 
-func expandKMSSecretCiphertextPlaintext(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSSecretCiphertextPlaintext(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -198,7 +200,7 @@ func expandKMSSecretCiphertextPlaintext(v interface{}, d TerraformResourceData, 
 	return base64.StdEncoding.EncodeToString([]byte(v.(string))), nil
 }
 
-func expandKMSSecretCiphertextAdditionalAuthenticatedData(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSSecretCiphertextAdditionalAuthenticatedData(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil {
 		return nil, nil
 	}

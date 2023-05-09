@@ -21,20 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccFirestoreDocument_firestoreDocumentBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_id":    getTestFirestoreProjectFromEnv(t),
-		"random_suffix": randString(t, 10),
+		"project_id":    acctest.GetTestFirestoreProjectFromEnv(t),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckFirestoreDocumentDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckFirestoreDocumentDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccFirestoreDocument_firestoreDocumentBasicExample(context),
@@ -54,7 +57,7 @@ func testAccFirestoreDocument_firestoreDocumentBasicExample(context map[string]i
 resource "google_firestore_document" "mydoc" {
   project     = "%{project_id}"
   collection  = "somenewcollection"
-  document_id = "my-doc-%{random_suffix}"
+  document_id = "tf-test-my-doc-id%{random_suffix}"
   fields      = "{\"something\":{\"mapValue\":{\"fields\":{\"akey\":{\"stringValue\":\"avalue\"}}}}}"
 }
 `, context)
@@ -64,14 +67,14 @@ func TestAccFirestoreDocument_firestoreDocumentNestedDocumentExample(t *testing.
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_id":    getTestFirestoreProjectFromEnv(t),
-		"random_suffix": randString(t, 10),
+		"project_id":    acctest.GetTestFirestoreProjectFromEnv(t),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckFirestoreDocumentDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckFirestoreDocumentDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccFirestoreDocument_firestoreDocumentNestedDocumentExample(context),
@@ -91,7 +94,7 @@ func testAccFirestoreDocument_firestoreDocumentNestedDocumentExample(context map
 resource "google_firestore_document" "mydoc" {
   project     = "%{project_id}"
   collection  = "somenewcollection"
-  document_id = "my-doc-%{random_suffix}"
+  document_id = "tf-test-my-doc-id%{random_suffix}"
   fields      = "{\"something\":{\"mapValue\":{\"fields\":{\"akey\":{\"stringValue\":\"avalue\"}}}}}"
 }
 
@@ -121,9 +124,9 @@ func testAccCheckFirestoreDocumentDestroyProducer(t *testing.T) func(s *terrafor
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{FirestoreBasePath}}{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{FirestoreBasePath}}{{name}}")
 			if err != nil {
 				return err
 			}
@@ -134,7 +137,7 @@ func testAccCheckFirestoreDocumentDestroyProducer(t *testing.T) func(s *terrafor
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("FirestoreDocument still exists at %s", url)
 			}

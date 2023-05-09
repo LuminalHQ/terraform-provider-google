@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -10,13 +11,13 @@ import (
 func TestAccComputeGlobalAddress_ipv6(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeGlobalAddressDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeGlobalAddressDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccComputeGlobalAddress_ipv6(randString(t, 10)),
+				Config: testAccComputeGlobalAddress_ipv6(RandString(t, 10)),
 			},
 			{
 				ResourceName:      "google_compute_global_address.foobar",
@@ -30,13 +31,13 @@ func TestAccComputeGlobalAddress_ipv6(t *testing.T) {
 func TestAccComputeGlobalAddress_internal(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeGlobalAddressDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeGlobalAddressDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccComputeGlobalAddress_internal(randString(t, 10), randString(t, 10)),
+				Config: testAccComputeGlobalAddress_internal(RandString(t, 10), RandString(t, 10)),
 			},
 			{
 				ResourceName:      "google_compute_global_address.foobar",
@@ -50,7 +51,7 @@ func TestAccComputeGlobalAddress_internal(t *testing.T) {
 func testAccComputeGlobalAddress_ipv6(addressName string) string {
 	return fmt.Sprintf(`
 resource "google_compute_global_address" "foobar" {
-  name        = "address-test-%s"
+  name        = "tf-test-address-%s"
   description = "Created for Terraform acceptance testing"
   ip_version  = "IPV6"
 }
@@ -60,11 +61,11 @@ resource "google_compute_global_address" "foobar" {
 func testAccComputeGlobalAddress_internal(networkName, addressName string) string {
 	return fmt.Sprintf(`
 resource "google_compute_network" "foobar" {
-  name = "address-test-%s"
+  name = "tf-test-address-%s"
 }
 
 resource "google_compute_global_address" "foobar" {
-  name          = "address-test-%s"
+  name          = "tf-test-address-%s"
   address_type  = "INTERNAL"
   purpose       = "VPC_PEERING"
   prefix_length = 24

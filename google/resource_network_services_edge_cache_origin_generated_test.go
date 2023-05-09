@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginBasicExample(context),
@@ -62,13 +65,13 @@ func TestAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginAdvance
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginAdvancedExample(context),
@@ -85,10 +88,9 @@ func TestAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginAdvance
 
 func testAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginAdvancedExample(context map[string]interface{}) string {
 	return Nprintf(`
-
 resource "google_network_services_edge_cache_origin" "fallback" {
   name                 = "tf-test-my-fallback%{random_suffix}"
-  origin_address       = "gs://media-edge-fallback"
+  origin_address       = "fallback.example.com"
   description          = "The default bucket for media edge test"
   max_attempts         = 3
   protocol = "HTTP"
@@ -105,6 +107,27 @@ resource "google_network_services_edge_cache_origin" "fallback" {
     max_attempts_timeout = "20s"
     response_timeout = "60s"
     read_timeout = "5s"
+  }
+  origin_override_action {
+    url_rewrite {
+      host_rewrite = "example.com"
+    }
+    header_action {
+      request_headers_to_add {
+        header_name = "x-header"
+	header_value = "value"
+	replace = true
+      }
+    }
+  }
+  origin_redirect {
+    redirect_conditions = [
+      "MOVED_PERMANENTLY",
+      "FOUND",
+      "SEE_OTHER",
+      "TEMPORARY_REDIRECT",
+      "PERMANENT_REDIRECT",
+    ]
   }
 }
 
@@ -125,6 +148,60 @@ resource "google_network_services_edge_cache_origin" "default" {
 `, context)
 }
 
+func TestAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginV4authExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginV4authExample(context),
+			},
+			{
+				ResourceName:            "google_network_services_edge_cache_origin.default",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name", "timeout"},
+			},
+		},
+	})
+}
+
+func testAccNetworkServicesEdgeCacheOrigin_networkServicesEdgeCacheOriginV4authExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_secret_manager_secret" "secret-basic" {
+  secret_id = "tf-test-secret-name%{random_suffix}"
+
+  replication {
+    automatic = true
+  }
+}
+
+resource "google_secret_manager_secret_version" "secret-version-basic" {
+  secret = google_secret_manager_secret.secret-basic.id
+
+  secret_data = "secret-data"
+}
+
+resource "google_network_services_edge_cache_origin" "default" {
+  name           = "tf-test-my-origin%{random_suffix}"
+  origin_address = "gs://media-edge-default"
+  description    = "The default bucket for V4 authentication"
+  aws_v4_authentication {
+    access_key_id             = "ACCESSKEYID"
+    secret_access_key_version = google_secret_manager_secret_version.secret-version-basic.id
+    origin_region             = "auto"
+  }
+}
+`, context)
+}
+
 func testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -135,9 +212,9 @@ func testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t *testing.T) fun
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -148,7 +225,7 @@ func testAccCheckNetworkServicesEdgeCacheOriginDestroyProducer(t *testing.T) fun
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("NetworkServicesEdgeCacheOrigin still exists at %s", url)
 			}

@@ -6,16 +6,17 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccSqlClientCert_mysql(t *testing.T) {
 	t.Parallel()
 
-	instance := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlClientCertDestroyProducer(t),
+	instance := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlClientCertDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testGoogleSqlClientCert_mysql(instance),
@@ -31,11 +32,11 @@ func TestAccSqlClientCert_mysql(t *testing.T) {
 func TestAccSqlClientCert_postgres(t *testing.T) {
 	t.Parallel()
 
-	instance := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccSqlClientCertDestroyProducer(t),
+	instance := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccSqlClientCertDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testGoogleSqlClientCert_postgres(instance),
@@ -49,7 +50,7 @@ func TestAccSqlClientCert_postgres(t *testing.T) {
 
 func testAccCheckGoogleSqlClientCertExists(t *testing.T, n string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		config := googleProviderConfig(t)
+		config := GoogleProviderConfig(t)
 		rs, ok := s.RootModule().Resources[n]
 		if !ok {
 			return fmt.Errorf("Resource not found: %s", n)
@@ -57,7 +58,7 @@ func testAccCheckGoogleSqlClientCertExists(t *testing.T, n string) resource.Test
 
 		instance := rs.Primary.Attributes["instance"]
 		fingerprint := rs.Primary.Attributes["sha1_fingerprint"]
-		sslClientCert, err := config.NewSqlAdminClient(config.userAgent).SslCerts.Get(config.Project, instance, fingerprint).Do()
+		sslClientCert, err := config.NewSqlAdminClient(config.UserAgent).SslCerts.Get(config.Project, instance, fingerprint).Do()
 
 		if err != nil {
 			return err
@@ -74,14 +75,14 @@ func testAccCheckGoogleSqlClientCertExists(t *testing.T, n string) resource.Test
 func testAccSqlClientCertDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for _, rs := range s.RootModule().Resources {
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 			if rs.Type != "google_sql_ssl_cert" {
 				continue
 			}
 
 			fingerprint := rs.Primary.Attributes["sha1_fingerprint"]
 			instance := rs.Primary.Attributes["instance"]
-			sslCert, _ := config.NewSqlAdminClient(config.userAgent).SslCerts.Get(config.Project, instance, fingerprint).Do()
+			sslCert, _ := config.NewSqlAdminClient(config.UserAgent).SslCerts.Get(config.Project, instance, fingerprint).Do()
 
 			commonName := rs.Primary.Attributes["common_name"]
 			if sslCert != nil {
@@ -128,11 +129,6 @@ func testGoogleSqlClientCert_postgres(instance string) string {
 		deletion_protection = false
 		settings {
 			tier = "db-f1-micro"
-		}
-
-		timeouts {
-			create = "20m"
-			delete = "20m"
 		}
 	}
 

@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func suppressSuffixDiff(_, old, new string, _ *schema.ResourceData) bool {
@@ -33,7 +35,7 @@ func suppressSuffixDiff(_, old, new string, _ *schema.ResourceData) bool {
 	return false
 }
 
-func resourceGameServicesGameServerCluster() *schema.Resource {
+func ResourceGameServicesGameServerCluster() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceGameServicesGameServerClusterCreate,
 		Read:   resourceGameServicesGameServerClusterRead,
@@ -149,8 +151,8 @@ For example,
 }
 
 func resourceGameServicesGameServerClusterCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -175,7 +177,7 @@ func resourceGameServicesGameServerClusterCreate(d *schema.ResourceData, meta in
 		obj["description"] = descriptionProp
 	}
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters?gameServerClusterId={{cluster_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters?gameServerClusterId={{cluster_id}}")
 	if err != nil {
 		return err
 	}
@@ -194,13 +196,13 @@ func resourceGameServicesGameServerClusterCreate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating GameServerCluster: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -209,12 +211,13 @@ func resourceGameServicesGameServerClusterCreate(d *schema.ResourceData, meta in
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = gameServicesOperationWaitTimeWithResponse(
+	err = GameServicesOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating GameServerCluster", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create GameServerCluster: %s", err)
 	}
 
@@ -223,7 +226,7 @@ func resourceGameServicesGameServerClusterCreate(d *schema.ResourceData, meta in
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -235,13 +238,13 @@ func resourceGameServicesGameServerClusterCreate(d *schema.ResourceData, meta in
 }
 
 func resourceGameServicesGameServerClusterRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
 	if err != nil {
 		return err
 	}
@@ -259,9 +262,9 @@ func resourceGameServicesGameServerClusterRead(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("GameServicesGameServerCluster %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("GameServicesGameServerCluster %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -285,8 +288,8 @@ func resourceGameServicesGameServerClusterRead(d *schema.ResourceData, meta inte
 }
 
 func resourceGameServicesGameServerClusterUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -313,7 +316,7 @@ func resourceGameServicesGameServerClusterUpdate(d *schema.ResourceData, meta in
 		obj["description"] = descriptionProp
 	}
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
 	if err != nil {
 		return err
 	}
@@ -328,9 +331,9 @@ func resourceGameServicesGameServerClusterUpdate(d *schema.ResourceData, meta in
 	if d.HasChange("description") {
 		updateMask = append(updateMask, "description")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -340,7 +343,7 @@ func resourceGameServicesGameServerClusterUpdate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating GameServerCluster %q: %s", d.Id(), err)
@@ -348,7 +351,7 @@ func resourceGameServicesGameServerClusterUpdate(d *schema.ResourceData, meta in
 		log.Printf("[DEBUG] Finished updating GameServerCluster %q: %#v", d.Id(), res)
 	}
 
-	err = gameServicesOperationWaitTime(
+	err = GameServicesOperationWaitTime(
 		config, res, project, "Updating GameServerCluster", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -360,8 +363,8 @@ func resourceGameServicesGameServerClusterUpdate(d *schema.ResourceData, meta in
 }
 
 func resourceGameServicesGameServerClusterDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -374,7 +377,7 @@ func resourceGameServicesGameServerClusterDelete(d *schema.ResourceData, meta in
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
 	if err != nil {
 		return err
 	}
@@ -387,12 +390,12 @@ func resourceGameServicesGameServerClusterDelete(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "GameServerCluster")
+		return transport_tpg.HandleNotFoundError(err, d, "GameServerCluster")
 	}
 
-	err = gameServicesOperationWaitTime(
+	err = GameServicesOperationWaitTime(
 		config, res, project, "Deleting GameServerCluster", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -405,8 +408,8 @@ func resourceGameServicesGameServerClusterDelete(d *schema.ResourceData, meta in
 }
 
 func resourceGameServicesGameServerClusterImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/realms/(?P<realm_id>[^/]+)/gameServerClusters/(?P<cluster_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<realm_id>[^/]+)/(?P<cluster_id>[^/]+)",
 		"(?P<location>[^/]+)/(?P<realm_id>[^/]+)/(?P<cluster_id>[^/]+)",
@@ -415,7 +418,7 @@ func resourceGameServicesGameServerClusterImport(d *schema.ResourceData, meta in
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/realms/{{realm_id}}/gameServerClusters/{{cluster_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -424,15 +427,15 @@ func resourceGameServicesGameServerClusterImport(d *schema.ResourceData, meta in
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenGameServicesGameServerClusterName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerClusterLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerClusterConnectionInfo(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterConnectionInfo(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -447,7 +450,7 @@ func flattenGameServicesGameServerClusterConnectionInfo(v interface{}, d *schema
 		flattenGameServicesGameServerClusterConnectionInfoNamespace(original["namespace"], d, config)
 	return []interface{}{transformed}
 }
-func flattenGameServicesGameServerClusterConnectionInfoGkeClusterReference(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterConnectionInfoGkeClusterReference(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -460,19 +463,19 @@ func flattenGameServicesGameServerClusterConnectionInfoGkeClusterReference(v int
 		flattenGameServicesGameServerClusterConnectionInfoGkeClusterReferenceCluster(original["cluster"], d, config)
 	return []interface{}{transformed}
 }
-func flattenGameServicesGameServerClusterConnectionInfoGkeClusterReferenceCluster(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterConnectionInfoGkeClusterReferenceCluster(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerClusterConnectionInfoNamespace(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterConnectionInfoNamespace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerClusterDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerClusterDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandGameServicesGameServerClusterLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandGameServicesGameServerClusterLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -483,7 +486,7 @@ func expandGameServicesGameServerClusterLabels(v interface{}, d TerraformResourc
 	return m, nil
 }
 
-func expandGameServicesGameServerClusterConnectionInfo(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerClusterConnectionInfo(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -509,7 +512,7 @@ func expandGameServicesGameServerClusterConnectionInfo(v interface{}, d Terrafor
 	return transformed, nil
 }
 
-func expandGameServicesGameServerClusterConnectionInfoGkeClusterReference(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerClusterConnectionInfoGkeClusterReference(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -528,14 +531,14 @@ func expandGameServicesGameServerClusterConnectionInfoGkeClusterReference(v inte
 	return transformed, nil
 }
 
-func expandGameServicesGameServerClusterConnectionInfoGkeClusterReferenceCluster(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerClusterConnectionInfoGkeClusterReferenceCluster(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerClusterConnectionInfoNamespace(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerClusterConnectionInfoNamespace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerClusterDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerClusterDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

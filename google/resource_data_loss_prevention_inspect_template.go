@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceDataLossPreventionInspectTemplate() *schema.Resource {
+func ResourceDataLossPreventionInspectTemplate() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataLossPreventionInspectTemplateCreate,
 		Read:   resourceDataLossPreventionInspectTemplateRead,
@@ -76,7 +80,7 @@ func resourceDataLossPreventionInspectTemplate() *schema.Resource {
 							Description: `List of options defining data content to scan. If empty, text, images, and other content will be included. Possible values: ["CONTENT_TEXT", "CONTENT_IMAGE"]`,
 							Elem: &schema.Schema{
 								Type:         schema.TypeString,
-								ValidateFunc: validateEnum([]string{"CONTENT_TEXT", "CONTENT_IMAGE"}),
+								ValidateFunc: verify.ValidateEnum([]string{"CONTENT_TEXT", "CONTENT_IMAGE"}),
 							},
 						},
 						"custom_info_types": {
@@ -100,6 +104,11 @@ treated as a custom info type.`,
 													Required: true,
 													Description: `Name of the information type. Either a name of your choosing when creating a CustomInfoType, or one of the names
 listed at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built-in type.`,
+												},
+												"version": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: `Version name for this InfoType.`,
 												},
 											},
 										},
@@ -152,13 +161,13 @@ phrase and every phrase must contain at least 2 characters that are letters or d
 									"exclusion_type": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validateEnum([]string{"EXCLUSION_TYPE_EXCLUDE", ""}),
+										ValidateFunc: verify.ValidateEnum([]string{"EXCLUSION_TYPE_EXCLUDE", ""}),
 										Description:  `If set to EXCLUSION_TYPE_EXCLUDE this infoType will not cause a finding to be returned. It still can be used for rules matching. Possible values: ["EXCLUSION_TYPE_EXCLUDE"]`,
 									},
 									"likelihood": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validateEnum([]string{"VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY", ""}),
+										ValidateFunc: verify.ValidateEnum([]string{"VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY", ""}),
 										Description: `Likelihood to return for this CustomInfoType. This base value can be altered by a detection rule if the finding meets the criteria
 specified by the rule. Default value: "VERY_LIKELY" Possible values: ["VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY"]`,
 										Default: "VERY_LIKELY",
@@ -205,6 +214,16 @@ or 'projects/project-id/storedInfoTypes/432452342'.`,
 											},
 										},
 									},
+									"surrogate_type": {
+										Type:        schema.TypeList,
+										Optional:    true,
+										ForceNew:    true,
+										Description: `Message for detecting output from deidentification transformations that support reversing.`,
+										MaxItems:    1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{},
+										},
+									},
 								},
 							},
 						},
@@ -233,6 +252,11 @@ By default this may be all types, but may change over time as detectors are upda
 										Required: true,
 										Description: `Name of the information type. Either a name of your choosing when creating a CustomInfoType, or one of the names listed
 at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built-in type.`,
+									},
+									"version": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: `Version of the information type to use. By default, the version is set to stable`,
 									},
 								},
 							},
@@ -275,6 +299,11 @@ specified in another InfoTypeLimit.`,
 																Description: `Name of the information type. Either a name of your choosing when creating a CustomInfoType, or one of the names listed
 at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built-in type.`,
 															},
+															"version": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Description: `Version name for this InfoType.`,
+															},
 														},
 													},
 												},
@@ -292,7 +321,7 @@ at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built
 						"min_likelihood": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY", ""}),
 							Description:  `Only returns findings equal or above this threshold. See https://cloud.google.com/dlp/docs/likelihood for more info Default value: "POSSIBLE" Possible values: ["VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY"]`,
 							Default:      "POSSIBLE",
 						},
@@ -315,6 +344,11 @@ other rules are executed in the order they are specified for each info type.`,
 													Description: `Name of the information type. Either a name of your choosing when creating a CustomInfoType, or one of the names listed
 at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built-in type.`,
 												},
+												"version": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: `Version name for this InfoType.`,
+												},
 											},
 										},
 									},
@@ -334,7 +368,7 @@ at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built
 															"matching_type": {
 																Type:         schema.TypeString,
 																Required:     true,
-																ValidateFunc: validateEnum([]string{"MATCHING_TYPE_FULL_MATCH", "MATCHING_TYPE_PARTIAL_MATCH", "MATCHING_TYPE_INVERSE_MATCH"}),
+																ValidateFunc: verify.ValidateEnum([]string{"MATCHING_TYPE_FULL_MATCH", "MATCHING_TYPE_PARTIAL_MATCH", "MATCHING_TYPE_INVERSE_MATCH"}),
 																Description:  `How the rule is applied. See the documentation for more information: https://cloud.google.com/dlp/docs/reference/rest/v2/InspectConfig#MatchingType Possible values: ["MATCHING_TYPE_FULL_MATCH", "MATCHING_TYPE_PARTIAL_MATCH", "MATCHING_TYPE_INVERSE_MATCH"]`,
 															},
 															"dictionary": {
@@ -381,6 +415,66 @@ phrase and every phrase must contain at least 2 characters that are letters or d
 																	},
 																},
 															},
+															"exclude_by_hotword": {
+																Type:     schema.TypeList,
+																Optional: true,
+																Description: `Drop if the hotword rule is contained in the proximate context.
+For tabular data, the context includes the column name.`,
+																MaxItems: 1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"hotword_regex": {
+																			Type:        schema.TypeList,
+																			Required:    true,
+																			Description: `Regular expression pattern defining what qualifies as a hotword.`,
+																			MaxItems:    1,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"pattern": {
+																						Type:     schema.TypeString,
+																						Required: true,
+																						Description: `Pattern defining the regular expression. Its syntax
+(https://github.com/google/re2/wiki/Syntax) can be found under the google/re2 repository on GitHub.`,
+																					},
+																					"group_indexes": {
+																						Type:     schema.TypeList,
+																						Optional: true,
+																						Description: `The index of the submatch to extract as findings. When not specified,
+the entire match is returned. No more than 3 may be included.`,
+																						Elem: &schema.Schema{
+																							Type: schema.TypeInt,
+																						},
+																					},
+																				},
+																			},
+																		},
+																		"proximity": {
+																			Type:     schema.TypeList,
+																			Required: true,
+																			Description: `Proximity of the finding within which the entire hotword must reside. The total length of the window cannot
+exceed 1000 characters. Note that the finding itself will be included in the window, so that hotwords may be
+used to match substrings of the finding itself. For example, the certainty of a phone number regex
+'(\d{3}) \d{3}-\d{4}' could be adjusted upwards if the area code is known to be the local area code of a company
+office using the hotword regex '(xxx)', where 'xxx' is the area code in question.`,
+																			MaxItems: 1,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"window_after": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Number of characters after the finding to consider.`,
+																					},
+																					"window_before": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Number of characters before the finding to consider.`,
+																					},
+																				},
+																			},
+																		},
+																	},
+																},
+															},
 															"exclude_info_types": {
 																Type:        schema.TypeList,
 																Optional:    true,
@@ -399,6 +493,11 @@ phrase and every phrase must contain at least 2 characters that are letters or d
 																						Required: true,
 																						Description: `Name of the information type. Either a name of your choosing when creating a CustomInfoType, or one of the names listed
 at https://cloud.google.com/dlp/docs/infotypes-reference when specifying a built-in type.`,
+																					},
+																					"version": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Description: `Version name for this InfoType.`,
 																					},
 																				},
 																			},
@@ -475,7 +574,7 @@ the entire match is returned. No more than 3 may be included.`,
 																		"fixed_likelihood": {
 																			Type:         schema.TypeString,
 																			Optional:     true,
-																			ValidateFunc: validateEnum([]string{"VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY", ""}),
+																			ValidateFunc: verify.ValidateEnum([]string{"VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY", ""}),
 																			Description:  `Set the likelihood of a finding to a fixed value. Either this or relative_likelihood can be set. Possible values: ["VERY_UNLIKELY", "UNLIKELY", "POSSIBLE", "LIKELY", "VERY_LIKELY"]`,
 																		},
 																		"relative_likelihood": {
@@ -538,8 +637,8 @@ office using the hotword regex '(xxx)', where 'xxx' is the area code in question
 }
 
 func resourceDataLossPreventionInspectTemplateCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -569,7 +668,7 @@ func resourceDataLossPreventionInspectTemplateCreate(d *schema.ResourceData, met
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates")
+	url, err := ReplaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates")
 	if err != nil {
 		return err
 	}
@@ -582,7 +681,7 @@ func resourceDataLossPreventionInspectTemplateCreate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating InspectTemplate: %s", err)
 	}
@@ -591,7 +690,7 @@ func resourceDataLossPreventionInspectTemplateCreate(d *schema.ResourceData, met
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{parent}}/inspectTemplates/{{name}}")
+	id, err := ReplaceVars(d, config, "{{parent}}/inspectTemplates/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -603,13 +702,13 @@ func resourceDataLossPreventionInspectTemplateCreate(d *schema.ResourceData, met
 }
 
 func resourceDataLossPreventionInspectTemplateRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -621,9 +720,9 @@ func resourceDataLossPreventionInspectTemplateRead(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DataLossPreventionInspectTemplate %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DataLossPreventionInspectTemplate %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenDataLossPreventionInspectTemplateName(res["name"], d, config)); err != nil {
@@ -643,8 +742,8 @@ func resourceDataLossPreventionInspectTemplateRead(d *schema.ResourceData, meta 
 }
 
 func resourceDataLossPreventionInspectTemplateUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -676,7 +775,7 @@ func resourceDataLossPreventionInspectTemplateUpdate(d *schema.ResourceData, met
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -695,9 +794,9 @@ func resourceDataLossPreventionInspectTemplateUpdate(d *schema.ResourceData, met
 	if d.HasChange("inspect_config") {
 		updateMask = append(updateMask, "inspectConfig")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -707,7 +806,7 @@ func resourceDataLossPreventionInspectTemplateUpdate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating InspectTemplate %q: %s", d.Id(), err)
@@ -719,15 +818,15 @@ func resourceDataLossPreventionInspectTemplateUpdate(d *schema.ResourceData, met
 }
 
 func resourceDataLossPreventionInspectTemplateDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DataLossPreventionBasePath}}{{parent}}/inspectTemplates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -740,9 +839,9 @@ func resourceDataLossPreventionInspectTemplateDelete(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "InspectTemplate")
+		return transport_tpg.HandleNotFoundError(err, d, "InspectTemplate")
 	}
 
 	log.Printf("[DEBUG] Finished deleting InspectTemplate %q: %#v", d.Id(), res)
@@ -750,10 +849,10 @@ func resourceDataLossPreventionInspectTemplateDelete(d *schema.ResourceData, met
 }
 
 func resourceDataLossPreventionInspectTemplateImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// Custom import to handle parent possibilities
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 	parts := strings.Split(d.Get("name").(string), "/")
@@ -775,7 +874,7 @@ func resourceDataLossPreventionInspectTemplateImport(d *schema.ResourceData, met
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{parent}}/inspectTemplates/{{name}}")
+	id, err := ReplaceVars(d, config, "{{parent}}/inspectTemplates/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -784,22 +883,22 @@ func resourceDataLossPreventionInspectTemplateImport(d *schema.ResourceData, met
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDataLossPreventionInspectTemplateName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenDataLossPreventionInspectTemplateDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -826,19 +925,19 @@ func flattenDataLossPreventionInspectTemplateInspectConfig(v interface{}, d *sch
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(original["customInfoTypes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigExcludeInfoTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigExcludeInfoTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigIncludeQuote(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigIncludeQuote(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigMinLikelihood(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigMinLikelihood(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigLimits(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimits(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -855,10 +954,10 @@ func flattenDataLossPreventionInspectTemplateInspectConfigLimits(v interface{}, 
 		flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoType(original["maxFindingsPerInfoType"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerItem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerItem(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -872,10 +971,10 @@ func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerIt
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerRequest(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerRequest(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -889,7 +988,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerRe
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -908,7 +1007,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerIn
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -919,16 +1018,22 @@ func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerIn
 	transformed := make(map[string]interface{})
 	transformed["name"] =
 		flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeName(original["name"], d, config)
+	transformed["version"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeVersion(original["version"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeMaxFindings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeMaxFindings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -942,7 +1047,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerIn
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigInfoTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigInfoTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -955,20 +1060,25 @@ func flattenDataLossPreventionInspectTemplateInspectConfigInfoTypes(v interface{
 			continue
 		}
 		transformed = append(transformed, map[string]interface{}{
-			"name": flattenDataLossPreventionInspectTemplateInspectConfigInfoTypesName(original["name"], d, config),
+			"name":    flattenDataLossPreventionInspectTemplateInspectConfigInfoTypesName(original["name"], d, config),
+			"version": flattenDataLossPreventionInspectTemplateInspectConfigInfoTypesVersion(original["version"], d, config),
 		})
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigInfoTypesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigInfoTypesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigContentOptions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigInfoTypesVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSet(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigContentOptions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSet(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -987,7 +1097,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSet(v interface{},
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1000,16 +1110,21 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypes(v int
 			continue
 		}
 		transformed = append(transformed, map[string]interface{}{
-			"name": flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesName(original["name"], d, config),
+			"name":    flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesName(original["name"], d, config),
+			"version": flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesVersion(original["version"], d, config),
 		})
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRules(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRules(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1028,7 +1143,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRules(v interfa
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1045,7 +1160,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustment(original["likelihoodAdjustment"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegex(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1060,15 +1175,15 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexGroupIndexes(original["groupIndexes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexPattern(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexPattern(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1083,10 +1198,10 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowAfter(original["windowAfter"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowBefore(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowBefore(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1100,10 +1215,10 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowAfter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowAfter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1117,7 +1232,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1132,14 +1247,14 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentRelativeLikelihood(original["relativeLikelihood"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentFixedLikelihood(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentFixedLikelihood(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentRelativeLikelihood(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentRelativeLikelihood(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1153,7 +1268,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRul
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1170,13 +1285,15 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegex(original["regex"], d, config)
 	transformed["exclude_info_types"] =
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypes(original["excludeInfoTypes"], d, config)
+	transformed["exclude_by_hotword"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotword(original["excludeByHotword"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleMatchingType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleMatchingType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionary(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionary(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1191,7 +1308,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePath(original["cloudStoragePath"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordList(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordList(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1204,11 +1321,11 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordListWords(original["words"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordListWords(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordListWords(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1221,11 +1338,11 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePathPath(original["path"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePathPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePathPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegex(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1240,15 +1357,15 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexGroupIndexes(original["groupIndexes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexPattern(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexPattern(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1261,7 +1378,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypes(original["infoTypes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1274,16 +1391,108 @@ func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionR
 			continue
 		}
 		transformed = append(transformed, map[string]interface{}{
-			"name": flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesName(original["name"], d, config),
+			"name":    flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesName(original["name"], d, config),
+			"version": flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesVersion(original["version"], d, config),
 		})
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotword(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["hotword_regex"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegex(original["hotwordRegex"], d, config)
+	transformed["proximity"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximity(original["proximity"], d, config)
+	return []interface{}{transformed}
+}
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["pattern"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexPattern(original["pattern"], d, config)
+	transformed["group_indexes"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexGroupIndexes(original["groupIndexes"], d, config)
+	return []interface{}{transformed}
+}
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexPattern(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["window_before"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowBefore(original["windowBefore"], d, config)
+	transformed["window_after"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowAfter(original["windowAfter"], d, config)
+	return []interface{}{transformed}
+}
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowBefore(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowAfter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1301,12 +1510,13 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v inte
 			"exclusion_type": flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesExclusionType(original["exclusionType"], d, config),
 			"regex":          flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(original["regex"], d, config),
 			"dictionary":     flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionary(original["dictionary"], d, config),
+			"surrogate_type": flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesSurrogateType(original["surrogateType"], d, config),
 			"stored_type":    flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredType(original["storedType"], d, config),
 		})
 	}
 	return transformed
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1317,21 +1527,27 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTyp
 	transformed := make(map[string]interface{})
 	transformed["name"] =
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeName(original["name"], d, config)
+	transformed["version"] =
+		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeVersion(original["version"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesLikelihood(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesExclusionType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesLikelihood(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesExclusionType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1346,15 +1562,15 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(v
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexGroupIndexes(original["groupIndexes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexPattern(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexPattern(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexGroupIndexes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionary(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionary(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1369,7 +1585,7 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDiction
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePath(original["cloudStoragePath"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordList(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordList(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1382,11 +1598,11 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDiction
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordListWords(original["words"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordListWords(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordListWords(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1399,11 +1615,19 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDiction
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePathPath(original["path"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePathPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePathPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesSurrogateType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	return []interface{}{transformed}
+}
+
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1416,19 +1640,19 @@ func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredT
 		flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredTypeName(original["name"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredTypeName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredTypeName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDataLossPreventionInspectTemplateDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1496,19 +1720,19 @@ func expandDataLossPreventionInspectTemplateInspectConfig(v interface{}, d Terra
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigExcludeInfoTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigExcludeInfoTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigIncludeQuote(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigIncludeQuote(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigMinLikelihood(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigMinLikelihood(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimits(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimits(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1541,15 +1765,15 @@ func expandDataLossPreventionInspectTemplateInspectConfigLimits(v interface{}, d
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerItem(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerItem(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerRequest(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerRequest(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1578,7 +1802,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInf
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1594,18 +1818,29 @@ func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInf
 		transformed["name"] = transformedName
 	}
 
+	transformedVersion, err := expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeVersion(original["version"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+		transformed["version"] = transformedVersion
+	}
+
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeMaxFindings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeInfoTypeVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigInfoTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigLimitsMaxFindingsPerInfoTypeMaxFindings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigInfoTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1622,20 +1857,31 @@ func expandDataLossPreventionInspectTemplateInspectConfigInfoTypes(v interface{}
 			transformed["name"] = transformedName
 		}
 
+		transformedVersion, err := expandDataLossPreventionInspectTemplateInspectConfigInfoTypesVersion(original["version"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+			transformed["version"] = transformedVersion
+		}
+
 		req = append(req, transformed)
 	}
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigInfoTypesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigInfoTypesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigContentOptions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigInfoTypesVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSet(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigContentOptions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSet(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1664,7 +1910,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSet(v interface{}, 
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1681,16 +1927,27 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypes(v inte
 			transformed["name"] = transformedName
 		}
 
+		transformedVersion, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesVersion(original["version"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+			transformed["version"] = transformedVersion
+		}
+
 		req = append(req, transformed)
 	}
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRules(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetInfoTypesVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRules(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1719,7 +1976,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRules(v interfac
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1752,7 +2009,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegex(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1778,15 +2035,15 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexPattern(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexPattern(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexGroupIndexes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleHotwordRegexGroupIndexes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1812,15 +2069,15 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowBefore(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowBefore(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowAfter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleProximityWindowAfter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1846,15 +2103,15 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRule
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentFixedLikelihood(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentFixedLikelihood(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentRelativeLikelihood(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesHotwordRuleLikelihoodAdjustmentRelativeLikelihood(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1891,14 +2148,21 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 		transformed["excludeInfoTypes"] = transformedExcludeInfoTypes
 	}
 
+	transformedExcludeByHotword, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotword(original["exclude_by_hotword"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedExcludeByHotword); val.IsValid() && !isEmptyValue(val) {
+		transformed["excludeByHotword"] = transformedExcludeByHotword
+	}
+
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleMatchingType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleMatchingType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionary(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionary(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1924,7 +2188,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordList(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordList(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1943,11 +2207,11 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordListWords(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryWordListWords(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1966,11 +2230,11 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePathPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleDictionaryCloudStoragePathPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegex(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1996,15 +2260,15 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexPattern(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexPattern(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexGroupIndexes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleRegexGroupIndexes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2023,7 +2287,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2040,16 +2304,121 @@ func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRu
 			transformed["name"] = transformedName
 		}
 
+		transformedVersion, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesVersion(original["version"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+			transformed["version"] = transformedVersion
+		}
+
 		req = append(req, transformed)
 	}
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeInfoTypesInfoTypesVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotword(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedHotwordRegex, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegex(original["hotword_regex"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedHotwordRegex); val.IsValid() && !isEmptyValue(val) {
+		transformed["hotwordRegex"] = transformedHotwordRegex
+	}
+
+	transformedProximity, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximity(original["proximity"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedProximity); val.IsValid() && !isEmptyValue(val) {
+		transformed["proximity"] = transformedProximity
+	}
+
+	return transformed, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPattern, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexPattern(original["pattern"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPattern); val.IsValid() && !isEmptyValue(val) {
+		transformed["pattern"] = transformedPattern
+	}
+
+	transformedGroupIndexes, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexGroupIndexes(original["group_indexes"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedGroupIndexes); val.IsValid() && !isEmptyValue(val) {
+		transformed["groupIndexes"] = transformedGroupIndexes
+	}
+
+	return transformed, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexPattern(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordHotwordRegexGroupIndexes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedWindowBefore, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowBefore(original["window_before"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedWindowBefore); val.IsValid() && !isEmptyValue(val) {
+		transformed["windowBefore"] = transformedWindowBefore
+	}
+
+	transformedWindowAfter, err := expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowAfter(original["window_after"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedWindowAfter); val.IsValid() && !isEmptyValue(val) {
+		transformed["windowAfter"] = transformedWindowAfter
+	}
+
+	return transformed, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowBefore(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigRuleSetRulesExclusionRuleExcludeByHotwordProximityWindowAfter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2094,6 +2463,13 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v inter
 			transformed["dictionary"] = transformedDictionary
 		}
 
+		transformedSurrogateType, err := expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesSurrogateType(original["surrogate_type"], d, config)
+		if err != nil {
+			return nil, err
+		} else {
+			transformed["surrogateType"] = transformedSurrogateType
+		}
+
 		transformedStoredType, err := expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredType(original["stored_type"], d, config)
 		if err != nil {
 			return nil, err
@@ -2106,7 +2482,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypes(v inter
 	return req, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2122,22 +2498,33 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoType
 		transformed["name"] = transformedName
 	}
 
+	transformedVersion, err := expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeVersion(original["version"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedVersion); val.IsValid() && !isEmptyValue(val) {
+		transformed["version"] = transformedVersion
+	}
+
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesLikelihood(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesInfoTypeVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesExclusionType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesLikelihood(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesExclusionType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2163,15 +2550,15 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegex(v 
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexPattern(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexPattern(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexGroupIndexes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesRegexGroupIndexes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionary(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionary(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2197,7 +2584,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictiona
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordList(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordList(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2216,11 +2603,11 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictiona
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordListWords(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryWordListWords(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2239,11 +2626,26 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictiona
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePathPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesDictionaryCloudStoragePathPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesSurrogateType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+
+	if l[0] == nil {
+		transformed := make(map[string]interface{})
+		return transformed, nil
+	}
+	transformed := make(map[string]interface{})
+
+	return transformed, nil
+}
+
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2262,7 +2664,7 @@ func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredTy
 	return transformed, nil
 }
 
-func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredTypeName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataLossPreventionInspectTemplateInspectConfigCustomInfoTypesStoredTypeName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

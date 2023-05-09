@@ -10,10 +10,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"google.golang.org/api/compute/v1"
 )
 
-func resourceComputeRegionInstanceGroupManager() *schema.Resource {
+func ResourceComputeRegionInstanceGroupManager() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeRegionInstanceGroupManagerCreate,
 		Read:   resourceComputeRegionInstanceGroupManagerRead,
@@ -51,7 +54,7 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 						"instance_template": {
 							Type:             schema.TypeString,
 							Required:         true,
-							DiffSuppressFunc: compareSelfLinkRelativePaths,
+							DiffSuppressFunc: compareSelfLinkRelativePathsIgnoreParams,
 							Description:      `The full URL to an instance template from which all new instances of this version will be created.`,
 						},
 
@@ -156,7 +159,7 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
-				Set:         selfLinkRelativePathHash,
+				Set:         tpgresource.SelfLinkRelativePathHash,
 				Description: `The full URL of all target pools to which new instances in the group are added. Updating the target pools attribute does not affect existing instances.`,
 			},
 			"target_size": {
@@ -164,6 +167,14 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 				Computed:    true,
 				Optional:    true,
 				Description: `The target number of running instances for this managed instance group. This value should always be explicitly set unless this resource is attached to an autoscaler, in which case it should never be set. Defaults to 0.`,
+			},
+
+			"list_managed_instances_results": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "PAGELESS",
+				ValidateFunc: validation.StringInSlice([]string{"PAGELESS", "PAGINATED"}, false),
+				Description:  `Pagination behavior of the listManagedInstances API method for this managed instance group. Valid values are: "PAGELESS", "PAGINATED". If PAGELESS (default), Pagination is disabled for the group's listManagedInstances API method. maxResults and pageToken query parameters are ignored and all instances are returned in a single response. If PAGINATED, pagination is enabled, maxResults and pageToken query parameters are respected.`,
 			},
 
 			// If true, the resource will report ready only after no instances are being created.
@@ -194,7 +205,7 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 						"health_check": {
 							Type:             schema.TypeString,
 							Required:         true,
-							DiffSuppressFunc: compareSelfLinkRelativePaths,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 							Description:      `The health check resource that signals autohealing.`,
 						},
 
@@ -217,7 +228,7 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 				Set:         hashZoneFromSelfLinkOrResourceName,
 				Elem: &schema.Schema{
 					Type:             schema.TypeString,
-					DiffSuppressFunc: compareSelfLinkOrResourceName,
+					DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				},
 			},
 
@@ -294,14 +305,14 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 							Type:             schema.TypeString,
 							Optional:         true,
 							ValidateFunc:     validation.StringInSlice([]string{"PROACTIVE", "NONE", ""}, false),
-							DiffSuppressFunc: emptyOrDefaultStringSuppress("PROACTIVE"),
+							DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress("PROACTIVE"),
 							Description:      `The instance redistribution policy for regional managed instance groups. Valid values are: "PROACTIVE", "NONE". If PROACTIVE (default), the group attempts to maintain an even distribution of VM instances across zones in the region. If NONE, proactive redistribution is disabled.`,
 						},
 						"replacement_method": {
 							Type:             schema.TypeString,
 							Optional:         true,
 							ValidateFunc:     validation.StringInSlice([]string{"RECREATE", "SUBSTITUTE", ""}, false),
-							DiffSuppressFunc: emptyOrDefaultStringSuppress("SUBSTITUTE"),
+							DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress("SUBSTITUTE"),
 							Description:      `The instance replacement method for regional managed instance groups. Valid values are: "RECREATE", "SUBSTITUTE". If SUBSTITUTE (default), the group replaces VM instances with new instances that have randomly generated names. If RECREATE, instance names are preserved.  You must also set max_unavailable_fixed or max_unavailable_percent to be greater than 0.`,
 						},
 					},
@@ -392,8 +403,8 @@ func resourceComputeRegionInstanceGroupManager() *schema.Resource {
 }
 
 func resourceComputeRegionInstanceGroupManagerCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -409,17 +420,18 @@ func resourceComputeRegionInstanceGroupManagerCreate(d *schema.ResourceData, met
 	}
 
 	manager := &compute.InstanceGroupManager{
-		Name:                d.Get("name").(string),
-		Description:         d.Get("description").(string),
-		BaseInstanceName:    d.Get("base_instance_name").(string),
-		TargetSize:          int64(d.Get("target_size").(int)),
-		NamedPorts:          getNamedPortsBeta(d.Get("named_port").(*schema.Set).List()),
-		TargetPools:         convertStringSet(d.Get("target_pools").(*schema.Set)),
-		AutoHealingPolicies: expandAutoHealingPolicies(d.Get("auto_healing_policies").([]interface{})),
-		Versions:            expandVersions(d.Get("version").([]interface{})),
-		UpdatePolicy:        expandRegionUpdatePolicy(d.Get("update_policy").([]interface{})),
-		DistributionPolicy:  expandDistributionPolicy(d),
-		StatefulPolicy:      expandStatefulPolicy(d.Get("stateful_disk").(*schema.Set).List()),
+		Name:                        d.Get("name").(string),
+		Description:                 d.Get("description").(string),
+		BaseInstanceName:            d.Get("base_instance_name").(string),
+		TargetSize:                  int64(d.Get("target_size").(int)),
+		ListManagedInstancesResults: d.Get("list_managed_instances_results").(string),
+		NamedPorts:                  getNamedPortsBeta(d.Get("named_port").(*schema.Set).List()),
+		TargetPools:                 convertStringSet(d.Get("target_pools").(*schema.Set)),
+		AutoHealingPolicies:         expandAutoHealingPolicies(d.Get("auto_healing_policies").([]interface{})),
+		Versions:                    expandVersions(d.Get("version").([]interface{})),
+		UpdatePolicy:                expandRegionUpdatePolicy(d.Get("update_policy").([]interface{})),
+		DistributionPolicy:          expandDistributionPolicy(d),
+		StatefulPolicy:              expandStatefulPolicy(d),
 		// Force send TargetSize to allow size of 0.
 		ForceSendFields: []string{"TargetSize"},
 	}
@@ -430,14 +442,14 @@ func resourceComputeRegionInstanceGroupManagerCreate(d *schema.ResourceData, met
 		return fmt.Errorf("Error creating RegionInstanceGroupManager: %s", err)
 	}
 
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
 	// Wait for the operation to complete
-	err = computeOperationWaitTime(config, op, project, "Creating InstanceGroupManager", userAgent, d.Timeout(schema.TimeoutCreate))
+	err = ComputeOperationWaitTime(config, op, project, "Creating InstanceGroupManager", userAgent, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return err
 	}
@@ -470,7 +482,7 @@ func computeRIGMWaitForInstanceStatus(d *schema.ResourceData, meta interface{}) 
 type getInstanceManagerFunc func(*schema.ResourceData, interface{}) (*compute.InstanceGroupManager, error)
 
 func getRegionalManager(d *schema.ResourceData, meta interface{}) (*compute.InstanceGroupManager, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	project, err := getProject(d, config)
 	if err != nil {
@@ -482,7 +494,7 @@ func getRegionalManager(d *schema.ResourceData, meta interface{}) (*compute.Inst
 		return nil, err
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +502,7 @@ func getRegionalManager(d *schema.ResourceData, meta interface{}) (*compute.Inst
 	name := d.Get("name").(string)
 	manager, err := config.NewComputeClient(userAgent).RegionInstanceGroupManagers.Get(project, region, name).Do()
 	if err != nil {
-		return nil, handleNotFoundError(err, d, fmt.Sprintf("Region Instance Manager %q", name))
+		return nil, transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Region Instance Manager %q", name))
 	}
 
 	return manager, nil
@@ -526,7 +538,7 @@ func waitForInstancesRefreshFunc(f getInstanceManagerFunc, waitForUpdates bool, 
 }
 
 func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	manager, err := getRegionalManager(d, meta)
 	if err != nil {
@@ -549,7 +561,7 @@ func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta 
 	if err := d.Set("name", manager.Name); err != nil {
 		return fmt.Errorf("Error setting name: %s", err)
 	}
-	if err := d.Set("region", GetResourceNameFromSelfLink(manager.Region)); err != nil {
+	if err := d.Set("region", tpgresource.GetResourceNameFromSelfLink(manager.Region)); err != nil {
 		return fmt.Errorf("Error setting region: %s", err)
 	}
 	if err := d.Set("description", manager.Description); err != nil {
@@ -561,7 +573,10 @@ func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta 
 	if err := d.Set("target_size", manager.TargetSize); err != nil {
 		return fmt.Errorf("Error setting target_size: %s", err)
 	}
-	if err := d.Set("target_pools", mapStringArr(manager.TargetPools, ConvertSelfLinkToV1)); err != nil {
+	if err := d.Set("list_managed_instances_results", manager.ListManagedInstancesResults); err != nil {
+		return fmt.Errorf("Error setting list_managed_instances_results: %s", err)
+	}
+	if err := d.Set("target_pools", mapStringArr(manager.TargetPools, tpgresource.ConvertSelfLinkToV1)); err != nil {
 		return fmt.Errorf("Error setting target_pools in state: %s", err.Error())
 	}
 	if err := d.Set("named_port", flattenNamedPortsBeta(manager.NamedPorts)); err != nil {
@@ -570,7 +585,7 @@ func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta 
 	if err := d.Set("fingerprint", manager.Fingerprint); err != nil {
 		return fmt.Errorf("Error setting fingerprint: %s", err)
 	}
-	if err := d.Set("instance_group", ConvertSelfLinkToV1(manager.InstanceGroup)); err != nil {
+	if err := d.Set("instance_group", tpgresource.ConvertSelfLinkToV1(manager.InstanceGroup)); err != nil {
 		return fmt.Errorf("Error setting instance_group: %s", err)
 	}
 	if err := d.Set("distribution_policy_zones", flattenDistributionPolicy(manager.DistributionPolicy)); err != nil {
@@ -579,7 +594,7 @@ func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta 
 	if err := d.Set("distribution_policy_target_shape", manager.DistributionPolicy.TargetShape); err != nil {
 		return err
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(manager.SelfLink)); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(manager.SelfLink)); err != nil {
 		return fmt.Errorf("Error setting self_link: %s", err)
 	}
 
@@ -598,7 +613,6 @@ func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta 
 	if err = d.Set("status", flattenStatus(manager.Status)); err != nil {
 		return fmt.Errorf("Error setting status in state: %s", err.Error())
 	}
-
 	// If unset in state set to default value
 	if d.Get("wait_for_instances_status").(string) == "" {
 		if err = d.Set("wait_for_instances_status", "STABLE"); err != nil {
@@ -610,9 +624,9 @@ func resourceComputeRegionInstanceGroupManagerRead(d *schema.ResourceData, meta 
 }
 
 func resourceComputeRegionInstanceGroupManagerUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -655,7 +669,12 @@ func resourceComputeRegionInstanceGroupManagerUpdate(d *schema.ResourceData, met
 	}
 
 	if d.HasChange("stateful_disk") {
-		updatedManager.StatefulPolicy = expandStatefulPolicy(d.Get("stateful_disk").(*schema.Set).List())
+		updatedManager.StatefulPolicy = expandStatefulPolicy(d)
+		change = true
+	}
+
+	if d.HasChange("list_managed_instances_results") {
+		updatedManager.ListManagedInstancesResults = d.Get("list_managed_instances_results").(string)
 		change = true
 	}
 
@@ -665,7 +684,7 @@ func resourceComputeRegionInstanceGroupManagerUpdate(d *schema.ResourceData, met
 			return fmt.Errorf("Error updating region managed group instances: %s", err)
 		}
 
-		err = computeOperationWaitTime(config, op, project, "Updating region managed group instances", userAgent, d.Timeout(schema.TimeoutUpdate))
+		err = ComputeOperationWaitTime(config, op, project, "Updating region managed group instances", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return err
 		}
@@ -687,7 +706,7 @@ func resourceComputeRegionInstanceGroupManagerUpdate(d *schema.ResourceData, met
 			return fmt.Errorf("Error updating RegionInstanceGroupManager: %s", err)
 		}
 
-		err = computeOperationWaitTime(config, op, project, "Updating RegionInstanceGroupManager", userAgent, d.Timeout(schema.TimeoutUpdate))
+		err = ComputeOperationWaitTime(config, op, project, "Updating RegionInstanceGroupManager", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return err
 		}
@@ -704,7 +723,7 @@ func resourceComputeRegionInstanceGroupManagerUpdate(d *schema.ResourceData, met
 			return fmt.Errorf("Error resizing RegionInstanceGroupManager: %s", err)
 		}
 
-		err = computeOperationWaitTime(config, op, project, "Resizing RegionInstanceGroupManager", userAgent, d.Timeout(schema.TimeoutUpdate))
+		err = ComputeOperationWaitTime(config, op, project, "Resizing RegionInstanceGroupManager", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return err
 		}
@@ -723,7 +742,7 @@ func resourceComputeRegionInstanceGroupManagerUpdate(d *schema.ResourceData, met
 }
 
 func resourceComputeRegionInstanceGroupManagerDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	if d.Get("wait_for_instances").(bool) {
 		err := computeRIGMWaitForInstanceStatus(d, meta)
@@ -732,7 +751,7 @@ func resourceComputeRegionInstanceGroupManagerDelete(d *schema.ResourceData, met
 		}
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -756,7 +775,7 @@ func resourceComputeRegionInstanceGroupManagerDelete(d *schema.ResourceData, met
 	}
 
 	// Wait for the operation to complete
-	err = computeOperationWaitTime(config, op, project, "Deleting RegionInstanceGroupManager", userAgent, d.Timeout(schema.TimeoutDelete))
+	err = ComputeOperationWaitTime(config, op, project, "Deleting RegionInstanceGroupManager", userAgent, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
 		return fmt.Errorf("Error waiting for delete to complete: %s", err)
 	}
@@ -869,7 +888,7 @@ func flattenDistributionPolicy(distributionPolicy *compute.DistributionPolicy) [
 
 	if distributionPolicy != nil {
 		for _, zone := range distributionPolicy.Zones {
-			zones = append(zones, GetResourceNameFromSelfLink(zone.Zone))
+			zones = append(zones, tpgresource.GetResourceNameFromSelfLink(zone.Zone))
 		}
 	}
 
@@ -880,7 +899,7 @@ func hashZoneFromSelfLinkOrResourceName(value interface{}) int {
 	parts := strings.Split(value.(string), "/")
 	resource := parts[len(parts)-1]
 
-	return hashcode(resource)
+	return tpgresource.Hashcode(resource)
 }
 
 func resourceRegionInstanceGroupManagerStateImporter(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
@@ -890,13 +909,13 @@ func resourceRegionInstanceGroupManagerStateImporter(d *schema.ResourceData, met
 	if err := d.Set("wait_for_instances_status", "STABLE"); err != nil {
 		return nil, fmt.Errorf("Error setting wait_for_instances_status: %s", err)
 	}
-	config := meta.(*Config)
-	if err := parseImportId([]string{"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/instanceGroupManagers/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)", "(?P<region>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/instanceGroupManagers/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)", "(?P<region>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}

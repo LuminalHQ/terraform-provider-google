@@ -22,6 +22,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 const notebooksInstanceGoogleProvidedLabel = "goog-caip-notebook"
@@ -41,7 +45,7 @@ func NotebooksInstanceLabelDiffSuppress(k, old, new string, d *schema.ResourceDa
 	return false
 }
 
-func resourceNotebooksInstance() *schema.Resource {
+func ResourceNotebooksInstance() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceNotebooksInstanceCreate,
 		Read:   resourceNotebooksInstanceRead,
@@ -70,7 +74,7 @@ func resourceNotebooksInstance() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `A reference to a machine type which defines VM kind.`,
 			},
 			"name": {
@@ -99,7 +103,7 @@ machineType you have selected.`,
 							Type:         schema.TypeString,
 							Required:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"ACCELERATOR_TYPE_UNSPECIFIED", "NVIDIA_TESLA_K80", "NVIDIA_TESLA_P100", "NVIDIA_TESLA_V100", "NVIDIA_TESLA_P4", "NVIDIA_TESLA_T4", "NVIDIA_TESLA_T4_VWS", "NVIDIA_TESLA_P100_VWS", "NVIDIA_TESLA_P4_VWS", "NVIDIA_TESLA_A100", "TPU_V2", "TPU_V3"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ACCELERATOR_TYPE_UNSPECIFIED", "NVIDIA_TESLA_K80", "NVIDIA_TESLA_P100", "NVIDIA_TESLA_V100", "NVIDIA_TESLA_P4", "NVIDIA_TESLA_T4", "NVIDIA_TESLA_T4_VWS", "NVIDIA_TESLA_P100_VWS", "NVIDIA_TESLA_P4_VWS", "NVIDIA_TESLA_A100", "TPU_V2", "TPU_V3"}),
 							Description:  `Type of this accelerator. Possible values: ["ACCELERATOR_TYPE_UNSPECIFIED", "NVIDIA_TESLA_K80", "NVIDIA_TESLA_P100", "NVIDIA_TESLA_V100", "NVIDIA_TESLA_P4", "NVIDIA_TESLA_T4", "NVIDIA_TESLA_T4_VWS", "NVIDIA_TESLA_P100_VWS", "NVIDIA_TESLA_P4_VWS", "NVIDIA_TESLA_A100", "TPU_V2", "TPU_V3"]`,
 						},
 					},
@@ -117,7 +121,7 @@ If not specified, this defaults to 100.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME", ""}),
 				Description:  `Possible disk types for notebook instances. Possible values: ["DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME"]`,
 			},
 			"container_image": {
@@ -162,19 +166,18 @@ You can choose the size of the data disk based on how big your notebooks and dat
 If not specified, this defaults to 100.`,
 			},
 			"data_disk_type": {
-				Type:             schema.TypeString,
-				Optional:         true,
-				ForceNew:         true,
-				ValidateFunc:     validateEnum([]string{"DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME", ""}),
-				DiffSuppressFunc: emptyOrDefaultStringSuppress("DISK_TYPE_UNSPECIFIED"),
-				Description:      `Possible disk types for notebook instances. Possible values: ["DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME"]`,
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				ValidateFunc: verify.ValidateEnum([]string{"DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME", ""}),
+				Description:  `Possible disk types for notebook instances. Possible values: ["DISK_TYPE_UNSPECIFIED", "PD_STANDARD", "PD_SSD", "PD_BALANCED", "PD_EXTREME"]`,
 			},
 			"disk_encryption": {
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
-				ValidateFunc:     validateEnum([]string{"DISK_ENCRYPTION_UNSPECIFIED", "GMEK", "CMEK", ""}),
-				DiffSuppressFunc: emptyOrDefaultStringSuppress("DISK_ENCRYPTION_UNSPECIFIED"),
+				ValidateFunc:     verify.ValidateEnum([]string{"DISK_ENCRYPTION_UNSPECIFIED", "GMEK", "CMEK", ""}),
+				DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress("DISK_ENCRYPTION_UNSPECIFIED"),
 				Description:      `Disk encryption method used on the boot and data disks, defaults to GMEK. Possible values: ["DISK_ENCRYPTION_UNSPECIFIED", "GMEK", "CMEK"]`,
 			},
 			"install_gpu_driver": {
@@ -227,7 +230,7 @@ An object containing a list of "key": value pairs. Example: { "name": "wrench", 
 				Computed:         true,
 				Optional:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `The name of the VPC that this instance is in.
 Format: projects/{project_id}/global/networks/{network_id}`,
 			},
@@ -235,7 +238,7 @@ Format: projects/{project_id}/global/networks/{network_id}`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"UNSPECIFIED_NIC_TYPE", "VIRTIO_NET", "GVNIC", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"UNSPECIFIED_NIC_TYPE", "VIRTIO_NET", "GVNIC", ""}),
 				Description:  `The type of vNIC driver. Possible values: ["UNSPECIFIED_NIC_TYPE", "VIRTIO_NET", "GVNIC"]`,
 			},
 			"no_proxy_access": {
@@ -276,7 +279,7 @@ or Cloud Storage path (gs://path-to-file/file-name).`,
 							Type:         schema.TypeString,
 							Required:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"NO_RESERVATION", "ANY_RESERVATION", "SPECIFIC_RESERVATION"}),
+							ValidateFunc: verify.ValidateEnum([]string{"NO_RESERVATION", "ANY_RESERVATION", "SPECIFIC_RESERVATION"}),
 							Description:  `The type of Compute Reservation. Possible values: ["NO_RESERVATION", "ANY_RESERVATION", "SPECIFIC_RESERVATION"]`,
 						},
 						"key": {
@@ -365,7 +368,7 @@ Enabled by default.`,
 				Computed:         true,
 				Optional:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `The name of the subnet that this instance is in.
 Format: projects/{project_id}/regions/{region}/subnetworks/{subnetwork_id}`,
 			},
@@ -416,9 +419,12 @@ Format: projects/{project_id}`,
 				Description: `Instance creation time`,
 			},
 			"proxy_uri": {
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: `The proxy endpoint that is used to access the Jupyter notebook.`,
+				Type:     schema.TypeString,
+				Computed: true,
+				Description: `The proxy endpoint that is used to access the Jupyter notebook.
+Only returned when the resource is in a 'PROVISIONED' state. If
+needed you can utilize 'terraform apply -refresh-only' to await
+the population of this value.`,
 			},
 			"state": {
 				Type:        schema.TypeString,
@@ -443,8 +449,8 @@ Format: projects/{project_id}`,
 }
 
 func resourceNotebooksInstanceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -613,7 +619,7 @@ func resourceNotebooksInstanceCreate(d *schema.ResourceData, meta interface{}) e
 		obj["containerImage"] = containerImageProp
 	}
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances?instanceId={{name}}")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances?instanceId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -632,13 +638,13 @@ func resourceNotebooksInstanceCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Instance: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/instances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -647,17 +653,18 @@ func resourceNotebooksInstanceCreate(d *schema.ResourceData, meta interface{}) e
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = notebooksOperationWaitTimeWithResponse(
+	err = NotebooksOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Instance", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Instance: %s", err)
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{location}}/instances/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/instances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -669,13 +676,13 @@ func resourceNotebooksInstanceCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceNotebooksInstanceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -693,9 +700,9 @@ func resourceNotebooksInstanceRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("NotebooksInstance %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("NotebooksInstance %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -738,9 +745,6 @@ func resourceNotebooksInstanceRead(d *schema.ResourceData, meta interface{}) err
 	if err := d.Set("custom_gpu_driver_path", flattenNotebooksInstanceCustomGpuDriverPath(res["customGpuDriverPath"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Instance: %s", err)
 	}
-	if err := d.Set("data_disk_type", flattenNotebooksInstanceDataDiskType(res["dataDiskType"], d, config)); err != nil {
-		return fmt.Errorf("Error reading Instance: %s", err)
-	}
 	if err := d.Set("disk_encryption", flattenNotebooksInstanceDiskEncryption(res["diskEncryption"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Instance: %s", err)
 	}
@@ -776,8 +780,8 @@ func resourceNotebooksInstanceRead(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceNotebooksInstanceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -802,7 +806,7 @@ func resourceNotebooksInstanceUpdate(d *schema.ResourceData, meta interface{}) e
 			obj["labels"] = labelsProp
 		}
 
-		url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances/{{name}}:setLabels")
+		url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances/{{name}}:setLabels")
 		if err != nil {
 			return err
 		}
@@ -812,14 +816,14 @@ func resourceNotebooksInstanceUpdate(d *schema.ResourceData, meta interface{}) e
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Instance %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating Instance %q: %#v", d.Id(), res)
 		}
 
-		err = notebooksOperationWaitTime(
+		err = NotebooksOperationWaitTime(
 			config, res, project, "Updating Instance", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -833,8 +837,8 @@ func resourceNotebooksInstanceUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceNotebooksInstanceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -847,7 +851,7 @@ func resourceNotebooksInstanceDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NotebooksBasePath}}projects/{{project}}/locations/{{location}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -860,12 +864,12 @@ func resourceNotebooksInstanceDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Instance")
+		return transport_tpg.HandleNotFoundError(err, d, "Instance")
 	}
 
-	err = notebooksOperationWaitTime(
+	err = NotebooksOperationWaitTime(
 		config, res, project, "Deleting Instance", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -878,8 +882,8 @@ func resourceNotebooksInstanceDelete(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceNotebooksInstanceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/instances/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -888,7 +892,7 @@ func resourceNotebooksInstanceImport(d *schema.ResourceData, meta interface{}) (
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/instances/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -897,30 +901,30 @@ func resourceNotebooksInstanceImport(d *schema.ResourceData, meta interface{}) (
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNotebooksInstanceMachineType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceMachineType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenNotebooksInstancePostStartupScript(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstancePostStartupScript(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceProxyUri(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceProxyUri(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceServiceAccount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceServiceAccount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceServiceAccountScopes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceServiceAccountScopes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceAcceleratorConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceAcceleratorConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -935,14 +939,14 @@ func flattenNotebooksInstanceAcceleratorConfig(v interface{}, d *schema.Resource
 		flattenNotebooksInstanceAcceleratorConfigCoreCount(original["coreCount"], d, config)
 	return []interface{}{transformed}
 }
-func flattenNotebooksInstanceAcceleratorConfigType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceAcceleratorConfigType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceAcceleratorConfigCoreCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceAcceleratorConfigCoreCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -956,7 +960,7 @@ func flattenNotebooksInstanceAcceleratorConfigCoreCount(v interface{}, d *schema
 	return v // let terraform core handle it otherwise
 }
 
-func flattenNotebooksInstanceShieldedInstanceConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceShieldedInstanceConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -973,23 +977,23 @@ func flattenNotebooksInstanceShieldedInstanceConfig(v interface{}, d *schema.Res
 		flattenNotebooksInstanceShieldedInstanceConfigEnableVtpm(original["enableVtpm"], d, config)
 	return []interface{}{transformed}
 }
-func flattenNotebooksInstanceShieldedInstanceConfigEnableIntegrityMonitoring(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceShieldedInstanceConfigEnableIntegrityMonitoring(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceShieldedInstanceConfigEnableSecureBoot(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceShieldedInstanceConfigEnableSecureBoot(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceShieldedInstanceConfigEnableVtpm(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceShieldedInstanceConfigEnableVtpm(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceNicType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceNicType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceReservationAffinity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceReservationAffinity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1006,95 +1010,91 @@ func flattenNotebooksInstanceReservationAffinity(v interface{}, d *schema.Resour
 		flattenNotebooksInstanceReservationAffinityValues(original["values"], d, config)
 	return []interface{}{transformed}
 }
-func flattenNotebooksInstanceReservationAffinityConsumeReservationType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceReservationAffinityConsumeReservationType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceReservationAffinityKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceReservationAffinityKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceReservationAffinityValues(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceReservationAffinityValues(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceInstallGpuDriver(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceInstallGpuDriver(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceCustomGpuDriverPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceCustomGpuDriverPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceDataDiskType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceDiskEncryption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceDiskEncryption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceKmsKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceKmsKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceNoPublicIp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceNoPublicIp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceNoProxyAccess(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceNoProxyAccess(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceSubnet(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceSubnet(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceTags(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceTags(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNotebooksInstanceUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNotebooksInstanceUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return v
-}
-
-func expandNotebooksInstanceMachineType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceMachineType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstancePostStartupScript(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstancePostStartupScript(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceInstanceOwners(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceInstanceOwners(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceServiceAccount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceServiceAccount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceServiceAccountScopes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceServiceAccountScopes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceAcceleratorConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceAcceleratorConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1120,15 +1120,15 @@ func expandNotebooksInstanceAcceleratorConfig(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandNotebooksInstanceAcceleratorConfigType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceAcceleratorConfigType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceAcceleratorConfigCoreCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceAcceleratorConfigCoreCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceShieldedInstanceConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceShieldedInstanceConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1161,23 +1161,23 @@ func expandNotebooksInstanceShieldedInstanceConfig(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandNotebooksInstanceShieldedInstanceConfigEnableIntegrityMonitoring(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceShieldedInstanceConfigEnableIntegrityMonitoring(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceShieldedInstanceConfigEnableSecureBoot(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceShieldedInstanceConfigEnableSecureBoot(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceShieldedInstanceConfigEnableVtpm(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceShieldedInstanceConfigEnableVtpm(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceNicType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceNicType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceReservationAffinity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceReservationAffinity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1210,71 +1210,71 @@ func expandNotebooksInstanceReservationAffinity(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandNotebooksInstanceReservationAffinityConsumeReservationType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceReservationAffinityConsumeReservationType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceReservationAffinityKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceReservationAffinityKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceReservationAffinityValues(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceReservationAffinityValues(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceInstallGpuDriver(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceInstallGpuDriver(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceCustomGpuDriverPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceCustomGpuDriverPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceBootDiskType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceBootDiskType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceBootDiskSizeGb(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceBootDiskSizeGb(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceDataDiskType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceDataDiskType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceDataDiskSizeGb(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceDataDiskSizeGb(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceNoRemoveDataDisk(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceNoRemoveDataDisk(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceDiskEncryption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceDiskEncryption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceKmsKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceKmsKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceNoPublicIp(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceNoPublicIp(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceNoProxyAccess(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceNoProxyAccess(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceSubnet(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceSubnet(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandNotebooksInstanceLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1285,11 +1285,11 @@ func expandNotebooksInstanceLabels(v interface{}, d TerraformResourceData, confi
 	return m, nil
 }
 
-func expandNotebooksInstanceTags(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceTags(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceMetadata(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandNotebooksInstanceMetadata(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1300,7 +1300,7 @@ func expandNotebooksInstanceMetadata(v interface{}, d TerraformResourceData, con
 	return m, nil
 }
 
-func expandNotebooksInstanceVmImage(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceVmImage(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1333,19 +1333,19 @@ func expandNotebooksInstanceVmImage(v interface{}, d TerraformResourceData, conf
 	return transformed, nil
 }
 
-func expandNotebooksInstanceVmImageProject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceVmImageProject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceVmImageImageFamily(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceVmImageImageFamily(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceVmImageImageName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceVmImageImageName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceContainerImage(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceContainerImage(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1371,10 +1371,10 @@ func expandNotebooksInstanceContainerImage(v interface{}, d TerraformResourceDat
 	return transformed, nil
 }
 
-func expandNotebooksInstanceContainerImageRepository(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceContainerImageRepository(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNotebooksInstanceContainerImageTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNotebooksInstanceContainerImageTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

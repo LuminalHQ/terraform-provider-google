@@ -2,10 +2,12 @@ package google
 
 import (
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func dataSourceGoogleBigqueryDefaultServiceAccount() *schema.Resource {
+func DataSourceGoogleBigqueryDefaultServiceAccount() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceGoogleBigqueryDefaultServiceAccountRead,
 		Schema: map[string]*schema.Schema{
@@ -18,13 +20,17 @@ func dataSourceGoogleBigqueryDefaultServiceAccount() *schema.Resource {
 				Optional: true,
 				Computed: true,
 			},
+			"member": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 		},
 	}
 }
 
 func dataSourceGoogleBigqueryDefaultServiceAccountRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -36,7 +42,7 @@ func dataSourceGoogleBigqueryDefaultServiceAccountRead(d *schema.ResourceData, m
 
 	projectResource, err := config.NewBigQueryClient(userAgent).Projects.GetServiceAccount(project).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, "BigQuery service account not found")
+		return transport_tpg.HandleNotFoundError(err, d, "BigQuery service account not found")
 	}
 
 	d.SetId(projectResource.Email)
@@ -45,6 +51,9 @@ func dataSourceGoogleBigqueryDefaultServiceAccountRead(d *schema.ResourceData, m
 	}
 	if err := d.Set("project", project); err != nil {
 		return fmt.Errorf("Error setting project: %s", err)
+	}
+	if err := d.Set("member", "serviceAccount:"+projectResource.Email); err != nil {
+		return fmt.Errorf("Error setting member: %s", err)
 	}
 	return nil
 }

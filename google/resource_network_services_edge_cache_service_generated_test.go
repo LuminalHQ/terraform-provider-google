@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceBasicExample(context),
@@ -107,13 +110,13 @@ func TestAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceAdvan
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceAdvancedExample(context),
@@ -317,6 +320,151 @@ resource "google_network_services_edge_cache_service" "instance" {
 `, context)
 }
 
+func TestAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceDualTokenExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceDualTokenExample(context),
+			},
+			{
+				ResourceName:            "google_network_services_edge_cache_service.instance",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name"},
+			},
+		},
+	})
+}
+
+func testAccNetworkServicesEdgeCacheService_networkServicesEdgeCacheServiceDualTokenExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_secret_manager_secret" "secret-basic" {
+  secret_id = "tf-test-secret-name%{random_suffix}"
+
+  replication {
+    automatic = true
+  }
+}
+
+resource "google_secret_manager_secret_version" "secret-version-basic" {
+  secret = google_secret_manager_secret.secret-basic.id
+
+  secret_data = "secret-data"
+}
+
+resource "google_network_services_edge_cache_keyset" "keyset" {
+  name        = "tf-test-keyset-name%{random_suffix}"
+  description = "The default keyset"
+  public_key {
+    id      = "my-public-key"
+    managed = true
+  }
+  validation_shared_keys {
+    secret_version = google_secret_manager_secret_version.secret-version-basic.id
+  }
+}
+
+resource "google_network_services_edge_cache_origin" "instance" {
+  name                 = "tf-test-my-origin%{random_suffix}"
+  origin_address       = "gs://media-edge-default"
+  description          = "The default bucket for media edge test"
+}
+
+resource "google_network_services_edge_cache_service" "instance" {
+  name                 = "tf-test-my-service%{random_suffix}"
+  description          = "some description"
+  routing {
+    host_rule {
+      description = "host rule description"
+      hosts = ["sslcert.tf-test.club"]
+      path_matcher = "routes"
+    }
+    path_matcher {
+      name = "routes"
+      route_rule {
+        description = "a route rule to match against master playlist"
+        priority = 1
+        match_rule {
+          path_template_match = "/master.m3u8"
+	}	
+        origin = google_network_services_edge_cache_origin.instance.name
+        route_action {
+          cdn_policy {
+	    signed_request_mode = "REQUIRE_TOKENS"
+	    signed_request_keyset = google_network_services_edge_cache_keyset.keyset.id
+	    signed_token_options {
+	      token_query_parameter = "edge-cache-token"
+	    }
+	    signed_request_maximum_expiration_ttl = "600s"
+	    add_signatures {
+	      actions = ["GENERATE_COOKIE"]
+	      keyset = google_network_services_edge_cache_keyset.keyset.id
+	      copied_parameters = ["PathGlobs", "SessionID"]
+	    }
+          }
+        }
+      }
+      route_rule {
+        description = "a route rule to match against all playlists"
+        priority = 2
+        match_rule {
+          path_template_match = "/*.m3u8"
+        }
+        origin = google_network_services_edge_cache_origin.instance.name
+        route_action {
+          cdn_policy {
+	    signed_request_mode = "REQUIRE_TOKENS"
+	    signed_request_keyset = google_network_services_edge_cache_keyset.keyset.id
+	    signed_token_options {
+	      token_query_parameter = "hdnts"
+	      allowed_signature_algorithms = ["ED25519", "HMAC_SHA_256", "HMAC_SHA1"]
+	    }
+	    add_signatures {
+	      actions = ["GENERATE_TOKEN_HLS_COOKIELESS"]
+	      keyset = google_network_services_edge_cache_keyset.keyset.id
+	      token_ttl = "1200s"
+	      token_query_parameter = "hdntl"
+	      copied_parameters = ["URLPrefix"]
+	    }
+          }
+        }
+      }
+      route_rule {
+        description = "a route rule to match against"
+        priority = 3
+        match_rule {
+          path_template_match = "/**.m3u8"
+        }
+        origin = google_network_services_edge_cache_origin.instance.name
+        route_action {
+          cdn_policy {
+	    signed_request_mode = "REQUIRE_TOKENS"
+	    signed_request_keyset = google_network_services_edge_cache_keyset.keyset.id
+	    signed_token_options {
+	      token_query_parameter = "hdntl"
+	    }
+	    add_signatures {
+	      actions = ["PROPAGATE_TOKEN_HLS_COOKIELESS"]
+	      token_query_parameter = "hdntl"
+	    }
+          }
+        }
+      }
+    }
+  }
+}
+`, context)
+}
+
 func testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -327,9 +475,9 @@ func testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t *testing.T) fu
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheServices/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheServices/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -340,7 +488,7 @@ func testAccCheckNetworkServicesEdgeCacheServiceDestroyProducer(t *testing.T) fu
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("NetworkServicesEdgeCacheService still exists at %s", url)
 			}

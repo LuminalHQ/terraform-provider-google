@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_target_ssl_proxy"
 description: |-
   Represents a TargetSslProxy resource, which is used by one or more
   global forwarding rule to route incoming SSL requests to a backend
@@ -89,12 +88,6 @@ The following arguments are supported:
   (Required)
   A reference to the BackendService resource.
 
-* `ssl_certificates` -
-  (Required)
-  A list of SslCertificate resources that are used to authenticate
-  connections between users and the load balancer. At least one
-  SSL certificate must be specified.
-
 
 - - -
 
@@ -108,7 +101,19 @@ The following arguments are supported:
   Specifies the type of proxy header to append before sending data to
   the backend.
   Default value is `NONE`.
-  Possible values are `NONE` and `PROXY_V1`.
+  Possible values are: `NONE`, `PROXY_V1`.
+
+* `ssl_certificates` -
+  (Optional)
+  A list of SslCertificate resources that are used to authenticate
+  connections between users and the load balancer. At least one
+  SSL certificate must be specified.
+
+* `certificate_map` -
+  (Optional)
+  A reference to the CertificateMap resource uri that identifies a certificate map
+  associated with the given target proxy. This field can only be set for global target proxies.
+  Accepted format is `//certificatemanager.googleapis.com/projects/{project}/locations/{location}/certificateMaps/{resourceName}`.
 
 * `ssl_policy` -
   (Optional)
@@ -137,7 +142,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -156,4 +161,4 @@ $ terraform import google_compute_target_ssl_proxy.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

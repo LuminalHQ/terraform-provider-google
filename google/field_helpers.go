@@ -3,6 +3,9 @@ package google
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 const (
@@ -24,31 +27,31 @@ const (
 // Field helpers
 // ------------------------------------------------------------
 
-func ParseNetworkFieldValue(network string, d TerraformResourceData, config *Config) (*GlobalFieldValue, error) {
+func ParseNetworkFieldValue(network string, d TerraformResourceData, config *transport_tpg.Config) (*GlobalFieldValue, error) {
 	return parseGlobalFieldValue("networks", network, "project", d, config, true)
 }
 
-func ParseSubnetworkFieldValue(subnetwork string, d TerraformResourceData, config *Config) (*RegionalFieldValue, error) {
+func ParseSubnetworkFieldValue(subnetwork string, d TerraformResourceData, config *transport_tpg.Config) (*RegionalFieldValue, error) {
 	return parseRegionalFieldValue("subnetworks", subnetwork, "project", "region", "zone", d, config, true)
 }
 
-func ParseSubnetworkFieldValueWithProjectField(subnetwork, projectField string, d TerraformResourceData, config *Config) (*RegionalFieldValue, error) {
+func ParseSubnetworkFieldValueWithProjectField(subnetwork, projectField string, d TerraformResourceData, config *transport_tpg.Config) (*RegionalFieldValue, error) {
 	return parseRegionalFieldValue("subnetworks", subnetwork, projectField, "region", "zone", d, config, true)
 }
 
-func ParseSslCertificateFieldValue(sslCertificate string, d TerraformResourceData, config *Config) (*GlobalFieldValue, error) {
+func ParseSslCertificateFieldValue(sslCertificate string, d TerraformResourceData, config *transport_tpg.Config) (*GlobalFieldValue, error) {
 	return parseGlobalFieldValue("sslCertificates", sslCertificate, "project", d, config, false)
 }
 
-func ParseHttpHealthCheckFieldValue(healthCheck string, d TerraformResourceData, config *Config) (*GlobalFieldValue, error) {
+func ParseHttpHealthCheckFieldValue(healthCheck string, d TerraformResourceData, config *transport_tpg.Config) (*GlobalFieldValue, error) {
 	return parseGlobalFieldValue("httpHealthChecks", healthCheck, "project", d, config, false)
 }
 
-func ParseDiskFieldValue(disk string, d TerraformResourceData, config *Config) (*ZonalFieldValue, error) {
+func ParseDiskFieldValue(disk string, d TerraformResourceData, config *transport_tpg.Config) (*ZonalFieldValue, error) {
 	return parseZonalFieldValue("disks", disk, "project", "zone", d, config, false)
 }
 
-func ParseRegionDiskFieldValue(disk string, d TerraformResourceData, config *Config) (*RegionalFieldValue, error) {
+func ParseRegionDiskFieldValue(disk string, d TerraformResourceData, config *transport_tpg.Config) (*RegionalFieldValue, error) {
 	return parseRegionalFieldValue("disks", disk, "project", "region", "zone", d, config, false)
 }
 
@@ -56,36 +59,40 @@ func ParseOrganizationCustomRoleName(role string) (*OrganizationFieldValue, erro
 	return parseOrganizationFieldValue("roles", role, false)
 }
 
-func ParseAcceleratorFieldValue(accelerator string, d TerraformResourceData, config *Config) (*ZonalFieldValue, error) {
+func ParseAcceleratorFieldValue(accelerator string, d TerraformResourceData, config *transport_tpg.Config) (*ZonalFieldValue, error) {
 	return parseZonalFieldValue("acceleratorTypes", accelerator, "project", "zone", d, config, false)
 }
 
-func ParseMachineTypesFieldValue(machineType string, d TerraformResourceData, config *Config) (*ZonalFieldValue, error) {
+func ParseMachineTypesFieldValue(machineType string, d TerraformResourceData, config *transport_tpg.Config) (*ZonalFieldValue, error) {
 	return parseZonalFieldValue("machineTypes", machineType, "project", "zone", d, config, false)
 }
 
-func ParseInstanceFieldValue(instance string, d TerraformResourceData, config *Config) (*ZonalFieldValue, error) {
+func ParseInstanceFieldValue(instance string, d TerraformResourceData, config *transport_tpg.Config) (*ZonalFieldValue, error) {
 	return parseZonalFieldValue("instances", instance, "project", "zone", d, config, false)
 }
 
-func ParseInstanceGroupFieldValue(instanceGroup string, d TerraformResourceData, config *Config) (*ZonalFieldValue, error) {
+func ParseInstanceGroupFieldValue(instanceGroup string, d TerraformResourceData, config *transport_tpg.Config) (*ZonalFieldValue, error) {
 	return parseZonalFieldValue("instanceGroups", instanceGroup, "project", "zone", d, config, false)
 }
 
-func ParseInstanceTemplateFieldValue(instanceTemplate string, d TerraformResourceData, config *Config) (*GlobalFieldValue, error) {
+func ParseInstanceTemplateFieldValue(instanceTemplate string, d TerraformResourceData, config *transport_tpg.Config) (*GlobalFieldValue, error) {
 	return parseGlobalFieldValue("instanceTemplates", instanceTemplate, "project", d, config, false)
 }
 
-func ParseMachineImageFieldValue(machineImage string, d TerraformResourceData, config *Config) (*GlobalFieldValue, error) {
+func ParseMachineImageFieldValue(machineImage string, d TerraformResourceData, config *transport_tpg.Config) (*GlobalFieldValue, error) {
 	return parseGlobalFieldValue("machineImages", machineImage, "project", d, config, false)
 }
 
-func ParseSecurityPolicyFieldValue(securityPolicy string, d TerraformResourceData, config *Config) (*GlobalFieldValue, error) {
+func ParseSecurityPolicyFieldValue(securityPolicy string, d TerraformResourceData, config *transport_tpg.Config) (*GlobalFieldValue, error) {
 	return parseGlobalFieldValue("securityPolicies", securityPolicy, "project", d, config, true)
 }
 
-func ParseNetworkEndpointGroupFieldValue(networkEndpointGroup string, d TerraformResourceData, config *Config) (*ZonalFieldValue, error) {
+func ParseNetworkEndpointGroupFieldValue(networkEndpointGroup string, d TerraformResourceData, config *transport_tpg.Config) (*ZonalFieldValue, error) {
 	return parseZonalFieldValue("networkEndpointGroups", networkEndpointGroup, "project", "zone", d, config, false)
+}
+
+func ParseNetworkEndpointGroupRegionalFieldValue(networkEndpointGroup string, d TerraformResourceData, config *transport_tpg.Config) (*RegionalFieldValue, error) {
+	return parseRegionalFieldValue("networkEndpointGroups", networkEndpointGroup, "project", "region", "zone", d, config, false)
 }
 
 // ------------------------------------------------------------
@@ -115,7 +122,7 @@ func (f GlobalFieldValue) RelativeLink() string {
 // - "" (empty string). RelativeLink() returns empty if isEmptyValid is true.
 //
 // If the project is not specified, it first tries to get the project from the `projectSchemaField` and then fallback on the default project.
-func parseGlobalFieldValue(resourceType, fieldValue, projectSchemaField string, d TerraformResourceData, config *Config, isEmptyValid bool) (*GlobalFieldValue, error) {
+func parseGlobalFieldValue(resourceType, fieldValue, projectSchemaField string, d TerraformResourceData, config *transport_tpg.Config, isEmptyValid bool) (*GlobalFieldValue, error) {
 	if len(fieldValue) == 0 {
 		if isEmptyValid {
 			return &GlobalFieldValue{resourceType: resourceType}, nil
@@ -140,7 +147,7 @@ func parseGlobalFieldValue(resourceType, fieldValue, projectSchemaField string, 
 
 	return &GlobalFieldValue{
 		Project: project,
-		Name:    GetResourceNameFromSelfLink(fieldValue),
+		Name:    tpgresource.GetResourceNameFromSelfLink(fieldValue),
 
 		resourceType: resourceType,
 	}, nil
@@ -171,7 +178,7 @@ func (f ZonalFieldValue) RelativeLink() string {
 //
 // If the project is not specified, it first tries to get the project from the `projectSchemaField` and then fallback on the default project.
 // If the zone is not specified, it takes the value of `zoneSchemaField`.
-func parseZonalFieldValue(resourceType, fieldValue, projectSchemaField, zoneSchemaField string, d TerraformResourceData, config *Config, isEmptyValid bool) (*ZonalFieldValue, error) {
+func parseZonalFieldValue(resourceType, fieldValue, projectSchemaField, zoneSchemaField string, d TerraformResourceData, config *transport_tpg.Config, isEmptyValid bool) (*ZonalFieldValue, error) {
 	if len(fieldValue) == 0 {
 		if isEmptyValid {
 			return &ZonalFieldValue{resourceType: resourceType}, nil
@@ -219,12 +226,12 @@ func parseZonalFieldValue(resourceType, fieldValue, projectSchemaField, zoneSche
 	return &ZonalFieldValue{
 		Project:      project,
 		Zone:         zone.(string),
-		Name:         GetResourceNameFromSelfLink(fieldValue),
+		Name:         tpgresource.GetResourceNameFromSelfLink(fieldValue),
 		resourceType: resourceType,
 	}, nil
 }
 
-func getProjectFromSchema(projectSchemaField string, d TerraformResourceData, config *Config) (string, error) {
+func getProjectFromSchema(projectSchemaField string, d TerraformResourceData, config *transport_tpg.Config) (string, error) {
 	res, ok := d.GetOk(projectSchemaField)
 	if ok && projectSchemaField != "" {
 		return res.(string), nil
@@ -235,7 +242,7 @@ func getProjectFromSchema(projectSchemaField string, d TerraformResourceData, co
 	return "", fmt.Errorf("%s: required field is not set", projectSchemaField)
 }
 
-func getBillingProjectFromSchema(billingProjectSchemaField string, d TerraformResourceData, config *Config) (string, error) {
+func getBillingProjectFromSchema(billingProjectSchemaField string, d TerraformResourceData, config *transport_tpg.Config) (string, error) {
 	res, ok := d.GetOk(billingProjectSchemaField)
 	if ok && billingProjectSchemaField != "" {
 		return res.(string), nil
@@ -309,7 +316,7 @@ func (f RegionalFieldValue) RelativeLink() string {
 //
 // If the project is not specified, it first tries to get the project from the `projectSchemaField` and then fallback on the default project.
 // If the region is not specified, see function documentation for `getRegionFromSchema`.
-func parseRegionalFieldValue(resourceType, fieldValue, projectSchemaField, regionSchemaField, zoneSchemaField string, d TerraformResourceData, config *Config, isEmptyValid bool) (*RegionalFieldValue, error) {
+func parseRegionalFieldValue(resourceType, fieldValue, projectSchemaField, regionSchemaField, zoneSchemaField string, d TerraformResourceData, config *transport_tpg.Config, isEmptyValid bool) (*RegionalFieldValue, error) {
 	if len(fieldValue) == 0 {
 		if isEmptyValid {
 			return &RegionalFieldValue{resourceType: resourceType}, nil
@@ -350,7 +357,7 @@ func parseRegionalFieldValue(resourceType, fieldValue, projectSchemaField, regio
 	return &RegionalFieldValue{
 		Project:      project,
 		Region:       region,
-		Name:         GetResourceNameFromSelfLink(fieldValue),
+		Name:         tpgresource.GetResourceNameFromSelfLink(fieldValue),
 		resourceType: resourceType,
 	}, nil
 }
@@ -360,7 +367,7 @@ func parseRegionalFieldValue(resourceType, fieldValue, projectSchemaField, regio
 // - region extracted from the `zoneSchemaField` in resource schema
 // - provider-level region
 // - region extracted from the provider-level zone
-func getRegionFromSchema(regionSchemaField, zoneSchemaField string, d TerraformResourceData, config *Config) (string, error) {
+func getRegionFromSchema(regionSchemaField, zoneSchemaField string, d TerraformResourceData, config *transport_tpg.Config) (string, error) {
 	// if identical such as GKE location, check if it's a zone first and find
 	// the region if so. Otherwise, return as it's a region.
 	if regionSchemaField == zoneSchemaField {
@@ -374,7 +381,7 @@ func getRegionFromSchema(regionSchemaField, zoneSchemaField string, d TerraformR
 	}
 
 	if v, ok := d.GetOk(regionSchemaField); ok && regionSchemaField != "" {
-		return GetResourceNameFromSelfLink(v.(string)), nil
+		return tpgresource.GetResourceNameFromSelfLink(v.(string)), nil
 	}
 	if v, ok := d.GetOk(zoneSchemaField); ok && zoneSchemaField != "" {
 		return getRegionFromZone(v.(string)), nil
@@ -406,7 +413,7 @@ func (f ProjectFieldValue) RelativeLink() string {
 
 // Parses a project field with the following formats:
 // - projects/{my_projects}/{resource_type}/{resource_name}
-func parseProjectFieldValue(resourceType, fieldValue, projectSchemaField string, d TerraformResourceData, config *Config, isEmptyValid bool) (*ProjectFieldValue, error) {
+func parseProjectFieldValue(resourceType, fieldValue, projectSchemaField string, d TerraformResourceData, config *transport_tpg.Config, isEmptyValid bool) (*ProjectFieldValue, error) {
 	if len(fieldValue) == 0 {
 		if isEmptyValid {
 			return &ProjectFieldValue{resourceType: resourceType}, nil
@@ -431,7 +438,7 @@ func parseProjectFieldValue(resourceType, fieldValue, projectSchemaField string,
 
 	return &ProjectFieldValue{
 		Project: project,
-		Name:    GetResourceNameFromSelfLink(fieldValue),
+		Name:    tpgresource.GetResourceNameFromSelfLink(fieldValue),
 
 		resourceType: resourceType,
 	}, nil

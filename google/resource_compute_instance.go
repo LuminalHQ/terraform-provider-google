@@ -18,6 +18,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/mitchellh/hashstructure"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"google.golang.org/api/compute/v1"
 )
 
@@ -88,7 +91,7 @@ func forceNewIfNetworkIPNotUpdatableFunc(d TerraformResourceDiff) error {
 	return nil
 }
 
-func resourceComputeInstance() *schema.Resource {
+func ResourceComputeInstance() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeInstanceCreate,
 		Read:   resourceComputeInstanceRead,
@@ -159,7 +162,7 @@ func resourceComputeInstance() *schema.Resource {
 							AtLeastOneOf:     bootDiskKeys,
 							ForceNew:         true,
 							ConflictsWith:    []string{"boot_disk.0.disk_encryption_key_raw"},
-							DiffSuppressFunc: compareSelfLinkRelativePaths,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 							Computed:         true,
 							Description:      `The self_link of the encryption key that is stored in Google Cloud KMS to encrypt this disk. Only one of kms_key_self_link and disk_encryption_key_raw may be set.`,
 						},
@@ -199,7 +202,7 @@ func resourceComputeInstance() *schema.Resource {
 										AtLeastOneOf:     initializeParamsKeys,
 										Computed:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: diskImageDiffSuppress,
+										DiffSuppressFunc: DiskImageDiffSuppress,
 										Description:      `The image from which this disk was initialised.`,
 									},
 
@@ -232,7 +235,7 @@ func resourceComputeInstance() *schema.Resource {
 							Computed:         true,
 							ForceNew:         true,
 							ConflictsWith:    []string{"boot_disk.initialize_params"},
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The name or self_link of the disk attached to this instance.`,
 						},
 					},
@@ -263,7 +266,7 @@ func resourceComputeInstance() *schema.Resource {
 							Type:             schema.TypeString,
 							Optional:         true,
 							Computed:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The name or self_link of the network attached to this interface.`,
 						},
 
@@ -271,7 +274,7 @@ func resourceComputeInstance() *schema.Resource {
 							Type:             schema.TypeString,
 							Optional:         true,
 							Computed:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The name or self_link of the subnetwork attached to this interface.`,
 						},
 
@@ -339,7 +342,7 @@ func resourceComputeInstance() *schema.Resource {
 									"ip_cidr_range": {
 										Type:             schema.TypeString,
 										Required:         true,
-										DiffSuppressFunc: ipCidrRangeDiffSuppress,
+										DiffSuppressFunc: tpgresource.IpCidrRangeDiffSuppress,
 										Description:      `The IP CIDR range represented by this alias IP range.`,
 									},
 									"subnetwork_range_name": {
@@ -419,7 +422,7 @@ func resourceComputeInstance() *schema.Resource {
 						"source": {
 							Type:             schema.TypeString,
 							Required:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The name or self_link of the disk attached to this instance.`,
 						},
 
@@ -448,7 +451,7 @@ func resourceComputeInstance() *schema.Resource {
 						"kms_key_self_link": {
 							Type:             schema.TypeString,
 							Optional:         true,
-							DiffSuppressFunc: compareSelfLinkRelativePaths,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 							Computed:         true,
 							Description:      `The self_link of the encryption key that is stored in Google Cloud KMS to encrypt this disk. Only one of kms_key_self_link and disk_encryption_key_raw may be set.`,
 						},
@@ -508,7 +511,7 @@ func resourceComputeInstance() *schema.Resource {
 							Type:             schema.TypeString,
 							Required:         true,
 							ForceNew:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The accelerator type resource exposed to this instance. E.g. nvidia-tesla-k80.`,
 						},
 					},
@@ -593,7 +596,7 @@ func resourceComputeInstance() *schema.Resource {
 							Optional:         true,
 							AtLeastOneOf:     schedulingKeys,
 							Elem:             instanceSchedulingNodeAffinitiesElemSchema(),
-							DiffSuppressFunc: emptyOrDefaultStringSuppress(""),
+							DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress(""),
 							Description:      `Specifies node affinities or anti-affinities to determine which sole-tenant nodes your instances and managed instance groups will use as host systems.`,
 						},
 
@@ -635,6 +638,14 @@ func resourceComputeInstance() *schema.Resource {
 							ValidateFunc: validation.StringInSlice([]string{"SCSI", "NVME"}, false),
 							Description:  `The disk interface used for attaching this disk. One of SCSI or NVME.`,
 						},
+						"size": {
+							Type:         schema.TypeInt,
+							Optional:     true,
+							ForceNew:     true,
+							ValidateFunc: validation.IntAtLeast(375),
+							Default:      375,
+							Description:  `The size of the disk in gigabytes. One of 375 or 3000.`,
+						},
 					},
 				},
 			},
@@ -661,10 +672,10 @@ func resourceComputeInstance() *schema.Resource {
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
 								StateFunc: func(v interface{}) string {
-									return canonicalizeServiceScope(v.(string))
+									return tpgresource.CanonicalizeServiceScope(v.(string))
 								},
 							},
-							Set: stringScopeHashcode,
+							Set: tpgresource.StringScopeHashcode,
 						},
 					},
 				},
@@ -677,7 +688,7 @@ func resourceComputeInstance() *schema.Resource {
 				// Since this block is used by the API based on which
 				// image being used, the field needs to be marked as Computed.
 				Computed:         true,
-				DiffSuppressFunc: emptyOrDefaultStringSuppress(""),
+				DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress(""),
 				Description:      `The shielded vm config being used by the instance.`,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -725,6 +736,12 @@ func resourceComputeInstance() *schema.Resource {
 							Optional:     true,
 							AtLeastOneOf: []string{"advanced_machine_features.0.enable_nested_virtualization", "advanced_machine_features.0.threads_per_core"},
 							Description:  `The number of threads per physical core. To disable simultaneous multithreading (SMT) set this to 1. If unset, the maximum number of threads supported per core by the underlying processor is assumed.`,
+						},
+						"visible_core_count": {
+							Type:         schema.TypeInt,
+							Optional:     true,
+							AtLeastOneOf: []string{"advanced_machine_features.0.enable_nested_virtualization", "advanced_machine_features.0.threads_per_core", "advanced_machine_features.0.visible_core_count"},
+							Description:  `The number of physical cores to expose to an instance. Multiply by the number of threads per core to compute the total number of virtual CPUs to expose to the instance. If unset, the number of cores is inferred from the instance\'s nominal CPU count and the underlying platform\'s SMT width.`,
 						},
 					},
 				},
@@ -819,10 +836,10 @@ func resourceComputeInstance() *schema.Resource {
 			"resource_policies": {
 				Type:             schema.TypeList,
 				Elem:             &schema.Schema{Type: schema.TypeString},
-				DiffSuppressFunc: compareSelfLinkRelativePaths,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 				Optional:         true,
 				MaxItems:         1,
-				Description:      `A list of short names or self_links of resource policies to attach to the instance. Currently a max of 1 resource policy is supported.`,
+				Description:      `A list of self_links of resource policies to attach to the instance. Currently a max of 1 resource policy is supported.`,
 			},
 
 			"reservation_affinity": {
@@ -885,7 +902,7 @@ func resourceComputeInstance() *schema.Resource {
 	}
 }
 
-func getInstance(config *Config, d *schema.ResourceData) (*compute.Instance, error) {
+func getInstance(config *transport_tpg.Config, d *schema.ResourceData) (*compute.Instance, error) {
 	project, err := getProject(d, config)
 	if err != nil {
 		return nil, err
@@ -894,24 +911,24 @@ func getInstance(config *Config, d *schema.ResourceData) (*compute.Instance, err
 	if err != nil {
 		return nil, err
 	}
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
 	instance, err := config.NewComputeClient(userAgent).Instances.Get(project, zone, d.Get("name").(string)).Do()
 	if err != nil {
-		return nil, handleNotFoundError(err, d, fmt.Sprintf("Instance %s", d.Get("name").(string)))
+		return nil, transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Instance %s", d.Get("name").(string)))
 	}
 	return instance, nil
 }
 
-func getDisk(diskUri string, d *schema.ResourceData, config *Config) (*compute.Disk, error) {
+func getDisk(diskUri string, d *schema.ResourceData, config *transport_tpg.Config) (*compute.Disk, error) {
 	source, err := ParseDiskFieldValue(diskUri, d, config)
 	if err != nil {
 		return nil, err
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +941,7 @@ func getDisk(diskUri string, d *schema.ResourceData, config *Config) (*compute.D
 	return disk, err
 }
 
-func expandComputeInstance(project string, d *schema.ResourceData, config *Config) (*compute.Instance, error) {
+func expandComputeInstance(project string, d *schema.ResourceData, config *transport_tpg.Config) (*compute.Instance, error) {
 	// Get the machine type
 	var machineTypeUrl string
 	if mt, ok := d.GetOk("machine_type"); ok {
@@ -1041,7 +1058,7 @@ func getAllStatusBut(status string) []string {
 	return computeInstanceStatus
 }
 
-func waitUntilInstanceHasDesiredStatus(config *Config, d *schema.ResourceData) error {
+func waitUntilInstanceHasDesiredStatus(config *transport_tpg.Config, d *schema.ResourceData) error {
 	desiredStatus := d.Get("desired_status").(string)
 
 	if desiredStatus != "" {
@@ -1073,8 +1090,8 @@ func waitUntilInstanceHasDesiredStatus(config *Config, d *schema.ResourceData) e
 }
 
 func resourceComputeInstanceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1111,7 +1128,7 @@ func resourceComputeInstanceCreate(d *schema.ResourceData, meta interface{}) err
 	d.SetId(fmt.Sprintf("projects/%s/zones/%s/instances/%s", project, z, instance.Name))
 
 	// Wait for the operation to complete
-	waitErr := computeOperationWaitTime(config, op, project, "instance to create", userAgent, d.Timeout(schema.TimeoutCreate))
+	waitErr := ComputeOperationWaitTime(config, op, project, "instance to create", userAgent, d.Timeout(schema.TimeoutCreate))
 	if waitErr != nil {
 		// The resource didn't actually create
 		d.SetId("")
@@ -1127,7 +1144,7 @@ func resourceComputeInstanceCreate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeInstanceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	project, err := getProject(d, config)
 	if err != nil {
@@ -1162,7 +1179,7 @@ func resourceComputeInstanceRead(d *schema.ResourceData, meta interface{}) error
 	if err := d.Set("can_ip_forward", instance.CanIpForward); err != nil {
 		return fmt.Errorf("Error setting can_ip_forward: %s", err)
 	}
-	if err := d.Set("machine_type", GetResourceNameFromSelfLink(instance.MachineType)); err != nil {
+	if err := d.Set("machine_type", tpgresource.GetResourceNameFromSelfLink(instance.MachineType)); err != nil {
 		return fmt.Errorf("Error setting machine_type: %s", err)
 	}
 	// Set the networks
@@ -1262,7 +1279,7 @@ func resourceComputeInstanceRead(d *schema.ResourceData, meta interface{}) error
 			}
 			adIndex, inConfig := attachedDiskSources[sourceLink]
 			di := map[string]interface{}{
-				"source":      ConvertSelfLinkToV1(disk.Source),
+				"source":      tpgresource.ConvertSelfLinkToV1(disk.Source),
 				"device_name": disk.DeviceName,
 				"mode":        disk.Mode,
 			}
@@ -1305,7 +1322,7 @@ func resourceComputeInstanceRead(d *schema.ResourceData, meta interface{}) error
 		}
 	}
 
-	zone := GetResourceNameFromSelfLink(instance.Zone)
+	zone := tpgresource.GetResourceNameFromSelfLink(instance.Zone)
 
 	if err := d.Set("service_account", flattenServiceAccounts(instance.ServiceAccounts)); err != nil {
 		return fmt.Errorf("Error setting service_account: %s", err)
@@ -1337,7 +1354,7 @@ func resourceComputeInstanceRead(d *schema.ResourceData, meta interface{}) error
 	if err := d.Set("deletion_protection", instance.DeletionProtection); err != nil {
 		return fmt.Errorf("Error setting deletion_protection: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(instance.SelfLink)); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(instance.SelfLink)); err != nil {
 		return fmt.Errorf("Error setting self_link: %s", err)
 	}
 	if err := d.Set("instance_id", fmt.Sprintf("%d", instance.Id)); err != nil {
@@ -1382,8 +1399,8 @@ func resourceComputeInstanceRead(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1402,7 +1419,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 	// Change back to getInstance(config, d) once updating alias ips is GA.
 	instance, err := config.NewComputeClient(userAgent).Instances.Get(project, zone, d.Get("name").(string)).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Instance %s", d.Get("name").(string)))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Instance %s", d.Get("name").(string)))
 	}
 
 	// Enable partial mode for the resource since it is possible
@@ -1415,12 +1432,12 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 		}
 
 		metadataV1 := &compute.Metadata{}
-		if err := Convert(metadata, metadataV1); err != nil {
+		if err := tpgresource.Convert(metadata, metadataV1); err != nil {
 			return err
 		}
 
 		// We're retrying for an error 412 where the metadata fingerprint is out of date
-		err = retry(
+		err = transport_tpg.Retry(
 			func() error {
 				// retrieve up-to-date metadata from the API in case several updates hit simultaneously. instances
 				// sometimes but not always share metadata fingerprints.
@@ -1436,7 +1453,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 					return fmt.Errorf("Error updating metadata: %s", err)
 				}
 
-				opErr := computeOperationWaitTime(config, op, project, "metadata to update", userAgent, d.Timeout(schema.TimeoutUpdate))
+				opErr := ComputeOperationWaitTime(config, op, project, "metadata to update", userAgent, d.Timeout(schema.TimeoutUpdate))
 				if opErr != nil {
 					return opErr
 				}
@@ -1453,7 +1470,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 	if d.HasChange("tags") {
 		tags := resourceInstanceTags(d)
 		tagsV1 := &compute.Tags{}
-		if err := Convert(tags, tagsV1); err != nil {
+		if err := tpgresource.Convert(tags, tagsV1); err != nil {
 			return err
 		}
 		op, err := config.NewComputeClient(userAgent).Instances.SetTags(
@@ -1462,7 +1479,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			return fmt.Errorf("Error updating tags: %s", err)
 		}
 
-		opErr := computeOperationWaitTime(config, op, project, "tags to update", userAgent, d.Timeout(schema.TimeoutUpdate))
+		opErr := ComputeOperationWaitTime(config, op, project, "tags to update", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if opErr != nil {
 			return opErr
 		}
@@ -1478,7 +1495,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			return fmt.Errorf("Error updating labels: %s", err)
 		}
 
-		opErr := computeOperationWaitTime(config, op, project, "labels to update", userAgent, d.Timeout(schema.TimeoutUpdate))
+		opErr := ComputeOperationWaitTime(config, op, project, "labels to update", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if opErr != nil {
 			return opErr
 		}
@@ -1493,7 +1510,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return fmt.Errorf("Error removing existing resource policies: %s", err)
 			}
 
-			opErr := computeOperationWaitTime(config, op, project, "resource policies to remove", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "resource policies to remove", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1508,7 +1525,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return fmt.Errorf("Error adding resource policies: %s", err)
 			}
 
-			opErr := computeOperationWaitTime(config, op, project, "resource policies to add", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "resource policies to add", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1529,7 +1546,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			return fmt.Errorf("Error updating scheduling policy: %s", err)
 		}
 
-		opErr := computeOperationWaitTime(
+		opErr := ComputeOperationWaitTime(
 			config, op, project, "scheduling policy update", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if opErr != nil {
@@ -1627,7 +1644,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				if err != nil {
 					return errwrap.Wrapf("Error removing alias_ip_range: {{err}}", err)
 				}
-				opErr := computeOperationWaitTime(config, op, project, "updating alias ip ranges", userAgent, d.Timeout(schema.TimeoutUpdate))
+				opErr := ComputeOperationWaitTime(config, op, project, "updating alias ip ranges", userAgent, d.Timeout(schema.TimeoutUpdate))
 				if opErr != nil {
 					return opErr
 				}
@@ -1648,7 +1665,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			if err != nil {
 				return errwrap.Wrapf("Error updating network interface: {{err}}", err)
 			}
-			opErr := computeOperationWaitTime(config, op, project, "network interface to update", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "network interface to update", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1732,7 +1749,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 
 			if _, ok := oDisks[hash]; !ok {
 				computeDiskV1 := &compute.AttachedDisk{}
-				err = Convert(computeDisk, computeDiskV1)
+				err = tpgresource.Convert(computeDisk, computeDiskV1)
 				if err != nil {
 					return err
 				}
@@ -1749,7 +1766,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 					return errwrap.Wrapf("Error detaching disk: %s", err)
 				}
 
-				opErr := computeOperationWaitTime(config, op, project, "detaching disk", userAgent, d.Timeout(schema.TimeoutUpdate))
+				opErr := ComputeOperationWaitTime(config, op, project, "detaching disk", userAgent, d.Timeout(schema.TimeoutUpdate))
 				if opErr != nil {
 					return opErr
 				}
@@ -1764,7 +1781,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return errwrap.Wrapf("Error attaching disk : {{err}}", err)
 			}
 
-			opErr := computeOperationWaitTime(config, op, project, "attaching disk", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "attaching disk", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1796,14 +1813,14 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			return fmt.Errorf("Error updating deletion protection flag: %s", err)
 		}
 
-		opErr := computeOperationWaitTime(config, op, project, "deletion protection to update", userAgent, d.Timeout(schema.TimeoutUpdate))
+		opErr := ComputeOperationWaitTime(config, op, project, "deletion protection to update", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if opErr != nil {
 			return opErr
 		}
 	}
 
 	if d.HasChange("can_ip_forward") {
-		err = retry(
+		err = transport_tpg.Retry(
 			func() error {
 				instance, err := config.NewComputeClient(userAgent).Instances.Get(project, zone, instance.Name).Do()
 				if err != nil {
@@ -1817,7 +1834,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 					return fmt.Errorf("Error updating instance: %s", err)
 				}
 
-				opErr := computeOperationWaitTime(config, op, project, "can_ip_forward, updating", userAgent, d.Timeout(schema.TimeoutUpdate))
+				opErr := ComputeOperationWaitTime(config, op, project, "can_ip_forward, updating", userAgent, d.Timeout(schema.TimeoutUpdate))
 				if opErr != nil {
 					return opErr
 				}
@@ -1850,7 +1867,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 					return err
 				}
 			}
-			opErr := computeOperationWaitTime(
+			opErr := ComputeOperationWaitTime(
 				config, op, project, "updating status", userAgent,
 				d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
@@ -1877,7 +1894,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return errwrap.Wrapf("Error stopping instance: {{err}}", err)
 			}
 
-			opErr := computeOperationWaitTime(config, op, project, "stopping instance", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "stopping instance", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1895,7 +1912,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			if err != nil {
 				return err
 			}
-			opErr := computeOperationWaitTime(config, op, project, "updating machinetype", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "updating machinetype", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1916,7 +1933,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			if err != nil {
 				return err
 			}
-			opErr := computeOperationWaitTime(config, op, project, "updating min cpu platform", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "updating min cpu platform", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1928,13 +1945,13 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			if len(sa) > 0 && sa[0] != nil {
 				saMap := sa[0].(map[string]interface{})
 				req.Email = saMap["email"].(string)
-				req.Scopes = canonicalizeServiceScopes(convertStringSet(saMap["scopes"].(*schema.Set)))
+				req.Scopes = tpgresource.CanonicalizeServiceScopes(convertStringSet(saMap["scopes"].(*schema.Set)))
 			}
 			op, err := config.NewComputeClient(userAgent).Instances.SetServiceAccount(project, zone, instance.Name, req).Do()
 			if err != nil {
 				return err
 			}
-			opErr := computeOperationWaitTime(config, op, project, "updating service account", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "updating service account", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1949,7 +1966,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 			if err != nil {
 				return fmt.Errorf("Error updating display device: %s", err)
 			}
-			opErr := computeOperationWaitTime(config, op, project, "updating display device", userAgent, d.Timeout(schema.TimeoutUpdate))
+			opErr := ComputeOperationWaitTime(config, op, project, "updating display device", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
 			}
@@ -1963,7 +1980,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return fmt.Errorf("Error updating shielded vm config: %s", err)
 			}
 
-			opErr := computeOperationWaitTime(config, op, project,
+			opErr := ComputeOperationWaitTime(config, op, project,
 				"shielded vm config update", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
@@ -1982,7 +1999,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return fmt.Errorf("Error updating scheduling policy: %s", err)
 			}
 
-			opErr := computeOperationWaitTime(
+			opErr := ComputeOperationWaitTime(
 				config, op, project, "scheduling policy update", userAgent,
 				d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
@@ -1991,7 +2008,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 		}
 
 		if d.HasChange("advanced_machine_features") {
-			err = retry(
+			err = transport_tpg.Retry(
 				func() error {
 					// retrieve up-to-date instance from the API in case several updates hit simultaneously. instances
 					// sometimes but not always share metadata fingerprints.
@@ -2007,7 +2024,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 						return fmt.Errorf("Error updating instance: %s", err)
 					}
 
-					opErr := computeOperationWaitTime(config, op, project, "advanced_machine_features to update", userAgent, d.Timeout(schema.TimeoutUpdate))
+					opErr := ComputeOperationWaitTime(config, op, project, "advanced_machine_features to update", userAgent, d.Timeout(schema.TimeoutUpdate))
 					if opErr != nil {
 						return opErr
 					}
@@ -2043,7 +2060,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 				return errwrap.Wrapf("Error starting instance: {{err}}", err)
 			}
 
-			opErr := computeOperationWaitTime(config, op, project,
+			opErr := ComputeOperationWaitTime(config, op, project,
 				"starting instance", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if opErr != nil {
 				return opErr
@@ -2057,7 +2074,7 @@ func resourceComputeInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 	return resourceComputeInstanceRead(d, meta)
 }
 
-func startInstanceOperation(d *schema.ResourceData, config *Config) (*compute.Operation, error) {
+func startInstanceOperation(d *schema.ResourceData, config *transport_tpg.Config) (*compute.Operation, error) {
 	project, err := getProject(d, config)
 	if err != nil {
 		return nil, err
@@ -2068,7 +2085,7 @@ func startInstanceOperation(d *schema.ResourceData, config *Config) (*compute.Op
 		return nil, err
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -2077,7 +2094,7 @@ func startInstanceOperation(d *schema.ResourceData, config *Config) (*compute.Op
 	// Change back to getInstance(config, d) once updating alias ips is GA.
 	instance, err := config.NewComputeClient(userAgent).Instances.Get(project, zone, d.Get("name").(string)).Do()
 	if err != nil {
-		return nil, handleNotFoundError(err, d, fmt.Sprintf("Instance %s", instance.Name))
+		return nil, transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Instance %s", instance.Name))
 	}
 
 	// Retrieve instance from config to pull encryption keys if necessary
@@ -2108,7 +2125,7 @@ func startInstanceOperation(d *schema.ResourceData, config *Config) (*compute.Op
 }
 
 func expandAttachedDisk(diskConfig map[string]interface{}, d *schema.ResourceData, meta interface{}) (*compute.AttachedDisk, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	s := diskConfig["source"].(string)
 	var sourceLink string
@@ -2163,7 +2180,7 @@ func expandAttachedDisk(diskConfig map[string]interface{}, d *schema.ResourceDat
 
 // See comment on expandInstanceTemplateGuestAccelerators regarding why this
 // code is duplicated.
-func expandInstanceGuestAccelerators(d TerraformResourceData, config *Config) ([]*compute.AcceleratorConfig, error) {
+func expandInstanceGuestAccelerators(d TerraformResourceData, config *transport_tpg.Config) ([]*compute.AcceleratorConfig, error) {
 	configs, ok := d.GetOk("guest_accelerator")
 	if !ok {
 		return nil, nil
@@ -2252,8 +2269,8 @@ func desiredStatusDiff(_ context.Context, diff *schema.ResourceDiff, meta interf
 }
 
 func resourceComputeInstanceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -2278,7 +2295,7 @@ func resourceComputeInstanceDelete(d *schema.ResourceData, meta interface{}) err
 		}
 
 		// Wait for the operation to complete
-		opErr := computeOperationWaitTime(config, op, project, "instance to delete", userAgent, d.Timeout(schema.TimeoutDelete))
+		opErr := ComputeOperationWaitTime(config, op, project, "instance to delete", userAgent, d.Timeout(schema.TimeoutDelete))
 		if opErr != nil {
 			// Refresh operation to check status
 			op, _ = config.NewComputeClient(userAgent).ZoneOperations.Get(project, zone, strconv.FormatUint(op.Id, 10)).Do()
@@ -2294,8 +2311,8 @@ func resourceComputeInstanceDelete(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeInstanceImportState(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/zones/(?P<zone>[^/]+)/instances/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -2304,7 +2321,7 @@ func resourceComputeInstanceImportState(d *schema.ResourceData, meta interface{}
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/instances/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -2313,8 +2330,8 @@ func resourceComputeInstanceImportState(d *schema.ResourceData, meta interface{}
 	return []*schema.ResourceData{d}, nil
 }
 
-func expandBootDisk(d *schema.ResourceData, config *Config, project string) (*compute.AttachedDisk, error) {
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+func expandBootDisk(d *schema.ResourceData, config *transport_tpg.Config, project string) (*compute.AttachedDisk, error) {
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -2390,12 +2407,12 @@ func expandBootDisk(d *schema.ResourceData, config *Config, project string) (*co
 	return disk, nil
 }
 
-func flattenBootDisk(d *schema.ResourceData, disk *compute.AttachedDisk, config *Config) []map[string]interface{} {
+func flattenBootDisk(d *schema.ResourceData, disk *compute.AttachedDisk, config *transport_tpg.Config) []map[string]interface{} {
 	result := map[string]interface{}{
 		"auto_delete": disk.AutoDelete,
 		"device_name": disk.DeviceName,
 		"mode":        disk.Mode,
-		"source":      ConvertSelfLinkToV1(disk.Source),
+		"source":      tpgresource.ConvertSelfLinkToV1(disk.Source),
 		// disk_encryption_key_raw is not returned from the API, so copy it from what the user
 		// originally specified to avoid diffs.
 		"disk_encryption_key_raw": d.Get("boot_disk.0.disk_encryption_key_raw"),
@@ -2413,7 +2430,7 @@ func flattenBootDisk(d *schema.ResourceData, disk *compute.AttachedDisk, config 
 		}
 	} else {
 		result["initialize_params"] = []map[string]interface{}{{
-			"type": GetResourceNameFromSelfLink(diskDetails.Type),
+			"type": tpgresource.GetResourceNameFromSelfLink(diskDetails.Type),
 			// If the config specifies a family name that doesn't match the image name, then
 			// the diff won't be properly suppressed. See DiffSuppressFunc for this field.
 			"image":  diskDetails.SourceImage,
@@ -2436,7 +2453,7 @@ func flattenBootDisk(d *schema.ResourceData, disk *compute.AttachedDisk, config 
 	return []map[string]interface{}{result}
 }
 
-func expandScratchDisks(d *schema.ResourceData, config *Config, project string) ([]*compute.AttachedDisk, error) {
+func expandScratchDisks(d *schema.ResourceData, config *transport_tpg.Config, project string) ([]*compute.AttachedDisk, error) {
 	diskType, err := readDiskType(config, d, "local-ssd")
 	if err != nil {
 		return nil, fmt.Errorf("Error loading disk type 'local-ssd': %s", err)
@@ -2449,6 +2466,7 @@ func expandScratchDisks(d *schema.ResourceData, config *Config, project string) 
 			AutoDelete: true,
 			Type:       "SCRATCH",
 			Interface:  d.Get(fmt.Sprintf("scratch_disk.%d.interface", i)).(string),
+			DiskSizeGb: int64(d.Get(fmt.Sprintf("scratch_disk.%d.size", i)).(int)),
 			InitializeParams: &compute.AttachedDiskInitializeParams{
 				DiskType: diskType.RelativeLink(),
 			},
@@ -2461,6 +2479,7 @@ func expandScratchDisks(d *schema.ResourceData, config *Config, project string) 
 func flattenScratchDisk(disk *compute.AttachedDisk) map[string]interface{} {
 	result := map[string]interface{}{
 		"interface": disk.Interface,
+		"size":      disk.DiskSizeGb,
 	}
 	return result
 }

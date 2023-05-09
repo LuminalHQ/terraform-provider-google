@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
 	"google.golang.org/api/logging/v2"
 )
 
@@ -26,7 +27,7 @@ func resourceLoggingSinkSchema() map[string]*schema.Schema {
 		"filter": {
 			Type:             schema.TypeString,
 			Optional:         true,
-			DiffSuppressFunc: optionalSurroundingSpacesSuppress,
+			DiffSuppressFunc: tpgresource.OptionalSurroundingSpacesSuppress,
 			Description:      `The filter to apply when exporting logs. Only log entries that match the filter are exported.`,
 		},
 
@@ -45,7 +46,7 @@ func resourceLoggingSinkSchema() map[string]*schema.Schema {
 		"exclusions": {
 			Type:        schema.TypeList,
 			Optional:    true,
-			Description: `Log entries that match any of the exclusion filters will not be exported. If a log entry is matched by both filter and one of exclusion_filters it will not be exported.`,
+			Description: `Log entries that match any of the exclusion filters will not be exported. If a log entry is matched by both filter and one of exclusion's filters, it will not be exported.`,
 			Elem: &schema.Resource{
 				Schema: map[string]*schema.Schema{
 					"name": {

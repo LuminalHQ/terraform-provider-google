@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Pub/Sub"
-page_title: "Google: google_pubsub_subscription"
 description: |-
   A named resource representing the stream of messages from a single,
   specific topic, to be delivered to the subscribing application.
@@ -31,7 +30,7 @@ To get more information about Subscription, see:
 * How-to Guides
     * [Managing Subscriptions](https://cloud.google.com/pubsub/docs/admin#managing_subscriptions)
 
-~> **Note:** You can retrieve the email of the Google Managed Pub/Sub Service Account used for forwarding 
+~> **Note:** You can retrieve the email of the Google Managed Pub/Sub Service Account used for forwarding
 by using the `google_project_service_identity` resource.
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
@@ -163,7 +162,7 @@ resource "google_pubsub_subscription" "example" {
   topic = google_pubsub_topic.example.name
 
   bigquery_config {
-    table = "${google_bigquery_table.test.project}:${google_bigquery_table.test.dataset_id}.${google_bigquery_table.test.table_id}"
+    table = "${google_bigquery_table.test.project}.${google_bigquery_table.test.dataset_id}.${google_bigquery_table.test.table_id}"
   }
 
   depends_on = [google_project_iam_member.viewer, google_project_iam_member.editor]
@@ -290,9 +289,9 @@ The following arguments are supported:
 
 * `filter` -
   (Optional)
-  The subscription only delivers the messages that match the filter. 
+  The subscription only delivers the messages that match the filter.
   Pub/Sub automatically acknowledges the messages that don't match the filter. You can filter messages
-  by their attributes. The maximum length of a filter is 256 bytes. After creating the subscription, 
+  by their attributes. The maximum length of a filter is 256 bytes. After creating the subscription,
   you can't modify the filter.
 
 * `dead_letter_policy` -
@@ -309,7 +308,7 @@ The following arguments are supported:
 * `retry_policy` -
   (Optional)
   A policy that specifies how Pub/Sub retries message delivery for this subscription.
-  If not set, the default retry policy is applied. This generally implies that messages will be retried as soon as possible for healthy subscribers. 
+  If not set, the default retry policy is applied. This generally implies that messages will be retried as soon as possible for healthy subscribers.
   RetryPolicy will be triggered on NACKs or acknowledgement deadline exceeded events for a given message
   Structure is [documented below](#nested_retry_policy).
 
@@ -412,7 +411,7 @@ The following arguments are supported:
   (Required)
   Specifies the "time-to-live" duration for an associated resource. The
   resource expires if it is not active for a period of ttl.
-  If ttl is not set, the associated resource never expires.
+  If ttl is set to "", the associated resource never expires.
   A duration in seconds with up to nine fractional digits, terminated by 's'.
   Example - "3.5s".
 
@@ -423,7 +422,7 @@ The following arguments are supported:
   The name of the topic to which dead letter messages should be published.
   Format is `projects/{project}/topics/{topic}`.
   The Cloud Pub/Sub service account associated with the enclosing subscription's
-  parent project (i.e., 
+  parent project (i.e.,
   service-{project_number}@gcp-sa-pubsub.iam.gserviceaccount.com) must have
   permission to Publish() to this topic.
   The operation will fail if the topic does not exist.
@@ -434,7 +433,7 @@ The following arguments are supported:
   (Optional)
   The maximum number of delivery attempts for any message. The value must be
   between 5 and 100.
-  The number of delivery attempts is defined as 1 + (the sum of number of 
+  The number of delivery attempts is defined as 1 + (the sum of number of
   NACKs and number of times the acknowledgement deadline has been exceeded for the message).
   A NACK is any call to ModifyAckDeadline with a 0 deadline. Note that
   client libraries may automatically extend ack_deadlines.
@@ -450,7 +449,7 @@ The following arguments are supported:
 
 * `maximum_backoff` -
   (Optional)
-  The maximum delay between consecutive deliveries of a given message. Value should be between 0 and 600 seconds. Defaults to 600 seconds. 
+  The maximum delay between consecutive deliveries of a given message. Value should be between 0 and 600 seconds. Defaults to 600 seconds.
   A duration in seconds with up to nine fractional digits, terminated by 's'. Example: "3.5s".
 
 ## Attributes Reference
@@ -463,7 +462,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -482,4 +481,4 @@ $ terraform import google_pubsub_subscription.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceIdentityPlatformTenant() *schema.Resource {
+func ResourceIdentityPlatformTenant() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceIdentityPlatformTenantCreate,
 		Read:   resourceIdentityPlatformTenantRead,
@@ -81,8 +84,8 @@ are not able to manage its users.`,
 }
 
 func resourceIdentityPlatformTenantCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -113,7 +116,7 @@ func resourceIdentityPlatformTenantCreate(d *schema.ResourceData, meta interface
 		obj["disableAuth"] = disableAuthProp
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants")
 	if err != nil {
 		return err
 	}
@@ -132,7 +135,7 @@ func resourceIdentityPlatformTenantCreate(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Tenant: %s", err)
 	}
@@ -141,7 +144,7 @@ func resourceIdentityPlatformTenantCreate(d *schema.ResourceData, meta interface
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/tenants/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/tenants/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -152,11 +155,11 @@ func resourceIdentityPlatformTenantCreate(d *schema.ResourceData, meta interface
 	if !ok {
 		return fmt.Errorf("Create response didn't contain critical fields. Create may not have succeeded.")
 	}
-	if err := d.Set("name", GetResourceNameFromSelfLink(name.(string))); err != nil {
+	if err := d.Set("name", tpgresource.GetResourceNameFromSelfLink(name.(string))); err != nil {
 		return fmt.Errorf("Error setting name: %s", err)
 	}
 	// Store the ID now that we have set the computed name
-	id, err = replaceVars(d, config, "projects/{{project}}/tenants/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/tenants/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -168,13 +171,13 @@ func resourceIdentityPlatformTenantCreate(d *schema.ResourceData, meta interface
 }
 
 func resourceIdentityPlatformTenantRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -192,9 +195,9 @@ func resourceIdentityPlatformTenantRead(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("IdentityPlatformTenant %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("IdentityPlatformTenant %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -221,8 +224,8 @@ func resourceIdentityPlatformTenantRead(d *schema.ResourceData, meta interface{}
 }
 
 func resourceIdentityPlatformTenantUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -261,7 +264,7 @@ func resourceIdentityPlatformTenantUpdate(d *schema.ResourceData, meta interface
 		obj["disableAuth"] = disableAuthProp
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -284,9 +287,9 @@ func resourceIdentityPlatformTenantUpdate(d *schema.ResourceData, meta interface
 	if d.HasChange("disable_auth") {
 		updateMask = append(updateMask, "disableAuth")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -296,7 +299,7 @@ func resourceIdentityPlatformTenantUpdate(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Tenant %q: %s", d.Id(), err)
@@ -308,8 +311,8 @@ func resourceIdentityPlatformTenantUpdate(d *schema.ResourceData, meta interface
 }
 
 func resourceIdentityPlatformTenantDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -322,7 +325,7 @@ func resourceIdentityPlatformTenantDelete(d *schema.ResourceData, meta interface
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -335,9 +338,9 @@ func resourceIdentityPlatformTenantDelete(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Tenant")
+		return transport_tpg.HandleNotFoundError(err, d, "Tenant")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Tenant %q: %#v", d.Id(), res)
@@ -345,8 +348,8 @@ func resourceIdentityPlatformTenantDelete(d *schema.ResourceData, meta interface
 }
 
 func resourceIdentityPlatformTenantImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/tenants/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -355,7 +358,7 @@ func resourceIdentityPlatformTenantImport(d *schema.ResourceData, meta interface
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/tenants/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/tenants/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -364,41 +367,41 @@ func resourceIdentityPlatformTenantImport(d *schema.ResourceData, meta interface
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenIdentityPlatformTenantName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenIdentityPlatformTenantDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantAllowPasswordSignup(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantAllowPasswordSignup(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantEnableEmailLinkSignin(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantEnableEmailLinkSignin(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantDisableAuth(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantDisableAuth(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandIdentityPlatformTenantDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantAllowPasswordSignup(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantAllowPasswordSignup(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantEnableEmailLinkSignin(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantEnableEmailLinkSignin(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantDisableAuth(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantDisableAuth(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	osconfig "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/osconfig"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceOsConfigOsPolicyAssignment() *schema.Resource {
+func ResourceOsConfigOsPolicyAssignment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceOsConfigOsPolicyAssignmentCreate,
 		Read:   resourceOsConfigOsPolicyAssignmentRead,
@@ -95,6 +97,12 @@ func resourceOsConfigOsPolicyAssignment() *schema.Resource {
 				ForceNew:         true,
 				DiffSuppressFunc: compareSelfLinkOrResourceName,
 				Description:      "The project for the resource",
+			},
+
+			"skip_await_rollout": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Set to true to skip awaiting rollout during resource creation and update.",
 			},
 
 			"baseline": {
@@ -1309,20 +1317,21 @@ func OsConfigOsPolicyAssignmentRolloutDisruptionBudgetSchema() *schema.Resource 
 }
 
 func resourceOsConfigOsPolicyAssignmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
 	}
 
 	obj := &osconfig.OSPolicyAssignment{
-		InstanceFilter: expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
-		Location:       dcl.String(d.Get("location").(string)),
-		Name:           dcl.String(d.Get("name").(string)),
-		OSPolicies:     expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
-		Rollout:        expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
-		Description:    dcl.String(d.Get("description").(string)),
-		Project:        dcl.String(project),
+		InstanceFilter:   expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
+		Location:         dcl.String(d.Get("location").(string)),
+		Name:             dcl.String(d.Get("name").(string)),
+		OSPolicies:       expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
+		Rollout:          expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
+		Description:      dcl.String(d.Get("description").(string)),
+		Project:          dcl.String(project),
+		SkipAwaitRollout: dcl.Bool(d.Get("skip_await_rollout").(bool)),
 	}
 
 	id, err := obj.ID()
@@ -1331,7 +1340,7 @@ func resourceOsConfigOsPolicyAssignmentCreate(d *schema.ResourceData, meta inter
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1340,8 +1349,8 @@ func resourceOsConfigOsPolicyAssignmentCreate(d *schema.ResourceData, meta inter
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -1363,23 +1372,24 @@ func resourceOsConfigOsPolicyAssignmentCreate(d *schema.ResourceData, meta inter
 }
 
 func resourceOsConfigOsPolicyAssignmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
 	}
 
 	obj := &osconfig.OSPolicyAssignment{
-		InstanceFilter: expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
-		Location:       dcl.String(d.Get("location").(string)),
-		Name:           dcl.String(d.Get("name").(string)),
-		OSPolicies:     expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
-		Rollout:        expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
-		Description:    dcl.String(d.Get("description").(string)),
-		Project:        dcl.String(project),
+		InstanceFilter:   expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
+		Location:         dcl.String(d.Get("location").(string)),
+		Name:             dcl.String(d.Get("name").(string)),
+		OSPolicies:       expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
+		Rollout:          expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
+		Description:      dcl.String(d.Get("description").(string)),
+		Project:          dcl.String(project),
+		SkipAwaitRollout: dcl.Bool(d.Get("skip_await_rollout").(bool)),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1388,8 +1398,8 @@ func resourceOsConfigOsPolicyAssignmentRead(d *schema.ResourceData, meta interfa
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -1422,6 +1432,9 @@ func resourceOsConfigOsPolicyAssignmentRead(d *schema.ResourceData, meta interfa
 	if err = d.Set("project", res.Project); err != nil {
 		return fmt.Errorf("error setting project in state: %s", err)
 	}
+	if err = d.Set("skip_await_rollout", res.SkipAwaitRollout); err != nil {
+		return fmt.Errorf("error setting skip_await_rollout in state: %s", err)
+	}
 	if err = d.Set("baseline", res.Baseline); err != nil {
 		return fmt.Errorf("error setting baseline in state: %s", err)
 	}
@@ -1450,23 +1463,36 @@ func resourceOsConfigOsPolicyAssignmentRead(d *schema.ResourceData, meta interfa
 	return nil
 }
 func resourceOsConfigOsPolicyAssignmentUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
 	}
 
 	obj := &osconfig.OSPolicyAssignment{
-		InstanceFilter: expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
-		Location:       dcl.String(d.Get("location").(string)),
-		Name:           dcl.String(d.Get("name").(string)),
-		OSPolicies:     expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
-		Rollout:        expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
-		Description:    dcl.String(d.Get("description").(string)),
-		Project:        dcl.String(project),
+		InstanceFilter:   expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
+		Location:         dcl.String(d.Get("location").(string)),
+		Name:             dcl.String(d.Get("name").(string)),
+		OSPolicies:       expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
+		Rollout:          expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
+		Description:      dcl.String(d.Get("description").(string)),
+		Project:          dcl.String(project),
+		SkipAwaitRollout: dcl.Bool(d.Get("skip_await_rollout").(bool)),
+	}
+	// Construct state hint from old values
+	old := &osconfig.OSPolicyAssignment{
+		InstanceFilter:   expandOsConfigOsPolicyAssignmentInstanceFilter(oldValue(d.GetChange("instance_filter"))),
+		Location:         dcl.String(oldValue(d.GetChange("location")).(string)),
+		Name:             dcl.String(oldValue(d.GetChange("name")).(string)),
+		OSPolicies:       expandOsConfigOsPolicyAssignmentOSPoliciesArray(oldValue(d.GetChange("os_policies"))),
+		Rollout:          expandOsConfigOsPolicyAssignmentRollout(oldValue(d.GetChange("rollout"))),
+		Description:      dcl.String(oldValue(d.GetChange("description")).(string)),
+		Project:          dcl.StringOrNil(oldValue(d.GetChange("project")).(string)),
+		SkipAwaitRollout: dcl.Bool(oldValue(d.GetChange("skip_await_rollout")).(bool)),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	directive = append(directive, dcl.WithStateHint(old))
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1476,8 +1502,8 @@ func resourceOsConfigOsPolicyAssignmentUpdate(d *schema.ResourceData, meta inter
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -1499,24 +1525,25 @@ func resourceOsConfigOsPolicyAssignmentUpdate(d *schema.ResourceData, meta inter
 }
 
 func resourceOsConfigOsPolicyAssignmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
 	}
 
 	obj := &osconfig.OSPolicyAssignment{
-		InstanceFilter: expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
-		Location:       dcl.String(d.Get("location").(string)),
-		Name:           dcl.String(d.Get("name").(string)),
-		OSPolicies:     expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
-		Rollout:        expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
-		Description:    dcl.String(d.Get("description").(string)),
-		Project:        dcl.String(project),
+		InstanceFilter:   expandOsConfigOsPolicyAssignmentInstanceFilter(d.Get("instance_filter")),
+		Location:         dcl.String(d.Get("location").(string)),
+		Name:             dcl.String(d.Get("name").(string)),
+		OSPolicies:       expandOsConfigOsPolicyAssignmentOSPoliciesArray(d.Get("os_policies")),
+		Rollout:          expandOsConfigOsPolicyAssignmentRollout(d.Get("rollout")),
+		Description:      dcl.String(d.Get("description").(string)),
+		Project:          dcl.String(project),
+		SkipAwaitRollout: dcl.Bool(d.Get("skip_await_rollout").(bool)),
 	}
 
 	log.Printf("[DEBUG] Deleting OSPolicyAssignment %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1525,8 +1552,8 @@ func resourceOsConfigOsPolicyAssignmentDelete(d *schema.ResourceData, meta inter
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLOsConfigClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -1541,9 +1568,9 @@ func resourceOsConfigOsPolicyAssignmentDelete(d *schema.ResourceData, meta inter
 }
 
 func resourceOsConfigOsPolicyAssignmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/osPolicyAssignments/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",

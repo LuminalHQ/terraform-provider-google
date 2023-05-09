@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
 )
 
 const readyStatusType string = "Ready"
@@ -53,7 +54,7 @@ func PollCheckKnativeStatusFunc(knativeRestResponse map[string]interface{}) func
 			return ErrorPollResult(respErr)
 		}
 		s := KnativeStatus{}
-		if err := Convert(resp, &s); err != nil {
+		if err := tpgresource.Convert(resp, &s); err != nil {
 			return ErrorPollResult(errwrap.Wrapf("unable to get KnativeStatus: {{err}}", err))
 		}
 
@@ -61,7 +62,7 @@ func PollCheckKnativeStatusFunc(knativeRestResponse map[string]interface{}) func
 		if err != nil {
 			return ErrorPollResult(errwrap.Wrapf("unable to find Knative generation: {{err}}", err))
 		}
-		if int(s.Status.ObservedGeneration) != gen {
+		if int(s.Status.ObservedGeneration) < gen {
 			return PendingStatusPollResult("waiting for observed generation to match")
 		}
 		for _, condition := range s.Status.Conditions {

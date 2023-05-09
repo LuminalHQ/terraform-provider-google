@@ -24,21 +24,24 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccEventarcTrigger_BasicHandWritten(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_name":  getTestProjectFromEnv(),
-		"region":        getTestRegionFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"region":        acctest.GetTestRegionFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckEventarcTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckEventarcTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccEventarcTrigger_BasicHandWritten(context),
@@ -307,7 +310,7 @@ func testAccCheckEventarcTriggerDestroyProducer(t *testing.T) func(s *terraform.
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
 			billingProject := ""
 			if config.BillingProject != "" {
@@ -317,6 +320,7 @@ func testAccCheckEventarcTriggerDestroyProducer(t *testing.T) func(s *terraform.
 			obj := &eventarc.Trigger{
 				Location:       dcl.String(rs.Primary.Attributes["location"]),
 				Name:           dcl.String(rs.Primary.Attributes["name"]),
+				Channel:        dcl.String(rs.Primary.Attributes["channel"]),
 				Project:        dcl.StringOrNil(rs.Primary.Attributes["project"]),
 				ServiceAccount: dcl.String(rs.Primary.Attributes["service_account"]),
 				CreateTime:     dcl.StringOrNil(rs.Primary.Attributes["create_time"]),
@@ -325,7 +329,7 @@ func testAccCheckEventarcTriggerDestroyProducer(t *testing.T) func(s *terraform.
 				UpdateTime:     dcl.StringOrNil(rs.Primary.Attributes["update_time"]),
 			}
 
-			client := NewDCLEventarcClient(config, config.userAgent, billingProject, 0)
+			client := transport_tpg.NewDCLEventarcClient(config, config.UserAgent, billingProject, 0)
 			_, err := client.GetTrigger(context.Background(), obj)
 			if err == nil {
 				return fmt.Errorf("google_eventarc_trigger still exists %v", obj)

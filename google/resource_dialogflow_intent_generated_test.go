@@ -21,20 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccDialogflowIntent_dialogflowIntentFullExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"org_id":        getTestOrgFromEnv(t),
-		"random_suffix": randString(t, 10),
+		"org_id":        acctest.GetTestOrgFromEnv(t),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckDialogflowIntentDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDialogflowIntentDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDialogflowIntent_dialogflowIntentFullExample(context),
@@ -51,8 +54,8 @@ func TestAccDialogflowIntent_dialogflowIntentFullExample(t *testing.T) {
 func testAccDialogflowIntent_dialogflowIntentFullExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_project" "agent_project" {
-  project_id = "tf-test-dialogflow-%{random_suffix}"
-  name = "tf-test-dialogflow-%{random_suffix}"
+  project_id = "tf-test-my-project%{random_suffix}"
+  name = "tf-test-my-project%{random_suffix}"
   org_id = "%{org_id}"
 }
 
@@ -63,7 +66,7 @@ resource "google_project_service" "agent_project" {
 }
 
 resource "google_service_account" "dialogflow_service_account" {
-  account_id = "tf-test-dialogflow-%{random_suffix}"
+  account_id = "tf-test-my-account%{random_suffix}"
 }
 
 resource "google_project_iam_member" "agent_create" {
@@ -106,9 +109,9 @@ func testAccCheckDialogflowIntentDestroyProducer(t *testing.T) func(s *terraform
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{DialogflowBasePath}}{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{DialogflowBasePath}}{{name}}")
 			if err != nil {
 				return err
 			}
@@ -119,7 +122,7 @@ func testAccCheckDialogflowIntentDestroyProducer(t *testing.T) func(s *terraform
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("DialogflowIntent still exists at %s", url)
 			}

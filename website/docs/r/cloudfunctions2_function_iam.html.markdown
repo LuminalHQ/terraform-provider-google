@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Functions (2nd gen)"
-page_title: "Google: google_cloudfunctions2_function_iam"
 description: |-
   Collection of resources to manage IAM policy for Cloud Functions (2nd gen) function
 ---
@@ -147,4 +146,4 @@ $ terraform import google_cloudfunctions2_function_iam_policy.editor projects/{{
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

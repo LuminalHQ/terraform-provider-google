@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func init() {
@@ -24,7 +25,7 @@ func testSweepComputeRegionInstanceGroupManager(region string) error {
 	resourceName := "ComputeRegionInstanceGroupManager"
 	log.Printf("[INFO][SWEEPER_LOG] Starting sweeper for %s", resourceName)
 
-	config, err := sharedConfigForRegion(region)
+	config, err := acctest.SharedConfigForRegion(region)
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] error getting shared config for region: %s", err)
 		return err
@@ -36,7 +37,7 @@ func testSweepComputeRegionInstanceGroupManager(region string) error {
 		return err
 	}
 
-	found, err := config.NewComputeClient(config.userAgent).RegionInstanceGroupManagers.List(config.Project, region).Do()
+	found, err := config.NewComputeClient(config.UserAgent).RegionInstanceGroupManagers.List(config.Project, region).Do()
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] Error in response from request: %s", err)
 		return nil
@@ -45,13 +46,13 @@ func testSweepComputeRegionInstanceGroupManager(region string) error {
 	// Keep count of items that aren't sweepable for logging.
 	nonPrefixCount := 0
 	for _, rigm := range found.Items {
-		if !isSweepableTestResource(rigm.Name) {
+		if !acctest.IsSweepableTestResource(rigm.Name) {
 			nonPrefixCount++
 			continue
 		}
 
 		// Don't wait on operations as we may have a lot to delete
-		_, err := config.NewComputeClient(config.userAgent).RegionInstanceGroupManagers.Delete(config.Project, region, rigm.Name).Do()
+		_, err := config.NewComputeClient(config.UserAgent).RegionInstanceGroupManagers.Delete(config.Project, region, rigm.Name).Do()
 		if err != nil {
 			log.Printf("[INFO][SWEEPER_LOG] Error deleting %s resource %s : %s", resourceName, rigm.Name, err)
 		} else {
@@ -69,15 +70,15 @@ func testSweepComputeRegionInstanceGroupManager(region string) error {
 func TestAccRegionInstanceGroupManager_basic(t *testing.T) {
 	t.Parallel()
 
-	template := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	target := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm1 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm2 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	template := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	target := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm1 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm2 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_basic(template, target, igm1, igm2),
@@ -101,13 +102,13 @@ func TestAccRegionInstanceGroupManager_basic(t *testing.T) {
 func TestAccRegionInstanceGroupManager_targetSizeZero(t *testing.T) {
 	t.Parallel()
 
-	templateName := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igmName := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	templateName := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igmName := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_targetSizeZero(templateName, igmName),
@@ -125,16 +126,16 @@ func TestAccRegionInstanceGroupManager_targetSizeZero(t *testing.T) {
 func TestAccRegionInstanceGroupManager_update(t *testing.T) {
 	t.Parallel()
 
-	template1 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	target1 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	target2 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	template2 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	template1 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	target1 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	target2 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	template2 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_update(template1, target1, igm),
@@ -169,17 +170,17 @@ func TestAccRegionInstanceGroupManager_update(t *testing.T) {
 
 func TestAccRegionInstanceGroupManager_updateLifecycle(t *testing.T) {
 	// Randomness in instance template
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	tag1 := "tag1"
 	tag2 := "tag2"
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_updateLifecycle(tag1, igm),
@@ -205,15 +206,15 @@ func TestAccRegionInstanceGroupManager_updateLifecycle(t *testing.T) {
 
 func TestAccRegionInstanceGroupManager_rollingUpdatePolicy(t *testing.T) {
 	// Randomness in instance template
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_rollingUpdatePolicy(igm),
@@ -253,16 +254,16 @@ func TestAccRegionInstanceGroupManager_rollingUpdatePolicy(t *testing.T) {
 
 func TestAccRegionInstanceGroupManager_separateRegions(t *testing.T) {
 	// Randomness in instance template
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	igm1 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm2 := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	igm1 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm2 := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_separateRegions(igm1, igm2),
@@ -286,14 +287,14 @@ func TestAccRegionInstanceGroupManager_separateRegions(t *testing.T) {
 func TestAccRegionInstanceGroupManager_versions(t *testing.T) {
 	t.Parallel()
 
-	primaryTemplate := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	canaryTemplate := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	primaryTemplate := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	canaryTemplate := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_versions(primaryTemplate, canaryTemplate, igm),
@@ -311,15 +312,15 @@ func TestAccRegionInstanceGroupManager_versions(t *testing.T) {
 func TestAccRegionInstanceGroupManager_autoHealingPolicies(t *testing.T) {
 	t.Parallel()
 
-	template := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	target := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	hck := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	template := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	target := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	hck := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_autoHealingPolicies(template, target, igm, hck),
@@ -346,14 +347,14 @@ func TestAccRegionInstanceGroupManager_autoHealingPolicies(t *testing.T) {
 func TestAccRegionInstanceGroupManager_distributionPolicy(t *testing.T) {
 	t.Parallel()
 
-	template := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	template := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
 	zones := []string{"us-central1-a", "us-central1-b"}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRegionInstanceGroupManager_distributionPolicy(template, igm, zones),
@@ -369,18 +370,21 @@ func TestAccRegionInstanceGroupManager_distributionPolicy(t *testing.T) {
 }
 
 func TestAccRegionInstanceGroupManager_stateful(t *testing.T) {
+	// TODO: Flaky test due to ordering of IPs https://github.com/hashicorp/terraform-provider-google/issues/13430
+	t.Skip()
 	t.Parallel()
 
-	template := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
-	igm := fmt.Sprintf("tf-test-rigm-%s", randString(t, 10))
+	template := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	igm := fmt.Sprintf("tf-test-rigm-%s", RandString(t, 10))
+	network := fmt.Sprintf("tf-test-igm-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRegionInstanceGroupManagerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccRegionInstanceGroupManager_stateful(template, igm),
+				Config: testAccRegionInstanceGroupManager_stateful(template, network, igm),
 			},
 			{
 				ResourceName:            "google_compute_region_instance_group_manager.igm-basic",
@@ -389,7 +393,16 @@ func TestAccRegionInstanceGroupManager_stateful(t *testing.T) {
 				ImportStateVerifyIgnore: []string{"status"},
 			},
 			{
-				Config: testAccRegionInstanceGroupManager_statefulUpdate(template, igm),
+				Config: testAccRegionInstanceGroupManager_statefulUpdate(template, network, igm),
+			},
+			{
+				ResourceName:            "google_compute_region_instance_group_manager.igm-basic",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"status"},
+			},
+			{
+				Config: testAccRegionInstanceGroupManager_statefulRemoved(template, network, igm),
 			},
 			{
 				ResourceName:            "google_compute_region_instance_group_manager.igm-basic",
@@ -403,12 +416,12 @@ func TestAccRegionInstanceGroupManager_stateful(t *testing.T) {
 
 func testAccCheckRegionInstanceGroupManagerDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
-		config := googleProviderConfig(t)
+		config := GoogleProviderConfig(t)
 		for _, rs := range s.RootModule().Resources {
 			if rs.Type != "google_compute_region_instance_group_manager" {
 				continue
 			}
-			_, err := config.NewComputeClient(config.userAgent).RegionInstanceGroupManagers.Get(
+			_, err := config.NewComputeClient(config.UserAgent).RegionInstanceGroupManagers.Get(
 				rs.Primary.Attributes["project"], rs.Primary.Attributes["region"], rs.Primary.Attributes["name"]).Do()
 			if err == nil {
 				return fmt.Errorf("RegionInstanceGroupManager still exists")
@@ -462,9 +475,10 @@ resource "google_compute_region_instance_group_manager" "igm-basic" {
     instance_template = google_compute_instance_template.igm-basic.self_link
   }
 
-  target_pools       = [google_compute_target_pool.igm-basic.self_link]
-  base_instance_name = "tf-test-igm-basic"
-  target_size        = 2
+  target_pools                   = [google_compute_target_pool.igm-basic.self_link]
+  base_instance_name             = "tf-test-igm-basic"
+  target_size                    = 2
+  list_managed_instances_results = "PAGINATED"
 }
 
 resource "google_compute_region_instance_group_manager" "igm-no-tp" {
@@ -476,9 +490,9 @@ resource "google_compute_region_instance_group_manager" "igm-no-tp" {
     instance_template = google_compute_instance_template.igm-basic.self_link
   }
 
-  base_instance_name = "tf-test-igm-no-tp"
-  region             = "us-central1"
-  target_size        = 2
+  base_instance_name             = "tf-test-igm-no-tp"
+  region                         = "us-central1"
+  target_size                    = 2
 }
 `, template, target, igm1, igm2)
 }
@@ -578,6 +592,7 @@ resource "google_compute_region_instance_group_manager" "igm-update" {
     port = 8080
   }
 
+
 }
 `, template, target, igm)
 }
@@ -657,9 +672,10 @@ resource "google_compute_region_instance_group_manager" "igm-update" {
     google_compute_target_pool.igm-update.self_link,
     google_compute_target_pool.igm-update2.self_link,
   ]
-  base_instance_name = "tf-test-igm-update"
-  region             = "us-central1"
-  target_size        = 3
+  base_instance_name             = "tf-test-igm-update"
+  region                         = "us-central1"
+  target_size                    = 3
+  list_managed_instances_results = "PAGINATED"
   named_port {
     name = "customhttp"
     port = 8080
@@ -668,6 +684,7 @@ resource "google_compute_region_instance_group_manager" "igm-update" {
     name = "customhttps"
     port = 8443
   }
+
 
 }
 `, template1, target1, target2, template2, igm)
@@ -744,9 +761,10 @@ resource "google_compute_region_instance_group_manager" "igm-update" {
     name              = "primary"
   }
 
-  base_instance_name = "tf-test-igm-update"
-  region             = "us-central1"
-  target_size        = 3
+  base_instance_name             = "tf-test-igm-update"
+  region                         = "us-central1"
+  target_size                    = 3
+  list_managed_instances_results = "PAGINATED"
   named_port {
     name = "customhttp"
     port = 8080
@@ -1312,13 +1330,15 @@ resource "google_compute_region_instance_group_manager" "igm-rolling-update-poli
 `, igm)
 }
 
-func testAccRegionInstanceGroupManager_stateful(template, igm string) string {
+func testAccRegionInstanceGroupManager_stateful(network, template, igm string) string {
 	return fmt.Sprintf(`
 data "google_compute_image" "my_image" {
   family  = "debian-11"
   project = "debian-cloud"
 }
-
+resource "google_compute_network" "igm-basic" {
+  name = "%s"
+}
 resource "google_compute_instance_template" "igm-basic" {
   name           = "%s"
   machine_type   = "e2-medium"
@@ -1337,6 +1357,9 @@ resource "google_compute_instance_template" "igm-basic" {
   }
   network_interface {
     network = "default"
+  }
+  network_interface {
+    network = google_compute_network.igm-basic.self_link
   }
 }
 
@@ -1363,17 +1386,19 @@ resource "google_compute_region_instance_group_manager" "igm-basic" {
     device_name = "stateful-disk"
     delete_rule = "NEVER"
   }
-}
-`, template, igm)
+  }
+`, network, template, igm)
 }
 
-func testAccRegionInstanceGroupManager_statefulUpdate(template, igm string) string {
+func testAccRegionInstanceGroupManager_statefulUpdate(network, template, igm string) string {
 	return fmt.Sprintf(`
 data "google_compute_image" "my_image" {
   family  = "debian-11"
   project = "debian-cloud"
 }
-
+resource "google_compute_network" "igm-basic" {
+  name = "%s"
+}
 resource "google_compute_instance_template" "igm-basic" {
   name           = "%s"
   machine_type   = "e2-medium"
@@ -1392,6 +1417,9 @@ resource "google_compute_instance_template" "igm-basic" {
   }
   network_interface {
     network = "default"
+  }
+  network_interface {
+    network = google_compute_network.igm-basic.self_link
   }
 }
 
@@ -1423,6 +1451,63 @@ resource "google_compute_region_instance_group_manager" "igm-basic" {
     device_name = "stateful-disk2"
     delete_rule = "ON_PERMANENT_INSTANCE_DELETION"
   }
+  }
+`, network, template, igm)
 }
-`, template, igm)
+
+func testAccRegionInstanceGroupManager_statefulRemoved(network, template, igm string) string {
+	return fmt.Sprintf(`
+data "google_compute_image" "my_image" {
+  family  = "debian-11"
+  project = "debian-cloud"
+}
+resource "google_compute_network" "igm-basic" {
+  name = "%s"
+}
+resource "google_compute_instance_template" "igm-basic" {
+  name           = "%s"
+  machine_type   = "e2-medium"
+  can_ip_forward = false
+  tags           = ["foo", "bar"]
+  disk {
+    source_image = data.google_compute_image.my_image.self_link
+    auto_delete  = true
+    boot         = true
+    device_name  = "stateful-disk"
+  }
+  disk {
+    source_image = data.google_compute_image.my_image.self_link
+    auto_delete  = true
+    device_name  = "stateful-disk2"
+  }
+  network_interface {
+    network = "default"
+  }
+  network_interface {
+    network = google_compute_network.igm-basic.self_link
+  }
+}
+
+resource "google_compute_region_instance_group_manager" "igm-basic" {
+  description = "Terraform test instance group manager"
+  name        = "%s"
+
+  version {
+    instance_template = google_compute_instance_template.igm-basic.self_link
+    name              = "primary"
+  }
+
+  base_instance_name        = "tf-test-igm-basic"
+  region                    = "us-central1"
+  target_size               = 2
+
+  update_policy {
+    instance_redistribution_type = "NONE"
+    type                         = "OPPORTUNISTIC"
+    minimal_action               = "REPLACE"
+    max_surge_fixed              = 0
+    max_unavailable_fixed        = 6
+  }
+}
+`, network, template, igm)
 }

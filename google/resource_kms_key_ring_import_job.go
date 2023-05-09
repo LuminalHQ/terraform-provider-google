@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceKMSKeyRingImportJob() *schema.Resource {
+func ResourceKMSKeyRingImportJob() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceKMSKeyRingImportJobCreate,
 		Read:   resourceKMSKeyRingImportJobRead,
@@ -50,7 +53,7 @@ func resourceKMSKeyRingImportJob() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"RSA_OAEP_3072_SHA1_AES_256", "RSA_OAEP_4096_SHA1_AES_256"}),
+				ValidateFunc: verify.ValidateEnum([]string{"RSA_OAEP_3072_SHA1_AES_256", "RSA_OAEP_4096_SHA1_AES_256"}),
 				Description:  `The wrapping method to be used for incoming key material. Possible values: ["RSA_OAEP_3072_SHA1_AES_256", "RSA_OAEP_4096_SHA1_AES_256"]`,
 			},
 			"key_ring": {
@@ -65,7 +68,7 @@ Format: ''projects/{{project}}/locations/{{location}}/keyRings/{{keyRing}}''.`,
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"SOFTWARE", "HSM", "EXTERNAL"}),
+				ValidateFunc: verify.ValidateEnum([]string{"SOFTWARE", "HSM", "EXTERNAL"}),
 				Description: `The protection level of the ImportJob. This must match the protectionLevel of the
 versionTemplate on the CryptoKey you attempt to import into. Possible values: ["SOFTWARE", "HSM", "EXTERNAL"]`,
 			},
@@ -128,8 +131,8 @@ for General Considerations and Textual Encoding of Subject Public Key Info.`,
 }
 
 func resourceKMSKeyRingImportJobCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -148,7 +151,7 @@ func resourceKMSKeyRingImportJobCreate(d *schema.ResourceData, meta interface{})
 		obj["protectionLevel"] = protectionLevelProp
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/importJobs?importJobId={{import_job_id}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/importJobs?importJobId={{import_job_id}}")
 	if err != nil {
 		return err
 	}
@@ -161,7 +164,7 @@ func resourceKMSKeyRingImportJobCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating KeyRingImportJob: %s", err)
 	}
@@ -170,7 +173,7 @@ func resourceKMSKeyRingImportJobCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -182,13 +185,13 @@ func resourceKMSKeyRingImportJobCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceKMSKeyRingImportJobRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -200,9 +203,9 @@ func resourceKMSKeyRingImportJobRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("KMSKeyRingImportJob %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("KMSKeyRingImportJob %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenKMSKeyRingImportJobName(res["name"], d, config)); err != nil {
@@ -231,15 +234,15 @@ func resourceKMSKeyRingImportJobRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceKMSKeyRingImportJobDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -252,9 +255,9 @@ func resourceKMSKeyRingImportJobDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "KeyRingImportJob")
+		return transport_tpg.HandleNotFoundError(err, d, "KeyRingImportJob")
 	}
 
 	log.Printf("[DEBUG] Finished deleting KeyRingImportJob %q: %#v", d.Id(), res)
@@ -263,10 +266,10 @@ func resourceKMSKeyRingImportJobDelete(d *schema.ResourceData, meta interface{})
 
 func resourceKMSKeyRingImportJobImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -288,27 +291,27 @@ func resourceKMSKeyRingImportJobImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenKMSKeyRingImportJobName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobImportMethod(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobImportMethod(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobProtectionLevel(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobProtectionLevel(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobExpireTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobExpireTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobPublicKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobPublicKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -321,11 +324,11 @@ func flattenKMSKeyRingImportJobPublicKey(v interface{}, d *schema.ResourceData, 
 		flattenKMSKeyRingImportJobPublicKeyPem(original["pem"], d, config)
 	return []interface{}{transformed}
 }
-func flattenKMSKeyRingImportJobPublicKeyPem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobPublicKeyPem(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobAttestation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobAttestation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -340,18 +343,18 @@ func flattenKMSKeyRingImportJobAttestation(v interface{}, d *schema.ResourceData
 		flattenKMSKeyRingImportJobAttestationContent(original["content"], d, config)
 	return []interface{}{transformed}
 }
-func flattenKMSKeyRingImportJobAttestationFormat(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobAttestationFormat(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSKeyRingImportJobAttestationContent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSKeyRingImportJobAttestationContent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandKMSKeyRingImportJobImportMethod(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSKeyRingImportJobImportMethod(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandKMSKeyRingImportJobProtectionLevel(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSKeyRingImportJobProtectionLevel(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

@@ -20,6 +20,9 @@ import (
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"google.golang.org/api/cloudresourcemanager/v1"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 var DataprocAutoscalingPolicyIamSchema = map[string]*schema.Schema{
@@ -48,10 +51,10 @@ type DataprocAutoscalingPolicyIamUpdater struct {
 	location string
 	policyId string
 	d        TerraformResourceData
-	Config   *Config
+	Config   *transport_tpg.Config
 }
 
-func DataprocAutoscalingPolicyIamUpdaterProducer(d TerraformResourceData, config *Config) (ResourceIamUpdater, error) {
+func DataprocAutoscalingPolicyIamUpdaterProducer(d TerraformResourceData, config *transport_tpg.Config) (ResourceIamUpdater, error) {
 	values := make(map[string]string)
 
 	project, _ := getProject(d, config)
@@ -103,7 +106,7 @@ func DataprocAutoscalingPolicyIamUpdaterProducer(d TerraformResourceData, config
 	return u, nil
 }
 
-func DataprocAutoscalingPolicyIdParseFunc(d *schema.ResourceData, config *Config) error {
+func DataprocAutoscalingPolicyIdParseFunc(d *schema.ResourceData, config *transport_tpg.Config) error {
 	values := make(map[string]string)
 
 	project, _ := getProject(d, config)
@@ -151,18 +154,18 @@ func (u *DataprocAutoscalingPolicyIamUpdater) GetResourceIamPolicy() (*cloudreso
 	}
 	var obj map[string]interface{}
 
-	userAgent, err := generateUserAgentString(u.d, u.Config.userAgent)
+	userAgent, err := generateUserAgentString(u.d, u.Config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
 
-	policy, err := sendRequest(u.Config, "POST", project, url, userAgent, obj)
+	policy, err := transport_tpg.SendRequest(u.Config, "POST", project, url, userAgent, obj)
 	if err != nil {
 		return nil, errwrap.Wrapf(fmt.Sprintf("Error retrieving IAM policy for %s: {{err}}", u.DescribeResource()), err)
 	}
 
 	out := &cloudresourcemanager.Policy{}
-	err = Convert(policy, out)
+	err = tpgresource.Convert(policy, out)
 	if err != nil {
 		return nil, errwrap.Wrapf("Cannot convert a policy to a resource manager policy: {{err}}", err)
 	}
@@ -171,7 +174,7 @@ func (u *DataprocAutoscalingPolicyIamUpdater) GetResourceIamPolicy() (*cloudreso
 }
 
 func (u *DataprocAutoscalingPolicyIamUpdater) SetResourceIamPolicy(policy *cloudresourcemanager.Policy) error {
-	json, err := ConvertToMap(policy)
+	json, err := tpgresource.ConvertToMap(policy)
 	if err != nil {
 		return err
 	}
@@ -188,12 +191,12 @@ func (u *DataprocAutoscalingPolicyIamUpdater) SetResourceIamPolicy(policy *cloud
 		return err
 	}
 
-	userAgent, err := generateUserAgentString(u.d, u.Config.userAgent)
+	userAgent, err := generateUserAgentString(u.d, u.Config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	_, err = sendRequestWithTimeout(u.Config, "POST", project, url, userAgent, obj, u.d.Timeout(schema.TimeoutCreate))
+	_, err = transport_tpg.SendRequestWithTimeout(u.Config, "POST", project, url, userAgent, obj, u.d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return errwrap.Wrapf(fmt.Sprintf("Error setting IAM policy for %s: {{err}}", u.DescribeResource()), err)
 	}
@@ -203,7 +206,7 @@ func (u *DataprocAutoscalingPolicyIamUpdater) SetResourceIamPolicy(policy *cloud
 
 func (u *DataprocAutoscalingPolicyIamUpdater) qualifyAutoscalingPolicyUrl(methodIdentifier string) (string, error) {
 	urlTemplate := fmt.Sprintf("{{DataprocBasePath}}%s:%s", fmt.Sprintf("projects/%s/locations/%s/autoscalingPolicies/%s", u.project, u.location, u.policyId), methodIdentifier)
-	url, err := replaceVars(u.d, u.Config, urlTemplate)
+	url, err := ReplaceVars(u.d, u.Config, urlTemplate)
 	if err != nil {
 		return "", err
 	}

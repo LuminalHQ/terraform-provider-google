@@ -2,21 +2,23 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 // Since each test here is acting on the same organization and only one AccessPolicy
 // can exist, they need to be run serially. See AccessPolicy for the test runner.
 
 func testAccAccessContextManagerAccessLevelCondition_basicTest(t *testing.T) {
-	org := getTestOrgFromEnv(t)
-	project := getTestProjectFromEnv()
+	org := acctest.GetTestOrgFromEnv(t)
+	project := acctest.GetTestProjectFromEnv()
 
-	serviceAccountName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceAccountName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
 	expected := map[string]interface{}{
 		"ipSubnetworks": []interface{}{"192.0.4.0/24"},
@@ -32,10 +34,10 @@ func testAccAccessContextManagerAccessLevelCondition_basicTest(t *testing.T) {
 		"regions": []interface{}{"IT", "US"},
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckAccessContextManagerAccessLevelConditionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckAccessContextManagerAccessLevelConditionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAccessContextManagerAccessLevelCondition_basic(org, "my policy", "level", serviceAccountName),
@@ -52,13 +54,13 @@ func testAccCheckAccessContextManagerAccessLevelConditionPresent(t *testing.T, n
 			return fmt.Errorf("Not found: %s", n)
 		}
 
-		config := googleProviderConfig(t)
-		url, err := replaceVarsForTest(config, rs, "{{AccessContextManagerBasePath}}{{access_level}}")
+		config := GoogleProviderConfig(t)
+		url, err := acctest.ReplaceVarsForTest(config, rs, "{{AccessContextManagerBasePath}}{{access_level}}")
 		if err != nil {
 			return err
 		}
 
-		al, err := sendRequest(config, "GET", "", url, config.userAgent, nil)
+		al, err := transport_tpg.SendRequest(config, "GET", "", url, config.UserAgent, nil)
 		if err != nil {
 			return err
 		}
@@ -79,14 +81,14 @@ func testAccCheckAccessContextManagerAccessLevelConditionDestroyProducer(t *test
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{AccessContextManagerBasePath}}{{access_level}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{AccessContextManagerBasePath}}{{access_level}}")
 			if err != nil {
 				return err
 			}
 
-			_, err = sendRequest(config, "GET", "", url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", "", url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("AccessLevel still exists at %s", url)
 			}

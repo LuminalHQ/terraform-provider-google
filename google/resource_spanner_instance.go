@@ -24,9 +24,13 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func deleteSpannerBackups(d *schema.ResourceData, config *Config, res map[string]interface{}, userAgent string, billingProject string) error {
+func deleteSpannerBackups(d *schema.ResourceData, config *transport_tpg.Config, res map[string]interface{}, userAgent string, billingProject string) error {
 	var v interface{}
 	var ok bool
 
@@ -48,12 +52,12 @@ func deleteSpannerBackups(d *schema.ResourceData, config *Config, res map[string
 
 		path := "{{SpannerBasePath}}" + backupName
 
-		url, err := replaceVars(d, config, path)
+		url, err := ReplaceVars(d, config, path)
 		if err != nil {
 			return err
 		}
 
-		_, err = sendRequest(config, "DELETE", billingProject, url, userAgent, nil)
+		_, err = transport_tpg.SendRequest(config, "DELETE", billingProject, url, userAgent, nil)
 		if err != nil {
 			return err
 		}
@@ -61,7 +65,23 @@ func deleteSpannerBackups(d *schema.ResourceData, config *Config, res map[string
 	return nil
 }
 
-func resourceSpannerInstance() *schema.Resource {
+func resourceSpannerInstanceVirtualUpdate(d *schema.ResourceData, resourceSchema map[string]*schema.Schema) bool {
+	// force_destroy is the only virtual field
+	if d.HasChange("force_destroy") {
+		for field := range resourceSchema {
+			if field == "force_destroy" {
+				continue
+			}
+			if d.HasChange(field) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func ResourceSpannerInstance() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceSpannerInstanceCreate,
 		Read:   resourceSpannerInstanceRead,
@@ -102,7 +122,7 @@ unique per project and between 4 and 30 characters in length.`,
 				Computed:     true,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRegexp(`^[a-z][-a-z0-9]*[a-z0-9]$`),
+				ValidateFunc: verify.ValidateRegexp(`^[a-z][-a-z0-9]*[a-z0-9]$`),
 				Description: `A unique identifier for the instance, which cannot be changed after
 the instance is created. The name must be between 6 and 30 characters
 in length.
@@ -129,7 +149,7 @@ must be present in terraform.`,
 				Type:     schema.TypeInt,
 				Computed: true,
 				Optional: true,
-				Description: `The number of processing units allocated to this instance. Exactly one of processing_units 
+				Description: `The number of processing units allocated to this instance. Exactly one of processing_units
 or node_count must be present in terraform.`,
 				ExactlyOneOf: []string{"num_nodes", "processing_units"},
 			},
@@ -142,6 +162,8 @@ or node_count must be present in terraform.`,
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
+				Description: `When deleting a spanner instance, this boolean option will delete all backups of this instance.
+This must be set to true if you created a backup manually in the console.`,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -155,8 +177,8 @@ or node_count must be present in terraform.`,
 }
 
 func resourceSpannerInstanceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -204,7 +226,7 @@ func resourceSpannerInstanceCreate(d *schema.ResourceData, meta interface{}) err
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances")
+	url, err := ReplaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances")
 	if err != nil {
 		return err
 	}
@@ -223,13 +245,13 @@ func resourceSpannerInstanceCreate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Instance: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{project}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -238,12 +260,13 @@ func resourceSpannerInstanceCreate(d *schema.ResourceData, meta interface{}) err
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = spannerOperationWaitTimeWithResponse(
+	err = SpannerOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Instance", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Instance: %s", err)
 	}
 
@@ -260,7 +283,7 @@ func resourceSpannerInstanceCreate(d *schema.ResourceData, meta interface{}) err
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{project}}/{{name}}")
+	id, err = ReplaceVars(d, config, "{{project}}/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -277,13 +300,13 @@ func resourceSpannerInstanceCreate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceSpannerInstanceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -301,9 +324,9 @@ func resourceSpannerInstanceRead(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("SpannerInstance %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("SpannerInstance %q", d.Id()))
 	}
 
 	res, err = resourceSpannerInstanceDecoder(d, meta, res)
@@ -354,8 +377,8 @@ func resourceSpannerInstanceRead(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceSpannerInstanceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -399,19 +422,27 @@ func resourceSpannerInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
 
 	log.Printf("[DEBUG] Updating Instance %q: %#v", d.Id(), obj)
+	if resourceSpannerInstanceVirtualUpdate(d, ResourceSpannerInstance().Schema) {
+		if d.Get("force_destroy") != nil {
+			if err := d.Set("force_destroy", d.Get("force_destroy")); err != nil {
+				return fmt.Errorf("Error reading Instance: %s", err)
+			}
+		}
+		return nil
+	}
 
 	// err == nil indicates that the billing_project value was found
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Instance %q: %s", d.Id(), err)
@@ -419,7 +450,7 @@ func resourceSpannerInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 		log.Printf("[DEBUG] Finished updating Instance %q: %#v", d.Id(), res)
 	}
 
-	err = spannerOperationWaitTime(
+	err = SpannerOperationWaitTime(
 		config, res, project, "Updating Instance", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -431,8 +462,8 @@ func resourceSpannerInstanceUpdate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceSpannerInstanceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -445,7 +476,7 @@ func resourceSpannerInstanceDelete(d *schema.ResourceData, meta interface{}) err
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -453,15 +484,15 @@ func resourceSpannerInstanceDelete(d *schema.ResourceData, meta interface{}) err
 	var obj map[string]interface{}
 
 	if d.Get("force_destroy").(bool) {
-		backupsUrl, err := replaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}/backups")
+		backupsUrl, err := ReplaceVars(d, config, "{{SpannerBasePath}}projects/{{project}}/instances/{{name}}/backups")
 		if err != nil {
 			return err
 		}
 
-		resp, err := sendRequest(config, "GET", billingProject, backupsUrl, userAgent, nil)
+		resp, err := transport_tpg.SendRequest(config, "GET", billingProject, backupsUrl, userAgent, nil)
 		if err != nil {
 			// API returns 200 if no backups exist but the instance still exists, hence the error check.
-			return handleNotFoundError(err, d, fmt.Sprintf("SpannerInstance %q", d.Id()))
+			return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("SpannerInstance %q", d.Id()))
 		}
 
 		err = deleteSpannerBackups(d, config, resp, billingProject, userAgent)
@@ -476,9 +507,9 @@ func resourceSpannerInstanceDelete(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Instance")
+		return transport_tpg.HandleNotFoundError(err, d, "Instance")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Instance %q: %#v", d.Id(), res)
@@ -486,8 +517,8 @@ func resourceSpannerInstanceDelete(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceSpannerInstanceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/instances/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -496,7 +527,7 @@ func resourceSpannerInstanceImport(d *schema.ResourceData, meta interface{}) ([]
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{project}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -510,28 +541,28 @@ func resourceSpannerInstanceImport(d *schema.ResourceData, meta interface{}) ([]
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenSpannerInstanceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenSpannerInstanceConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenSpannerInstanceDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSpannerInstanceNumNodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceNumNodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -545,10 +576,10 @@ func flattenSpannerInstanceNumNodes(v interface{}, d *schema.ResourceData, confi
 	return v // let terraform core handle it otherwise
 }
 
-func flattenSpannerInstanceProcessingUnits(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceProcessingUnits(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -562,19 +593,19 @@ func flattenSpannerInstanceProcessingUnits(v interface{}, d *schema.ResourceData
 	return v // let terraform core handle it otherwise
 }
 
-func flattenSpannerInstanceLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSpannerInstanceState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSpannerInstanceState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandSpannerInstanceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSpannerInstanceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSpannerInstanceConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSpannerInstanceConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	r := regexp.MustCompile("projects/(.+)/instanceConfigs/(.+)")
 	if r.MatchString(v.(string)) {
 		return v.(string), nil
@@ -588,19 +619,19 @@ func expandSpannerInstanceConfig(v interface{}, d TerraformResourceData, config 
 	return fmt.Sprintf("projects/%s/instanceConfigs/%s", project, v.(string)), nil
 }
 
-func expandSpannerInstanceDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSpannerInstanceDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSpannerInstanceNumNodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSpannerInstanceNumNodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSpannerInstanceProcessingUnits(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSpannerInstanceProcessingUnits(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSpannerInstanceLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandSpannerInstanceLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -631,7 +662,7 @@ func resourceSpannerInstanceEncoder(d *schema.ResourceData, meta interface{}, ob
 }
 
 func resourceSpannerInstanceUpdateEncoder(d *schema.ResourceData, meta interface{}, obj map[string]interface{}) (map[string]interface{}, error) {
-	project, err := getProject(d, meta.(*Config))
+	project, err := getProject(d, meta.(*transport_tpg.Config))
 	if err != nil {
 		return nil, err
 	}
@@ -656,14 +687,14 @@ func resourceSpannerInstanceUpdateEncoder(d *schema.ResourceData, meta interface
 }
 
 func resourceSpannerInstanceDecoder(d *schema.ResourceData, meta interface{}, res map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	d.SetId(res["name"].(string))
-	if err := parseImportId([]string{"projects/(?P<project>[^/]+)/instances/(?P<name>[^/]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"projects/(?P<project>[^/]+)/instances/(?P<name>[^/]+)"}, d, config); err != nil {
 		return nil, err
 	}
 	res["project"] = d.Get("project").(string)
 	res["name"] = d.Get("name").(string)
-	id, err := replaceVars(d, config, "{{project}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{name}}")
 	if err != nil {
 		return nil, err
 	}

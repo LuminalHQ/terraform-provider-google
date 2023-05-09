@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_resource_policy"
 description: |-
   A policy that can be attached to a resource to specify or schedule actions on that resource.
 ---
@@ -34,7 +33,7 @@ A policy that can be attached to a resource to specify or schedule actions on th
 
 ```hcl
 resource "google_compute_resource_policy" "foo" {
-  name   = "policy"
+  name   = "gce-policy"
   region = "us-central1"
   snapshot_schedule_policy {
     schedule {
@@ -56,7 +55,7 @@ resource "google_compute_resource_policy" "foo" {
 
 ```hcl
 resource "google_compute_resource_policy" "bar" {
-  name   = "policy"
+  name   = "gce-policy"
   region = "us-central1"
   snapshot_schedule_policy {
     schedule {
@@ -89,11 +88,31 @@ resource "google_compute_resource_policy" "bar" {
 
 ```hcl
 resource "google_compute_resource_policy" "baz" {
-  name   = "policy"
+  name   = "gce-policy"
   region = "us-central1"
   group_placement_policy {
     vm_count = 2
     collocation = "COLLOCATED"
+  }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=resource_policy_placement_policy_max_distance&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Resource Policy Placement Policy Max Distance
+
+
+```hcl
+resource "google_compute_resource_policy" "baz" {
+  name   = "gce-policy"
+  region = "us-central1"
+  provider = google-beta
+  group_placement_policy {
+    vm_count = 2
+    collocation = "COLLOCATED"
+    max_distance = 2
   }
 }
 ```
@@ -107,7 +126,7 @@ resource "google_compute_resource_policy" "baz" {
 
 ```hcl
 resource "google_compute_resource_policy" "hourly" {
-  name   = "policy"
+  name   = "gce-policy"
   region = "us-central1"
   description = "Start and stop instances"
   instance_schedule_policy {
@@ -118,6 +137,60 @@ resource "google_compute_resource_policy" "hourly" {
       schedule = "15 * * * *"
     }
     time_zone = "US/Central"
+  }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=resource_policy_snapshot_schedule_chain_name&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Resource Policy Snapshot Schedule Chain Name
+
+
+```hcl
+resource "google_compute_resource_policy" "hourly" {
+  name   = "gce-policy"
+  region = "us-central1"
+  description = "chain name snapshot"
+  snapshot_schedule_policy {
+    schedule {
+      hourly_schedule {
+        hours_in_cycle = 20
+        start_time     = "23:00"
+      }
+    }
+    retention_policy {
+      max_retention_days    = 14
+      on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
+    }
+    snapshot_properties {
+      labels = {
+        my_label = "value"
+      }
+      storage_locations = ["us"]
+      guest_flush       = true
+      chain_name = "test-schedule-chain-name"
+    }
+  }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=resource_policy_consistency_group&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Resource Policy Consistency Group
+
+
+```hcl
+resource "google_compute_resource_policy" "cgroup" {
+  provider = google-beta
+
+  name   = "gce-policy"
+  region = "europe-west1"
+  disk_consistency_group_policy {
+    enabled = true
   }
 }
 ```
@@ -159,6 +232,11 @@ The following arguments are supported:
   (Optional)
   Resource policy for scheduling instance operations.
   Structure is [documented below](#nested_instance_schedule_policy).
+
+* `disk_consistency_group_policy` -
+  (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
+  Replication consistency group for asynchronous disk replication.
+  Structure is [documented below](#nested_disk_consistency_group_policy).
 
 * `region` -
   (Optional)
@@ -247,7 +325,7 @@ The following arguments are supported:
 * `day` -
   (Required)
   The day of the week to create the snapshot. e.g. MONDAY
-  Possible values are `MONDAY`, `TUESDAY`, `WEDNESDAY`, `THURSDAY`, `FRIDAY`, `SATURDAY`, and `SUNDAY`.
+  Possible values are: `MONDAY`, `TUESDAY`, `WEDNESDAY`, `THURSDAY`, `FRIDAY`, `SATURDAY`, `SUNDAY`.
 
 <a name="nested_retention_policy"></a>The `retention_policy` block supports:
 
@@ -260,7 +338,7 @@ The following arguments are supported:
   Specifies the behavior to apply to scheduled snapshots when
   the source disk is deleted.
   Default value is `KEEP_AUTO_SNAPSHOTS`.
-  Possible values are `KEEP_AUTO_SNAPSHOTS` and `APPLY_RETENTION_POLICY`.
+  Possible values are: `KEEP_AUTO_SNAPSHOTS`, `APPLY_RETENTION_POLICY`.
 
 <a name="nested_snapshot_properties"></a>The `snapshot_properties` block supports:
 
@@ -276,6 +354,12 @@ The following arguments are supported:
 * `guest_flush` -
   (Optional)
   Whether to perform a 'guest aware' snapshot.
+
+* `chain_name` -
+  (Optional)
+  Creates the new snapshot in the snapshot chain labeled with the
+  specified name. The chain name must be 1-63 characters long and comply
+  with RFC1035.
 
 <a name="nested_group_placement_policy"></a>The `group_placement_policy` block supports:
 
@@ -296,7 +380,11 @@ The following arguments are supported:
   Specify `COLLOCATED` to enable collocation. Can only be specified with `vm_count`. If compute instances are created
   with a COLLOCATED policy, then exactly `vm_count` instances must be created at the same time with the resource policy
   attached.
-  Possible values are `COLLOCATED`.
+  Possible values are: `COLLOCATED`.
+
+* `max_distance` -
+  (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
+  Specifies the number of max logical switches.
 
 <a name="nested_instance_schedule_policy"></a>The `instance_schedule_policy` block supports:
 
@@ -336,6 +424,12 @@ The following arguments are supported:
   (Required)
   Specifies the frequency for the operation, using the unix-cron format.
 
+<a name="nested_disk_consistency_group_policy"></a>The `disk_consistency_group_policy` block supports:
+
+* `enabled` -
+  (Required)
+  Enable disk consistency on the resource policy.
+
 ## Attributes Reference
 
 In addition to the arguments listed above, the following computed attributes are exported:
@@ -347,7 +441,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `delete` - Default is 20 minutes.
@@ -366,4 +460,4 @@ $ terraform import google_compute_resource_policy.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

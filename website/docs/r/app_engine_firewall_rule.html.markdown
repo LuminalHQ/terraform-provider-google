@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "App Engine"
-page_title: "Google: google_app_engine_firewall_rule"
 description: |-
   A single firewall rule that is evaluated against incoming traffic
   and provides an action to take on matched requests.
@@ -66,7 +65,7 @@ The following arguments are supported:
 * `action` -
   (Required)
   The action to take if this rule matches.
-  Possible values are `UNSPECIFIED_ACTION`, `ALLOW`, and `DENY`.
+  Possible values are: `UNSPECIFIED_ACTION`, `ALLOW`, `DENY`.
 
 
 - - -
@@ -98,7 +97,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -117,4 +116,4 @@ $ terraform import google_app_engine_firewall_rule.default {{priority}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

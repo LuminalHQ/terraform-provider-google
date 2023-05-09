@@ -4,19 +4,20 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccSecretManagerSecret_import(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckSecretManagerSecretDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckSecretManagerSecretDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSecretManagerSecret_basic(context),
@@ -37,15 +38,15 @@ func TestAccSecretManagerSecret_cmek(t *testing.T) {
 	kmscentral := BootstrapKMSKeyInLocation(t, "us-central1")
 	kmseast := BootstrapKMSKeyInLocation(t, "us-east1")
 	context1 := map[string]interface{}{
-		"pid":                  getTestProjectFromEnv(),
-		"random_suffix":        randString(t, 10),
+		"pid":                  acctest.GetTestProjectFromEnv(),
+		"random_suffix":        RandString(t, 10),
 		"kms_key_name_central": kmscentral.CryptoKey.Name,
 		"kms_key_name_east":    kmseast.CryptoKey.Name,
 	}
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckSecretManagerSecretDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckSecretManagerSecretDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSecretMangerSecret_cmek(context1),

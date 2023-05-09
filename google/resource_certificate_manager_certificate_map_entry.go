@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceCertificateManagerCertificateMapEntry() *schema.Resource {
+func ResourceCertificateManagerCertificateMapEntry() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCertificateManagerCertificateMapEntryCreate,
 		Read:   resourceCertificateManagerCertificateMapEntryRead,
@@ -45,7 +48,7 @@ func resourceCertificateManagerCertificateMapEntry() *schema.Resource {
 			"certificates": {
 				Type:             schema.TypeList,
 				Required:         true,
-				DiffSuppressFunc: projectNumberDiffSuppress,
+				DiffSuppressFunc: tpgresource.ProjectNumberDiffSuppress,
 				Description: `A set of Certificates defines for the given hostname.
 There can be defined up to fifteen certificates in each Certificate Map Entry.
 Each certificate must match pattern projects/*/locations/*/certificates/*.`,
@@ -64,8 +67,8 @@ Each certificate must match pattern projects/*/locations/*/certificates/*.`,
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
-				Description: `A user-defined name of the Certificate Map Entry. Certificate Map Entry 
-names must be unique globally and match pattern 
+				Description: `A user-defined name of the Certificate Map Entry. Certificate Map Entry
+names must be unique globally and match pattern
 'projects/*/locations/*/certificateMaps/*/certificateMapEntries/*'`,
 			},
 			"description": {
@@ -76,6 +79,7 @@ names must be unique globally and match pattern
 			"hostname": {
 				Type:     schema.TypeString,
 				Optional: true,
+				ForceNew: true,
 				Description: `A Hostname (FQDN, e.g. example.com) or a wildcard hostname expression (*.example.com)
 for a set of hostnames with common suffix. Used as Server Name Indication (SNI) for
 selecting a proper certificate.`,
@@ -93,14 +97,15 @@ Example: { "name": "wrench", "mass": "1.3kg", "count": "3" }.`,
 			"matcher": {
 				Type:         schema.TypeString,
 				Optional:     true,
+				ForceNew:     true,
 				Description:  `A predefined matcher for particular cases, other than SNI selection`,
 				ExactlyOneOf: []string{"hostname", "matcher"},
 			},
 			"create_time": {
 				Type:     schema.TypeString,
 				Computed: true,
-				Description: `Creation timestamp of a Certificate Map Entry. Timestamp in RFC3339 UTC "Zulu" format, 
-with nanosecond resolution and up to nine fractional digits. 
+				Description: `Creation timestamp of a Certificate Map Entry. Timestamp in RFC3339 UTC "Zulu" format,
+with nanosecond resolution and up to nine fractional digits.
 Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
 			},
 			"state": {
@@ -111,8 +116,8 @@ Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
 			"update_time": {
 				Type:     schema.TypeString,
 				Computed: true,
-				Description: `Update timestamp of a Certificate Map Entry. Timestamp in RFC3339 UTC "Zulu" format, 
-with nanosecond resolution and up to nine fractional digits. 
+				Description: `Update timestamp of a Certificate Map Entry. Timestamp in RFC3339 UTC "Zulu" format,
+with nanosecond resolution and up to nine fractional digits.
 Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
 			},
 			"project": {
@@ -127,8 +132,8 @@ Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
 }
 
 func resourceCertificateManagerCertificateMapEntryCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -171,7 +176,7 @@ func resourceCertificateManagerCertificateMapEntryCreate(d *schema.ResourceData,
 		obj["name"] = nameProp
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries?certificateMapEntryId={{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries?certificateMapEntryId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -190,19 +195,19 @@ func resourceCertificateManagerCertificateMapEntryCreate(d *schema.ResourceData,
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating CertificateMapEntry: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Creating CertificateMapEntry", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -218,13 +223,13 @@ func resourceCertificateManagerCertificateMapEntryCreate(d *schema.ResourceData,
 }
 
 func resourceCertificateManagerCertificateMapEntryRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -242,9 +247,9 @@ func resourceCertificateManagerCertificateMapEntryRead(d *schema.ResourceData, m
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CertificateManagerCertificateMapEntry %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CertificateManagerCertificateMapEntry %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -283,8 +288,8 @@ func resourceCertificateManagerCertificateMapEntryRead(d *schema.ResourceData, m
 }
 
 func resourceCertificateManagerCertificateMapEntryUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -316,20 +321,8 @@ func resourceCertificateManagerCertificateMapEntryUpdate(d *schema.ResourceData,
 	} else if v, ok := d.GetOkExists("certificates"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, certificatesProp)) {
 		obj["certificates"] = certificatesProp
 	}
-	hostnameProp, err := expandCertificateManagerCertificateMapEntryHostname(d.Get("hostname"), d, config)
-	if err != nil {
-		return err
-	} else if v, ok := d.GetOkExists("hostname"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, hostnameProp)) {
-		obj["hostname"] = hostnameProp
-	}
-	matcherProp, err := expandCertificateManagerCertificateMapEntryMatcher(d.Get("matcher"), d, config)
-	if err != nil {
-		return err
-	} else if v, ok := d.GetOkExists("matcher"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, matcherProp)) {
-		obj["matcher"] = matcherProp
-	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -348,17 +341,9 @@ func resourceCertificateManagerCertificateMapEntryUpdate(d *schema.ResourceData,
 	if d.HasChange("certificates") {
 		updateMask = append(updateMask, "certificates")
 	}
-
-	if d.HasChange("hostname") {
-		updateMask = append(updateMask, "hostname")
-	}
-
-	if d.HasChange("matcher") {
-		updateMask = append(updateMask, "matcher")
-	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -368,7 +353,7 @@ func resourceCertificateManagerCertificateMapEntryUpdate(d *schema.ResourceData,
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating CertificateMapEntry %q: %s", d.Id(), err)
@@ -376,7 +361,7 @@ func resourceCertificateManagerCertificateMapEntryUpdate(d *schema.ResourceData,
 		log.Printf("[DEBUG] Finished updating CertificateMapEntry %q: %#v", d.Id(), res)
 	}
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Updating CertificateMapEntry", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -388,8 +373,8 @@ func resourceCertificateManagerCertificateMapEntryUpdate(d *schema.ResourceData,
 }
 
 func resourceCertificateManagerCertificateMapEntryDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -402,7 +387,7 @@ func resourceCertificateManagerCertificateMapEntryDelete(d *schema.ResourceData,
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -415,12 +400,12 @@ func resourceCertificateManagerCertificateMapEntryDelete(d *schema.ResourceData,
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "CertificateMapEntry")
+		return transport_tpg.HandleNotFoundError(err, d, "CertificateMapEntry")
 	}
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Deleting CertificateMapEntry", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -433,8 +418,8 @@ func resourceCertificateManagerCertificateMapEntryDelete(d *schema.ResourceData,
 }
 
 func resourceCertificateManagerCertificateMapEntryImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/certificateMaps/(?P<map>[^/]+)/certificateMapEntries/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<map>[^/]+)/(?P<name>[^/]+)",
 		"(?P<map>[^/]+)/(?P<name>[^/]+)",
@@ -443,7 +428,7 @@ func resourceCertificateManagerCertificateMapEntryImport(d *schema.ResourceData,
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/certificateMaps/{{map}}/certificateMapEntries/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -452,50 +437,50 @@ func resourceCertificateManagerCertificateMapEntryImport(d *schema.ResourceData,
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCertificateManagerCertificateMapEntryDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryCertificates(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryCertificates(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryHostname(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryHostname(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryMatcher(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryMatcher(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateMapEntryName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateMapEntryName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandCertificateManagerCertificateMapEntryDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateMapEntryDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateMapEntryLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCertificateManagerCertificateMapEntryLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -506,18 +491,18 @@ func expandCertificateManagerCertificateMapEntryLabels(v interface{}, d Terrafor
 	return m, nil
 }
 
-func expandCertificateManagerCertificateMapEntryCertificates(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateMapEntryCertificates(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateMapEntryHostname(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateMapEntryHostname(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateMapEntryMatcher(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateMapEntryMatcher(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateMapEntryName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return GetResourceNameFromSelfLink(v.(string)), nil
+func expandCertificateManagerCertificateMapEntryName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return tpgresource.GetResourceNameFromSelfLink(v.(string)), nil
 }

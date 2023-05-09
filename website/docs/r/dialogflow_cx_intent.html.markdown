@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Dialogflow CX"
-page_title: "Google: google_dialogflow_cx_intent"
 description: |-
   An intent represents a user's intent to interact with a conversational agent.
 ---
@@ -118,7 +117,7 @@ The following arguments are supported:
 
 * `is_fallback` -
   (Optional)
-  Indicates whether this is a fallback intent. Currently only default fallback intent is allowed in the agent, which is added upon agent creation. 
+  Indicates whether this is a fallback intent. Currently only default fallback intent is allowed in the agent, which is added upon agent creation.
   Adding training phrases to fallback intent is useful in the case of requests that are mistakenly matched, since training phrases assigned to fallback intents act as negative examples that triggers no-match event.
 
 * `labels` -
@@ -146,6 +145,7 @@ The following arguments are supported:
 <a name="nested_training_phrases"></a>The `training_phrases` block supports:
 
 * `id` -
+  (Output)
   The unique identifier of the training phrase.
 
 * `parts` -
@@ -182,7 +182,7 @@ The following arguments are supported:
 
 * `entity_type` -
   (Required)
-  The entity type of the parameter. 
+  The entity type of the parameter.
   Format: projects/-/locations/-/agents/-/entityTypes/<System Entity Type ID> for system entity types (for example, projects/-/locations/-/agents/-/entityTypes/sys.date), or projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/entityTypes/<Entity Type ID> for developer entity types.
 
 * `is_list` -
@@ -191,7 +191,7 @@ The following arguments are supported:
 
 * `redact` -
   (Optional)
-  Indicates whether the parameter content should be redacted in log. If redaction is enabled, the parameter content will be replaced by parameter name during logging. 
+  Indicates whether the parameter content should be redacted in log. If redaction is enabled, the parameter content will be replaced by parameter name during logging.
   Note: the parameter content is subject to redaction if either parameter level redaction or entity type level redaction is enabled.
 
 ## Attributes Reference
@@ -201,14 +201,14 @@ In addition to the arguments listed above, the following computed attributes are
 * `id` - an identifier for the resource with format `{{parent}}/intents/{{name}}`
 
 * `name` -
-  The unique identifier of the intent.  
+  The unique identifier of the intent.
   Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/intents/<Intent ID>.
 
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 40 minutes.
 - `update` - Default is 40 minutes.

@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"google.golang.org/api/cloudidentity/v1"
 )
 
-func dataSourceGoogleCloudIdentityGroupMemberships() *schema.Resource {
+func DataSourceGoogleCloudIdentityGroupMemberships() *schema.Resource {
 	// Generate datasource schema from resource
-	dsSchema := datasourceSchemaFromResourceSchema(resourceCloudIdentityGroupMembership().Schema)
+	dsSchema := tpgresource.DatasourceSchemaFromResourceSchema(ResourceCloudIdentityGroupMembership().Schema)
 
 	return &schema.Resource{
 		Read: dataSourceGoogleCloudIdentityGroupMembershipsRead,
@@ -28,7 +31,7 @@ func dataSourceGoogleCloudIdentityGroupMemberships() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `The name of the Group to get memberships from.`,
 			},
 		},
@@ -36,8 +39,8 @@ func dataSourceGoogleCloudIdentityGroupMemberships() *schema.Resource {
 }
 
 func dataSourceGoogleCloudIdentityGroupMembershipsRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -61,7 +64,7 @@ func dataSourceGoogleCloudIdentityGroupMembershipsRead(d *schema.ResourceData, m
 		}
 	}
 
-	err = membershipsCall.Pages(config.context, func(resp *cloudidentity.ListMembershipsResponse) error {
+	err = membershipsCall.Pages(config.Context, func(resp *cloudidentity.ListMembershipsResponse) error {
 		for _, member := range resp.Memberships {
 			result = append(result, map[string]interface{}{
 				"name":                 member.Name,
@@ -73,7 +76,7 @@ func dataSourceGoogleCloudIdentityGroupMembershipsRead(d *schema.ResourceData, m
 		return nil
 	})
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroupMemberships %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CloudIdentityGroupMemberships %q", d.Id()))
 	}
 
 	if err := d.Set("memberships", result); err != nil {

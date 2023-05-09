@@ -23,11 +23,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 const workloadIdentityPoolProviderIdRegexp = `^[0-9a-z-]+$`
 
-func validateWorkloadIdentityPoolProviderId(v interface{}, k string) (ws []string, errors []error) {
+func ValidateWorkloadIdentityPoolProviderId(v interface{}, k string) (ws []string, errors []error) {
 	value := v.(string)
 
 	if strings.HasPrefix(value, "gcp-") {
@@ -53,7 +55,7 @@ func validateWorkloadIdentityPoolProviderId(v interface{}, k string) (ws []strin
 	return
 }
 
-func resourceIAMBetaWorkloadIdentityPoolProvider() *schema.Resource {
+func ResourceIAMBetaWorkloadIdentityPoolProvider() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceIAMBetaWorkloadIdentityPoolProviderCreate,
 		Read:   resourceIAMBetaWorkloadIdentityPoolProviderRead,
@@ -83,7 +85,7 @@ value should be 4-32 characters, and may contain the characters [a-z0-9-]. The p
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateWorkloadIdentityPoolProviderId,
+				ValidateFunc: ValidateWorkloadIdentityPoolProviderId,
 				Description: `The ID for the provider, which becomes the final component of the resource name. This
 value must be 4-32 characters, and may contain the characters [a-z0-9-]. The prefix
 'gcp-' is reserved for use by Google, and may not be specified.`,
@@ -272,8 +274,8 @@ https://iam.googleapis.com/projects/<project-number>/locations/<location>/worklo
 }
 
 func resourceIAMBetaWorkloadIdentityPoolProviderCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -322,7 +324,7 @@ func resourceIAMBetaWorkloadIdentityPoolProviderCreate(d *schema.ResourceData, m
 		obj["oidc"] = oidcProp
 	}
 
-	url, err := replaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers?workloadIdentityPoolProviderId={{workload_identity_pool_provider_id}}")
+	url, err := ReplaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers?workloadIdentityPoolProviderId={{workload_identity_pool_provider_id}}")
 	if err != nil {
 		return err
 	}
@@ -341,19 +343,19 @@ func resourceIAMBetaWorkloadIdentityPoolProviderCreate(d *schema.ResourceData, m
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating WorkloadIdentityPoolProvider: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = iAMBetaOperationWaitTime(
+	err = IAMBetaOperationWaitTime(
 		config, res, project, "Creating WorkloadIdentityPoolProvider", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -369,13 +371,13 @@ func resourceIAMBetaWorkloadIdentityPoolProviderCreate(d *schema.ResourceData, m
 }
 
 func resourceIAMBetaWorkloadIdentityPoolProviderRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
+	url, err := ReplaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
 	if err != nil {
 		return err
 	}
@@ -393,9 +395,9 @@ func resourceIAMBetaWorkloadIdentityPoolProviderRead(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("IAMBetaWorkloadIdentityPoolProvider %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("IAMBetaWorkloadIdentityPoolProvider %q", d.Id()))
 	}
 
 	res, err = resourceIAMBetaWorkloadIdentityPoolProviderDecoder(d, meta, res)
@@ -446,8 +448,8 @@ func resourceIAMBetaWorkloadIdentityPoolProviderRead(d *schema.ResourceData, met
 }
 
 func resourceIAMBetaWorkloadIdentityPoolProviderUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -504,7 +506,7 @@ func resourceIAMBetaWorkloadIdentityPoolProviderUpdate(d *schema.ResourceData, m
 		obj["oidc"] = oidcProp
 	}
 
-	url, err := replaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
+	url, err := ReplaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
 	if err != nil {
 		return err
 	}
@@ -540,9 +542,9 @@ func resourceIAMBetaWorkloadIdentityPoolProviderUpdate(d *schema.ResourceData, m
 		updateMask = append(updateMask, "oidc.allowed_audiences",
 			"oidc.issuer_uri")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -552,7 +554,7 @@ func resourceIAMBetaWorkloadIdentityPoolProviderUpdate(d *schema.ResourceData, m
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating WorkloadIdentityPoolProvider %q: %s", d.Id(), err)
@@ -560,7 +562,7 @@ func resourceIAMBetaWorkloadIdentityPoolProviderUpdate(d *schema.ResourceData, m
 		log.Printf("[DEBUG] Finished updating WorkloadIdentityPoolProvider %q: %#v", d.Id(), res)
 	}
 
-	err = iAMBetaOperationWaitTime(
+	err = IAMBetaOperationWaitTime(
 		config, res, project, "Updating WorkloadIdentityPoolProvider", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -572,8 +574,8 @@ func resourceIAMBetaWorkloadIdentityPoolProviderUpdate(d *schema.ResourceData, m
 }
 
 func resourceIAMBetaWorkloadIdentityPoolProviderDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -586,7 +588,7 @@ func resourceIAMBetaWorkloadIdentityPoolProviderDelete(d *schema.ResourceData, m
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
+	url, err := ReplaceVars(d, config, "{{IAMBetaBasePath}}projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
 	if err != nil {
 		return err
 	}
@@ -599,12 +601,12 @@ func resourceIAMBetaWorkloadIdentityPoolProviderDelete(d *schema.ResourceData, m
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "WorkloadIdentityPoolProvider")
+		return transport_tpg.HandleNotFoundError(err, d, "WorkloadIdentityPoolProvider")
 	}
 
-	err = iAMBetaOperationWaitTime(
+	err = IAMBetaOperationWaitTime(
 		config, res, project, "Deleting WorkloadIdentityPoolProvider", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -617,8 +619,8 @@ func resourceIAMBetaWorkloadIdentityPoolProviderDelete(d *schema.ResourceData, m
 }
 
 func resourceIAMBetaWorkloadIdentityPoolProviderImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/workloadIdentityPools/(?P<workload_identity_pool_id>[^/]+)/providers/(?P<workload_identity_pool_provider_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<workload_identity_pool_id>[^/]+)/(?P<workload_identity_pool_provider_id>[^/]+)",
 		"(?P<workload_identity_pool_id>[^/]+)/(?P<workload_identity_pool_provider_id>[^/]+)",
@@ -627,7 +629,7 @@ func resourceIAMBetaWorkloadIdentityPoolProviderImport(d *schema.ResourceData, m
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/workloadIdentityPools/{{workload_identity_pool_id}}/providers/{{workload_identity_pool_provider_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -636,35 +638,35 @@ func resourceIAMBetaWorkloadIdentityPoolProviderImport(d *schema.ResourceData, m
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderDisabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderDisabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderAttributeMapping(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderAttributeMapping(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderAttributeCondition(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderAttributeCondition(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderAws(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderAws(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -677,11 +679,11 @@ func flattenIAMBetaWorkloadIdentityPoolProviderAws(v interface{}, d *schema.Reso
 		flattenIAMBetaWorkloadIdentityPoolProviderAwsAccountId(original["accountId"], d, config)
 	return []interface{}{transformed}
 }
-func flattenIAMBetaWorkloadIdentityPoolProviderAwsAccountId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderAwsAccountId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderOidc(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderOidc(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -696,27 +698,27 @@ func flattenIAMBetaWorkloadIdentityPoolProviderOidc(v interface{}, d *schema.Res
 		flattenIAMBetaWorkloadIdentityPoolProviderOidcIssuerUri(original["issuerUri"], d, config)
 	return []interface{}{transformed}
 }
-func flattenIAMBetaWorkloadIdentityPoolProviderOidcAllowedAudiences(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderOidcAllowedAudiences(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIAMBetaWorkloadIdentityPoolProviderOidcIssuerUri(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIAMBetaWorkloadIdentityPoolProviderOidcIssuerUri(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderDisabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderDisabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderAttributeMapping(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderAttributeMapping(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -727,11 +729,11 @@ func expandIAMBetaWorkloadIdentityPoolProviderAttributeMapping(v interface{}, d 
 	return m, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderAttributeCondition(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderAttributeCondition(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderAws(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderAws(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -750,11 +752,11 @@ func expandIAMBetaWorkloadIdentityPoolProviderAws(v interface{}, d TerraformReso
 	return transformed, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderAwsAccountId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderAwsAccountId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderOidc(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderOidc(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -780,11 +782,11 @@ func expandIAMBetaWorkloadIdentityPoolProviderOidc(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderOidcAllowedAudiences(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderOidcAllowedAudiences(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIAMBetaWorkloadIdentityPoolProviderOidcIssuerUri(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIAMBetaWorkloadIdentityPoolProviderOidcIssuerUri(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

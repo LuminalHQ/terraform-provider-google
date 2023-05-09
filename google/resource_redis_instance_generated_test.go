@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccRedisInstance_redisInstanceBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRedisInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRedisInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRedisInstance_redisInstanceBasicExample(context),
@@ -42,7 +45,7 @@ func TestAccRedisInstance_redisInstanceBasicExample(t *testing.T) {
 				ResourceName:            "google_redis_instance.cache",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"region"},
+				ImportStateVerifyIgnore: []string{"reserved_ip_range", "region"},
 			},
 		},
 	})
@@ -62,13 +65,13 @@ func TestAccRedisInstance_redisInstanceFullExample(t *testing.T) {
 
 	context := map[string]interface{}{
 		"network_name":  BootstrapSharedTestNetwork(t, "redis-full"),
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRedisInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRedisInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRedisInstance_redisInstanceFullExample(context),
@@ -77,7 +80,7 @@ func TestAccRedisInstance_redisInstanceFullExample(t *testing.T) {
 				ResourceName:            "google_redis_instance.cache",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"region"},
+				ImportStateVerifyIgnore: []string{"reserved_ip_range", "region"},
 			},
 		},
 	})
@@ -131,19 +134,62 @@ data "google_compute_network" "redis-network" {
 `, context)
 }
 
+func TestAccRedisInstance_redisInstanceFullWithPersistenceConfigExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"network_name":  BootstrapSharedTestNetwork(t, "redis-full-persis"),
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRedisInstanceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRedisInstance_redisInstanceFullWithPersistenceConfigExample(context),
+			},
+			{
+				ResourceName:            "google_redis_instance.cache-persis",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"reserved_ip_range", "region"},
+			},
+		},
+	})
+}
+
+func testAccRedisInstance_redisInstanceFullWithPersistenceConfigExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_redis_instance" "cache-persis" {
+  name           = "tf-test-ha-memory-cache-persis%{random_suffix}"
+  tier           = "STANDARD_HA"
+  memory_size_gb = 1
+  location_id             = "us-central1-a"
+  alternative_location_id = "us-central1-f"
+
+  persistence_config {
+    persistence_mode = "RDB"
+    rdb_snapshot_period = "TWELVE_HOURS"
+  }
+}
+`, context)
+}
+
 func TestAccRedisInstance_redisInstancePrivateServiceExample(t *testing.T) {
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
 		"network_name":  BootstrapSharedTestNetwork(t, "redis-private"),
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRedisInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRedisInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRedisInstance_redisInstancePrivateServiceExample(context),
@@ -152,7 +198,7 @@ func TestAccRedisInstance_redisInstancePrivateServiceExample(t *testing.T) {
 				ResourceName:            "google_redis_instance.cache",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"region"},
+				ImportStateVerifyIgnore: []string{"reserved_ip_range", "region"},
 			},
 		},
 	})
@@ -211,13 +257,13 @@ func TestAccRedisInstance_redisInstanceMrrExample(t *testing.T) {
 
 	context := map[string]interface{}{
 		"network_name":  BootstrapSharedTestNetwork(t, "redis-mrr"),
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckRedisInstanceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckRedisInstanceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccRedisInstance_redisInstanceMrrExample(context),
@@ -226,7 +272,7 @@ func TestAccRedisInstance_redisInstanceMrrExample(t *testing.T) {
 				ResourceName:            "google_redis_instance.cache",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"region"},
+				ImportStateVerifyIgnore: []string{"reserved_ip_range", "region"},
 			},
 		},
 	})
@@ -280,9 +326,9 @@ func testAccCheckRedisInstanceDestroyProducer(t *testing.T) func(s *terraform.St
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -293,7 +339,7 @@ func testAccCheckRedisInstanceDestroyProducer(t *testing.T) func(s *terraform.St
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("RedisInstance still exists at %s", url)
 			}

@@ -21,22 +21,25 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccCloudfunctions2function_cloudfunctions2BasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
+		"project":       acctest.GetTestProjectFromEnv(),
 		"zip_path":      "./test-fixtures/cloudfunctions2/function-source.zip",
 		"location":      "us-central1",
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudfunctions2functionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudfunctions2function_cloudfunctions2BasicExample(context),
@@ -104,17 +107,17 @@ func TestAccCloudfunctions2function_cloudfunctions2FullExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":             getTestProjectFromEnv(),
+		"project":             acctest.GetTestProjectFromEnv(),
 		"zip_path":            "./test-fixtures/cloudfunctions2/function-source-pubsub.zip",
 		"primary_resource_id": "terraform-test",
 		"location":            "us-central1",
-		"random_suffix":       randString(t, 10),
+		"random_suffix":       RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudfunctions2functionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudfunctions2function_cloudfunctions2FullExample(context),
@@ -137,7 +140,7 @@ locals {
 }
 
 resource "google_service_account" "account" {
-  account_id = "sa%{random_suffix}"
+  account_id = "tf-test-gcf-sa%{random_suffix}"
   display_name = "Test Service Account"
 }
 
@@ -158,7 +161,7 @@ resource "google_storage_bucket_object" "object" {
 }
  
 resource "google_cloudfunctions2_function" "function" {
-  name = "function%{random_suffix}"
+  name = "tf-test-gcf-function%{random_suffix}"
   location = "us-central1"
   description = "a new function"
  
@@ -179,8 +182,10 @@ resource "google_cloudfunctions2_function" "function" {
   service_config {
     max_instance_count  = 3
     min_instance_count = 1
-    available_memory    = "256M"
+    available_memory    = "4Gi"
     timeout_seconds     = 60
+    max_instance_request_concurrency = 80
+    available_cpu = "4"
     environment_variables = {
         SERVICE_CONFIG_TEST = "config_test"
     }
@@ -204,16 +209,17 @@ func TestAccCloudfunctions2function_cloudfunctions2BasicGcsExample(t *testing.T)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":             getTestProjectFromEnv(),
+		"project":             acctest.GetTestProjectFromEnv(),
 		"zip_path":            "./test-fixtures/cloudfunctions2/function-source-eventarc-gcs.zip",
 		"primary_resource_id": "terraform-test",
-		"random_suffix":       randString(t, 10),
+		"policyChanged":       BootstrapPSARole(t, "service-", "gcp-sa-pubsub", "roles/cloudkms.cryptoKeyEncrypterDecrypter"),
+		"random_suffix":       RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudfunctions2functionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudfunctions2function_cloudfunctions2BasicGcsExample(context),
@@ -262,7 +268,7 @@ resource "google_project_iam_member" "gcs-pubsub-publishing" {
 }
 
 resource "google_service_account" "account" {
-  account_id   = "sa%{random_suffix}"
+  account_id   = "tf-test-gcf-sa%{random_suffix}"
   display_name = "Test Service Account - used for both the cloud function and eventarc trigger in the test"
 }
 
@@ -271,18 +277,21 @@ resource "google_project_iam_member" "invoking" {
   project = "%{project}"
   role    = "roles/run.invoker"
   member  = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.gcs-pubsub-publishing]
 }
 
 resource "google_project_iam_member" "event-receiving" {
   project = "%{project}"
   role    = "roles/eventarc.eventReceiver"
   member  = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.invoking]
 }
 
 resource "google_project_iam_member" "artifactregistry-reader" {
   project = "%{project}"
   role     = "roles/artifactregistry.reader"
   member   = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.event-receiving]
 }
 
 resource "google_cloudfunctions2_function" "function" {
@@ -290,7 +299,7 @@ resource "google_cloudfunctions2_function" "function" {
     google_project_iam_member.event-receiving,
     google_project_iam_member.artifactregistry-reader,
   ]
-  name = "function%{random_suffix}"
+  name = "tf-test-gcf-function%{random_suffix}"
   location = "us-central1"
   description = "a new function"
  
@@ -340,16 +349,17 @@ func TestAccCloudfunctions2function_cloudfunctions2BasicAuditlogsExample(t *test
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":             getTestProjectFromEnv(),
+		"project":             acctest.GetTestProjectFromEnv(),
 		"zip_path":            "./test-fixtures/cloudfunctions2/function-source-eventarc-gcs.zip",
 		"primary_resource_id": "terraform-test",
-		"random_suffix":       randString(t, 10),
+		"policyChanged":       BootstrapPSARole(t, "service-", "gcp-sa-pubsub", "roles/cloudkms.cryptoKeyEncrypterDecrypter"),
+		"random_suffix":       RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudfunctions2functionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudfunctions2function_cloudfunctions2BasicAuditlogsExample(context),
@@ -409,12 +419,14 @@ resource "google_project_iam_member" "event-receiving" {
   project = "%{project}"
   role    = "roles/eventarc.eventReceiver"
   member  = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.invoking]
 }
 
 resource "google_project_iam_member" "artifactregistry-reader" {
   project = "%{project}"
   role     = "roles/artifactregistry.reader"
   member   = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.event-receiving]
 }
 
 resource "google_cloudfunctions2_function" "function" {
@@ -477,6 +489,285 @@ resource "google_cloudfunctions2_function" "function" {
 `, context)
 }
 
+func TestAccCloudfunctions2function_cloudfunctions2SecretEnvExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"project":       acctest.GetTestProjectFromEnv(),
+		"zip_path":      "./test-fixtures/cloudfunctions2/function-source.zip",
+		"location":      "us-central1",
+		"policyChanged": BootstrapPSARole(t, "service-", "gcp-sa-pubsub", "roles/cloudkms.cryptoKeyEncrypterDecrypter"),
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudfunctions2function_cloudfunctions2SecretEnvExample(context),
+			},
+			{
+				ResourceName:            "google_cloudfunctions2_function.function",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location", "build_config.0.source.0.storage_source.0.object", "build_config.0.source.0.storage_source.0.bucket"},
+			},
+		},
+	})
+}
+
+func testAccCloudfunctions2function_cloudfunctions2SecretEnvExample(context map[string]interface{}) string {
+	return Nprintf(`
+locals {
+  project = "%{project}" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-tf-test-gcf-source%{random_suffix}"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+ 
+resource "google_storage_bucket_object" "object" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "%{zip_path}"  # Add path to the zipped function source code
+}
+ 
+resource "google_cloudfunctions2_function" "function" {
+  name = "tf-test-function-secret%{random_suffix}"
+  location = "us-central1"
+  description = "a new function"
+ 
+  build_config {
+    runtime = "nodejs16"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+  }
+ 
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+
+    secret_environment_variables {
+      key        = "TEST"
+      project_id = local.project
+      secret     = google_secret_manager_secret.secret.secret_id
+      version    = "latest"
+    }
+  }
+  depends_on = [google_secret_manager_secret_version.secret]
+}
+
+resource "google_secret_manager_secret" "secret" {
+  secret_id = "secret%{random_suffix}"
+
+  replication {
+    user_managed {
+      replicas {
+        location = "us-central1"
+      }
+    }
+  }  
+}
+
+resource "google_secret_manager_secret_version" "secret" {
+  secret = google_secret_manager_secret.secret.name
+
+  secret_data = "secret%{random_suffix}"
+  enabled = true
+}
+`, context)
+}
+
+func TestAccCloudfunctions2function_cloudfunctions2SecretVolumeExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"project":       acctest.GetTestProjectFromEnv(),
+		"zip_path":      "./test-fixtures/cloudfunctions2/function-source.zip",
+		"location":      "us-central1",
+		"policyChanged": BootstrapPSARole(t, "service-", "gcp-sa-pubsub", "roles/cloudkms.cryptoKeyEncrypterDecrypter"),
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudfunctions2function_cloudfunctions2SecretVolumeExample(context),
+			},
+			{
+				ResourceName:            "google_cloudfunctions2_function.function",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location", "build_config.0.source.0.storage_source.0.object", "build_config.0.source.0.storage_source.0.bucket"},
+			},
+		},
+	})
+}
+
+func testAccCloudfunctions2function_cloudfunctions2SecretVolumeExample(context map[string]interface{}) string {
+	return Nprintf(`
+locals {
+  project = "%{project}" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-tf-test-gcf-source%{random_suffix}"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+ 
+resource "google_storage_bucket_object" "object" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "%{zip_path}"  # Add path to the zipped function source code
+}
+ 
+resource "google_cloudfunctions2_function" "function" {
+  name = "tf-test-function-secret%{random_suffix}"
+  location = "us-central1"
+  description = "a new function"
+ 
+  build_config {
+    runtime = "nodejs16"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+  }
+ 
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+
+    secret_volumes {
+      mount_path = "/etc/secrets"
+      project_id = local.project
+      secret     = google_secret_manager_secret.secret.secret_id
+    }
+  }
+  depends_on = [google_secret_manager_secret_version.secret]
+}
+
+resource "google_secret_manager_secret" "secret" {
+  secret_id = "secret%{random_suffix}"
+
+  replication {
+    user_managed {
+      replicas {
+        location = "us-central1"
+      }
+    }
+  }  
+}
+
+resource "google_secret_manager_secret_version" "secret" {
+  secret = google_secret_manager_secret.secret.name
+
+  secret_data = "secret%{random_suffix}"
+  enabled = true
+}
+`, context)
+}
+
+func TestAccCloudfunctions2function_cloudfunctions2PrivateWorkerpoolExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"project":       acctest.GetTestProjectFromEnv(),
+		"zip_path":      "./test-fixtures/cloudfunctions2/function-source.zip",
+		"location":      "us-central1",
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudfunctions2functionDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudfunctions2function_cloudfunctions2PrivateWorkerpoolExample(context),
+			},
+			{
+				ResourceName:            "google_cloudfunctions2_function.function",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location", "build_config.0.source.0.storage_source.0.object", "build_config.0.source.0.storage_source.0.bucket"},
+			},
+		},
+	})
+}
+
+func testAccCloudfunctions2function_cloudfunctions2PrivateWorkerpoolExample(context map[string]interface{}) string {
+	return Nprintf(`
+locals {
+  project = "%{project}" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-tf-test-gcf-source%{random_suffix}"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+ 
+resource "google_storage_bucket_object" "object" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "%{zip_path}"  # Add path to the zipped function source code
+}
+
+resource "google_cloudbuild_worker_pool" "pool" {
+  name = "workerpool%{random_suffix}"
+  location = "us-central1"
+  worker_config {
+    disk_size_gb = 100
+    machine_type = "e2-standard-8"
+    no_external_ip = false
+  }
+}
+ 
+resource "google_cloudfunctions2_function" "function" {
+  name = "tf-test-function-workerpool%{random_suffix}"
+  location = "us-central1"
+  description = "a new function"
+ 
+  build_config {
+    runtime = "nodejs16"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+    worker_pool = google_cloudbuild_worker_pool.pool.id
+  }
+ 
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+  }
+}
+`, context)
+}
+
 func testAccCheckCloudfunctions2functionDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -487,9 +778,9 @@ func testAccCheckCloudfunctions2functionDestroyProducer(t *testing.T) func(s *te
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{Cloudfunctions2BasePath}}projects/{{project}}/locations/{{location}}/functions/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -500,7 +791,7 @@ func testAccCheckCloudfunctions2functionDestroyProducer(t *testing.T) func(s *te
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("Cloudfunctions2function still exists at %s", url)
 			}

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Apigee"
-page_title: "Google: google_apigee_instance"
 description: |-
   An `Instance` is the runtime dataplane in Apigee.
 ---
@@ -61,7 +60,7 @@ resource "google_apigee_organization" "apigee_org" {
 }
 
 resource "google_apigee_instance" "apigee_instance" {
-  name     = "tf-test%{random_suffix}"
+  name     = "my-instance-name"
   location = "us-central1"
   org_id   = google_apigee_organization.apigee_org.id
 }
@@ -98,7 +97,7 @@ resource "google_apigee_organization" "apigee_org" {
 }
 
 resource "google_apigee_instance" "apigee_instance" {
-  name     = "tf-test%{random_suffix}"
+  name     = "my-instance-name"
   location = "us-central1"
   org_id   = google_apigee_organization.apigee_org.id
   peering_cidr_range = "SLASH_22"
@@ -136,7 +135,7 @@ resource "google_apigee_organization" "apigee_org" {
 }
 
 resource "google_apigee_instance" "apigee_instance" {
-  name     = "tf-test%{random_suffix}"
+  name     = "my-instance-name"
   location = "us-central1"
   org_id   = google_apigee_organization.apigee_org.id
   ip_range = "10.87.8.0/22"
@@ -210,10 +209,10 @@ resource "google_apigee_organization" "apigee_org" {
 }
 
 resource "google_apigee_instance" "apigee_instance" {
-  name                     = "tf-test%{random_suffix}"
+  name                     = "my-instance-name"
   location                 = "us-central1"
   description              = "Terraform-managed Apigee Runtime Instance"
-  display_name             = "tf-test%{random_suffix}"
+  display_name             = "my-instance-name"
   org_id                   = google_apigee_organization.apigee_org.id
   disk_encryption_key_name = google_kms_crypto_key.apigee_key.id
 }
@@ -243,7 +242,7 @@ The following arguments are supported:
 
 * `peering_cidr_range` -
   (Optional)
-  The size of the CIDR block range that will be reserved by the instance. For valid values, 
+  The size of the CIDR block range that will be reserved by the instance. For valid values,
   see [CidrRange](https://cloud.google.com/apigee/docs/reference/apis/apigee/rest/v1/organizations.instances#CidrRange) on the documentation.
 
 * `ip_range` -
@@ -298,7 +297,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 60 minutes.
 - `delete` - Default is 60 minutes.

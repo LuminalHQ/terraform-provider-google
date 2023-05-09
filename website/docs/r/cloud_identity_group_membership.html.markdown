@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Identity"
-page_title: "Google: google_cloud_identity_group_membership"
 description: |-
   A Membership defines a relationship between a Group and an entity belonging to that Group, referred to as a "member".
 ---
@@ -30,9 +29,9 @@ To get more information about GroupMembership, see:
     * [Official Documentation](https://cloud.google.com/identity/docs/how-to/memberships-google-groups)
 
 ~> **Warning:** If you are using User ADCs (Application Default Credentials) with this resource,
-you must specify a `billing_project` and set `user_project_override` to true 
-in the provider configuration. Otherwise the Cloud Identity API will return a 403 error. 
-Your account must have the `serviceusage.services.use` permission on the 
+you must specify a `billing_project` and set `user_project_override` to true
+in the provider configuration. Otherwise the Cloud Identity API will return a 403 error.
+Your account must have the `serviceusage.services.use` permission on the
 `billing_project` you defined.
 
 ## Example Usage - Cloud Identity Group Membership
@@ -135,7 +134,7 @@ The following arguments are supported:
 * `name` -
   (Required)
   The name of the MembershipRole. Must be one of OWNER, MANAGER, MEMBER.
-  Possible values are `OWNER`, `MANAGER`, and `MEMBER`.
+  Possible values are: `OWNER`, `MANAGER`, `MEMBER`.
 
 - - -
 
@@ -213,7 +212,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

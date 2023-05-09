@@ -23,9 +23,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceDNSPolicy() *schema.Resource {
+func ResourceDNSPolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDNSPolicyCreate,
 		Read:   resourceDNSPolicyRead,
@@ -68,11 +72,11 @@ are not available when an alternative name server is specified.`,
 							Set: func(v interface{}) int {
 								raw := v.(map[string]interface{})
 								if address, ok := raw["ipv4_address"]; ok {
-									hashcode(address.(string))
+									tpgresource.Hashcode(address.(string))
 								}
 								var buf bytes.Buffer
 								schema.SerializeResourceForHash(&buf, raw, dnsPolicyAlternativeNameServerConfigTargetNameServersSchema())
-								return hashcode(buf.String())
+								return tpgresource.Hashcode(buf.String())
 							},
 						},
 					},
@@ -106,11 +110,11 @@ Defaults to no logging if not set.`,
 				Set: func(v interface{}) int {
 					raw := v.(map[string]interface{})
 					if url, ok := raw["network_url"]; ok {
-						return selfLinkNameHash(url)
+						return tpgresource.SelfLinkNameHash(url)
 					}
 					var buf bytes.Buffer
 					schema.SerializeResourceForHash(&buf, raw, dnsPolicyNetworksSchema())
-					return hashcode(buf.String())
+					return tpgresource.Hashcode(buf.String())
 				},
 			},
 			"project": {
@@ -135,7 +139,7 @@ func dnsPolicyAlternativeNameServerConfigTargetNameServersSchema() *schema.Resou
 			"forwarding_path": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"default", "private", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"default", "private", ""}),
 				Description: `Forwarding path for this TargetNameServer. If unset or 'default' Cloud DNS will make forwarding
 decision based on address ranges, i.e. RFC1918 addresses go to the VPC, Non-RFC1918 addresses go
 to the Internet. When set to 'private', Cloud DNS will always send queries through VPC for this target Possible values: ["default", "private"]`,
@@ -150,7 +154,7 @@ func dnsPolicyNetworksSchema() *schema.Resource {
 			"network_url": {
 				Type:             schema.TypeString,
 				Required:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `The id or fully qualified URL of the VPC network to forward queries to.
 This should be formatted like 'projects/{project}/global/networks/{network}' or
 'https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}'`,
@@ -160,8 +164,8 @@ This should be formatted like 'projects/{project}/global/networks/{network}' or
 }
 
 func resourceDNSPolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -204,7 +208,7 @@ func resourceDNSPolicyCreate(d *schema.ResourceData, meta interface{}) error {
 		obj["networks"] = networksProp
 	}
 
-	url, err := replaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies")
+	url, err := ReplaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies")
 	if err != nil {
 		return err
 	}
@@ -223,13 +227,13 @@ func resourceDNSPolicyCreate(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Policy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/policies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/policies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -241,13 +245,13 @@ func resourceDNSPolicyCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDNSPolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -265,9 +269,9 @@ func resourceDNSPolicyRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DNSPolicy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DNSPolicy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -297,8 +301,8 @@ func resourceDNSPolicyRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDNSPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -347,7 +351,7 @@ func resourceDNSPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
 			obj["networks"] = networksProp
 		}
 
-		url, err := replaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
+		url, err := ReplaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
 		if err != nil {
 			return err
 		}
@@ -357,7 +361,7 @@ func resourceDNSPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Policy %q: %s", d.Id(), err)
 		} else {
@@ -372,8 +376,8 @@ func resourceDNSPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDNSPolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -386,7 +390,7 @@ func resourceDNSPolicyDelete(d *schema.ResourceData, meta interface{}) error {
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -397,12 +401,12 @@ func resourceDNSPolicyDelete(d *schema.ResourceData, meta interface{}) error {
 		patched := make(map[string]interface{})
 		patched["networks"] = nil
 
-		url, err := replaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
+		url, err := ReplaceVars(d, config, "{{DNSBasePath}}projects/{{project}}/policies/{{name}}")
 		if err != nil {
 			return err
 		}
 
-		_, err = sendRequestWithTimeout(config, "PATCH", project, url, userAgent, patched, d.Timeout(schema.TimeoutUpdate))
+		_, err = transport_tpg.SendRequestWithTimeout(config, "PATCH", project, url, userAgent, patched, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Policy %q: %s", d.Id(), err)
 		}
@@ -414,9 +418,9 @@ func resourceDNSPolicyDelete(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Policy")
+		return transport_tpg.HandleNotFoundError(err, d, "Policy")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Policy %q: %#v", d.Id(), res)
@@ -424,8 +428,8 @@ func resourceDNSPolicyDelete(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDNSPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/policies/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -434,7 +438,7 @@ func resourceDNSPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schem
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/policies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/policies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -443,7 +447,7 @@ func resourceDNSPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schem
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDNSPolicyAlternativeNameServerConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyAlternativeNameServerConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -456,7 +460,7 @@ func flattenDNSPolicyAlternativeNameServerConfig(v interface{}, d *schema.Resour
 		flattenDNSPolicyAlternativeNameServerConfigTargetNameServers(original["targetNameServers"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -464,11 +468,11 @@ func flattenDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{},
 	transformed := schema.NewSet(func(v interface{}) int {
 		raw := v.(map[string]interface{})
 		if address, ok := raw["ipv4_address"]; ok {
-			hashcode(address.(string))
+			tpgresource.Hashcode(address.(string))
 		}
 		var buf bytes.Buffer
 		schema.SerializeResourceForHash(&buf, raw, dnsPolicyAlternativeNameServerConfigTargetNameServersSchema())
-		return hashcode(buf.String())
+		return tpgresource.Hashcode(buf.String())
 	}, []interface{}{})
 	for _, raw := range l {
 		original := raw.(map[string]interface{})
@@ -483,31 +487,31 @@ func flattenDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{},
 	}
 	return transformed
 }
-func flattenDNSPolicyAlternativeNameServerConfigTargetNameServersIpv4Address(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyAlternativeNameServerConfigTargetNameServersIpv4Address(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDNSPolicyAlternativeNameServerConfigTargetNameServersForwardingPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyAlternativeNameServerConfigTargetNameServersForwardingPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDNSPolicyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDNSPolicyEnableInboundForwarding(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyEnableInboundForwarding(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDNSPolicyEnableLogging(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyEnableLogging(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDNSPolicyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDNSPolicyNetworks(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyNetworks(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -515,11 +519,11 @@ func flattenDNSPolicyNetworks(v interface{}, d *schema.ResourceData, config *Con
 	transformed := schema.NewSet(func(v interface{}) int {
 		raw := v.(map[string]interface{})
 		if url, ok := raw["network_url"]; ok {
-			return selfLinkNameHash(url)
+			return tpgresource.SelfLinkNameHash(url)
 		}
 		var buf bytes.Buffer
 		schema.SerializeResourceForHash(&buf, raw, dnsPolicyNetworksSchema())
-		return hashcode(buf.String())
+		return tpgresource.Hashcode(buf.String())
 	}, []interface{}{})
 	for _, raw := range l {
 		original := raw.(map[string]interface{})
@@ -533,11 +537,11 @@ func flattenDNSPolicyNetworks(v interface{}, d *schema.ResourceData, config *Con
 	}
 	return transformed
 }
-func flattenDNSPolicyNetworksNetworkUrl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDNSPolicyNetworksNetworkUrl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDNSPolicyAlternativeNameServerConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyAlternativeNameServerConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -556,7 +560,7 @@ func expandDNSPolicyAlternativeNameServerConfig(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -586,31 +590,31 @@ func expandDNSPolicyAlternativeNameServerConfigTargetNameServers(v interface{}, 
 	return req, nil
 }
 
-func expandDNSPolicyAlternativeNameServerConfigTargetNameServersIpv4Address(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyAlternativeNameServerConfigTargetNameServersIpv4Address(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDNSPolicyAlternativeNameServerConfigTargetNameServersForwardingPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyAlternativeNameServerConfigTargetNameServersForwardingPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDNSPolicyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDNSPolicyEnableInboundForwarding(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyEnableInboundForwarding(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDNSPolicyEnableLogging(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyEnableLogging(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDNSPolicyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDNSPolicyNetworks(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyNetworks(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -633,15 +637,15 @@ func expandDNSPolicyNetworks(v interface{}, d TerraformResourceData, config *Con
 	return req, nil
 }
 
-func expandDNSPolicyNetworksNetworkUrl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDNSPolicyNetworksNetworkUrl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil || v.(string) == "" {
 		return "", nil
 	} else if strings.HasPrefix(v.(string), "https://") {
 		return v, nil
 	}
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}"+v.(string))
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}"+v.(string))
 	if err != nil {
 		return "", err
 	}
-	return ConvertSelfLinkToV1(url), nil
+	return tpgresource.ConvertSelfLinkToV1(url), nil
 }

@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceIdentityPlatformDefaultSupportedIdpConfig() *schema.Resource {
+func ResourceIdentityPlatformDefaultSupportedIdpConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceIdentityPlatformDefaultSupportedIdpConfigCreate,
 		Read:   resourceIdentityPlatformDefaultSupportedIdpConfigRead,
@@ -100,8 +102,8 @@ func resourceIdentityPlatformDefaultSupportedIdpConfig() *schema.Resource {
 }
 
 func resourceIdentityPlatformDefaultSupportedIdpConfigCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -126,7 +128,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigCreate(d *schema.ResourceD
 		obj["enabled"] = enabledProp
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs?idpId={{idp_id}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs?idpId={{idp_id}}")
 	if err != nil {
 		return err
 	}
@@ -145,7 +147,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigCreate(d *schema.ResourceD
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating DefaultSupportedIdpConfig: %s", err)
 	}
@@ -154,7 +156,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigCreate(d *schema.ResourceD
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -166,13 +168,13 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigCreate(d *schema.ResourceD
 }
 
 func resourceIdentityPlatformDefaultSupportedIdpConfigRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
 	if err != nil {
 		return err
 	}
@@ -190,9 +192,9 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigRead(d *schema.ResourceDat
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("IdentityPlatformDefaultSupportedIdpConfig %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("IdentityPlatformDefaultSupportedIdpConfig %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -216,8 +218,8 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigRead(d *schema.ResourceDat
 }
 
 func resourceIdentityPlatformDefaultSupportedIdpConfigUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -250,7 +252,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigUpdate(d *schema.ResourceD
 		obj["enabled"] = enabledProp
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
 	if err != nil {
 		return err
 	}
@@ -269,9 +271,9 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigUpdate(d *schema.ResourceD
 	if d.HasChange("enabled") {
 		updateMask = append(updateMask, "enabled")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -281,7 +283,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigUpdate(d *schema.ResourceD
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating DefaultSupportedIdpConfig %q: %s", d.Id(), err)
@@ -293,8 +295,8 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigUpdate(d *schema.ResourceD
 }
 
 func resourceIdentityPlatformDefaultSupportedIdpConfigDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -307,7 +309,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigDelete(d *schema.ResourceD
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
 	if err != nil {
 		return err
 	}
@@ -320,9 +322,9 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigDelete(d *schema.ResourceD
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "DefaultSupportedIdpConfig")
+		return transport_tpg.HandleNotFoundError(err, d, "DefaultSupportedIdpConfig")
 	}
 
 	log.Printf("[DEBUG] Finished deleting DefaultSupportedIdpConfig %q: %#v", d.Id(), res)
@@ -330,8 +332,8 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigDelete(d *schema.ResourceD
 }
 
 func resourceIdentityPlatformDefaultSupportedIdpConfigImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/defaultSupportedIdpConfigs/(?P<idp_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<idp_id>[^/]+)",
 		"(?P<idp_id>[^/]+)",
@@ -340,7 +342,7 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigImport(d *schema.ResourceD
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/defaultSupportedIdpConfigs/{{idp_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -349,30 +351,30 @@ func resourceIdentityPlatformDefaultSupportedIdpConfigImport(d *schema.ResourceD
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenIdentityPlatformDefaultSupportedIdpConfigName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformDefaultSupportedIdpConfigName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformDefaultSupportedIdpConfigClientId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformDefaultSupportedIdpConfigClientId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformDefaultSupportedIdpConfigClientSecret(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformDefaultSupportedIdpConfigClientSecret(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformDefaultSupportedIdpConfigEnabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformDefaultSupportedIdpConfigEnabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandIdentityPlatformDefaultSupportedIdpConfigClientId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformDefaultSupportedIdpConfigClientId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformDefaultSupportedIdpConfigClientSecret(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformDefaultSupportedIdpConfigClientSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformDefaultSupportedIdpConfigEnabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformDefaultSupportedIdpConfigEnabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

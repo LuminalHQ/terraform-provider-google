@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Managed Microsoft Active Directory"
-page_title: "Google: google_active_directory_peering"
 description: |-
   Creates a Peering for Managed AD instance.
 ---
@@ -47,7 +46,7 @@ resource "google_active_directory_peering" "ad-domain-peering" {
 
 resource "google_active_directory_domain" "ad-domain" {
     provider            = google-beta
-    domain_name         = "ad.test.d-%{random_suffix}.com"
+    domain_name         = "ad.test.hashicorptest.com"
     locations           = ["us-central1"]
     reserved_ip_range   = "192.168.255.0/24"
     authorized_networks = [google_compute_network.source-network.id]
@@ -72,8 +71,8 @@ resource "google_project_service" "compute" {
 
 resource "google_project" "peered-project" {
     provider        = google-beta
-    name            = "peered-project-%{random_suffix}"
-    project_id      = "peered-project-%{random_suffix}"
+    name            = "my-peered-project"
+    project_id      = "my-peered-project"
     org_id          = "123456789"
     billing_account = "000000-0000000-0000000-000000"
 }
@@ -128,7 +127,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -140,4 +139,4 @@ This resource does not support import.
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

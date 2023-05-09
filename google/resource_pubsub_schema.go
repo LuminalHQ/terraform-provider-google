@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourcePubsubSchema() *schema.Resource {
+func ResourcePubsubSchema() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePubsubSchemaCreate,
 		Read:   resourcePubsubSchemaRead,
@@ -43,7 +47,7 @@ func resourcePubsubSchema() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `The ID to use for the schema, which will become the final component of the schema's resource name.`,
 			},
 			"definition": {
@@ -58,7 +62,7 @@ that is a valid schema definition of the type specified in type.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"TYPE_UNSPECIFIED", "PROTOCOL_BUFFER", "AVRO", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"TYPE_UNSPECIFIED", "PROTOCOL_BUFFER", "AVRO", ""}),
 				Description:  `The type of the schema definition Default value: "TYPE_UNSPECIFIED" Possible values: ["TYPE_UNSPECIFIED", "PROTOCOL_BUFFER", "AVRO"]`,
 				Default:      "TYPE_UNSPECIFIED",
 			},
@@ -74,8 +78,8 @@ that is a valid schema definition of the type specified in type.`,
 }
 
 func resourcePubsubSchemaCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -100,7 +104,7 @@ func resourcePubsubSchemaCreate(d *schema.ResourceData, meta interface{}) error 
 		obj["name"] = nameProp
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas?schemaId={{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas?schemaId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -119,13 +123,13 @@ func resourcePubsubSchemaCreate(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Schema: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/schemas/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/schemas/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -138,9 +142,9 @@ func resourcePubsubSchemaCreate(d *schema.ResourceData, meta interface{}) error 
 
 func resourcePubsubSchemaPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas/{{name}}")
+		url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas/{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -158,12 +162,12 @@ func resourcePubsubSchemaPollRead(d *schema.ResourceData, meta interface{}) Poll
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 		if err != nil {
 			return res, err
 		}
@@ -172,13 +176,13 @@ func resourcePubsubSchemaPollRead(d *schema.ResourceData, meta interface{}) Poll
 }
 
 func resourcePubsubSchemaRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -196,9 +200,9 @@ func resourcePubsubSchemaRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("PubsubSchema %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("PubsubSchema %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -216,8 +220,8 @@ func resourcePubsubSchemaRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourcePubsubSchemaDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -230,7 +234,7 @@ func resourcePubsubSchemaDelete(d *schema.ResourceData, meta interface{}) error 
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/schemas/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -243,9 +247,9 @@ func resourcePubsubSchemaDelete(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Schema")
+		return transport_tpg.HandleNotFoundError(err, d, "Schema")
 	}
 
 	err = PollingWaitTime(resourcePubsubSchemaPollRead(d, meta), PollCheckForAbsence, "Deleting Schema", d.Timeout(schema.TimeoutCreate), 10)
@@ -258,8 +262,8 @@ func resourcePubsubSchemaDelete(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourcePubsubSchemaImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/schemas/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -268,7 +272,7 @@ func resourcePubsubSchemaImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/schemas/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/schemas/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -277,25 +281,25 @@ func resourcePubsubSchemaImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenPubsubSchemaType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSchemaType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSchemaName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSchemaName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandPubsubSchemaType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSchemaType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSchemaDefinition(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSchemaDefinition(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSchemaName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return GetResourceNameFromSelfLink(v.(string)), nil
+func expandPubsubSchemaName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return tpgresource.GetResourceNameFromSelfLink(v.(string)), nil
 }

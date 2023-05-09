@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	bigqueryreservation "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/bigqueryreservation"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceBigqueryReservationAssignment() *schema.Resource {
+func ResourceBigqueryReservationAssignment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceBigqueryReservationAssignmentCreate,
 		Read:   resourceBigqueryReservationAssignmentRead,
@@ -99,7 +101,7 @@ func resourceBigqueryReservationAssignment() *schema.Resource {
 }
 
 func resourceBigqueryReservationAssignmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -119,7 +121,7 @@ func resourceBigqueryReservationAssignmentCreate(d *schema.ResourceData, meta in
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -128,8 +130,8 @@ func resourceBigqueryReservationAssignmentCreate(d *schema.ResourceData, meta in
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLBigqueryReservationClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLBigqueryReservationClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -162,7 +164,7 @@ func resourceBigqueryReservationAssignmentCreate(d *schema.ResourceData, meta in
 }
 
 func resourceBigqueryReservationAssignmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -177,7 +179,7 @@ func resourceBigqueryReservationAssignmentRead(d *schema.ResourceData, meta inte
 		Name:        dcl.StringOrNil(d.Get("name").(string)),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -186,8 +188,8 @@ func resourceBigqueryReservationAssignmentRead(d *schema.ResourceData, meta inte
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLBigqueryReservationClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLBigqueryReservationClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -225,7 +227,7 @@ func resourceBigqueryReservationAssignmentRead(d *schema.ResourceData, meta inte
 }
 
 func resourceBigqueryReservationAssignmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -241,7 +243,7 @@ func resourceBigqueryReservationAssignmentDelete(d *schema.ResourceData, meta in
 	}
 
 	log.Printf("[DEBUG] Deleting Assignment %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -250,8 +252,8 @@ func resourceBigqueryReservationAssignmentDelete(d *schema.ResourceData, meta in
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLBigqueryReservationClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLBigqueryReservationClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -266,9 +268,9 @@ func resourceBigqueryReservationAssignmentDelete(d *schema.ResourceData, meta in
 }
 
 func resourceBigqueryReservationAssignmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/reservations/(?P<reservation>[^/]+)/assignments/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<reservation>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<reservation>[^/]+)/(?P<name>[^/]+)",

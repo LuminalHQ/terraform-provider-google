@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeExternalVpnGateway() *schema.Resource {
+func ResourceComputeExternalVpnGateway() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeExternalVpnGatewayCreate,
 		Read:   resourceComputeExternalVpnGatewayRead,
@@ -86,11 +90,18 @@ it cannot be an IP address from Google Compute Engine.`,
 					},
 				},
 			},
+			"labels": {
+				Type:        schema.TypeMap,
+				Optional:    true,
+				ForceNew:    true,
+				Description: `Labels for the external VPN gateway resource.`,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+			},
 			"redundancy_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"FOUR_IPS_REDUNDANCY", "SINGLE_IP_INTERNALLY_REDUNDANT", "TWO_IPS_REDUNDANCY", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"FOUR_IPS_REDUNDANCY", "SINGLE_IP_INTERNALLY_REDUNDANT", "TWO_IPS_REDUNDANCY", ""}),
 				Description:  `Indicates the redundancy type of this external VPN gateway Possible values: ["FOUR_IPS_REDUNDANCY", "SINGLE_IP_INTERNALLY_REDUNDANT", "TWO_IPS_REDUNDANCY"]`,
 			},
 			"project": {
@@ -109,8 +120,8 @@ it cannot be an IP address from Google Compute Engine.`,
 }
 
 func resourceComputeExternalVpnGatewayCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -121,6 +132,12 @@ func resourceComputeExternalVpnGatewayCreate(d *schema.ResourceData, meta interf
 		return err
 	} else if v, ok := d.GetOkExists("description"); !isEmptyValue(reflect.ValueOf(descriptionProp)) && (ok || !reflect.DeepEqual(v, descriptionProp)) {
 		obj["description"] = descriptionProp
+	}
+	labelsProp, err := expandComputeExternalVpnGatewayLabels(d.Get("labels"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("labels"); !isEmptyValue(reflect.ValueOf(labelsProp)) && (ok || !reflect.DeepEqual(v, labelsProp)) {
+		obj["labels"] = labelsProp
 	}
 	nameProp, err := expandComputeExternalVpnGatewayName(d.Get("name"), d, config)
 	if err != nil {
@@ -141,7 +158,7 @@ func resourceComputeExternalVpnGatewayCreate(d *schema.ResourceData, meta interf
 		obj["interfaces"] = interfacesProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/externalVpnGateways")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/externalVpnGateways")
 	if err != nil {
 		return err
 	}
@@ -160,19 +177,19 @@ func resourceComputeExternalVpnGatewayCreate(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating ExternalVpnGateway: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/externalVpnGateways/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/externalVpnGateways/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating ExternalVpnGateway", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -188,13 +205,13 @@ func resourceComputeExternalVpnGatewayCreate(d *schema.ResourceData, meta interf
 }
 
 func resourceComputeExternalVpnGatewayRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/externalVpnGateways/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/externalVpnGateways/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -212,9 +229,9 @@ func resourceComputeExternalVpnGatewayRead(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeExternalVpnGateway %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeExternalVpnGateway %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -222,6 +239,9 @@ func resourceComputeExternalVpnGatewayRead(d *schema.ResourceData, meta interfac
 	}
 
 	if err := d.Set("description", flattenComputeExternalVpnGatewayDescription(res["description"], d, config)); err != nil {
+		return fmt.Errorf("Error reading ExternalVpnGateway: %s", err)
+	}
+	if err := d.Set("labels", flattenComputeExternalVpnGatewayLabels(res["labels"], d, config)); err != nil {
 		return fmt.Errorf("Error reading ExternalVpnGateway: %s", err)
 	}
 	if err := d.Set("name", flattenComputeExternalVpnGatewayName(res["name"], d, config)); err != nil {
@@ -233,7 +253,7 @@ func resourceComputeExternalVpnGatewayRead(d *schema.ResourceData, meta interfac
 	if err := d.Set("interface", flattenComputeExternalVpnGatewayInterface(res["interfaces"], d, config)); err != nil {
 		return fmt.Errorf("Error reading ExternalVpnGateway: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading ExternalVpnGateway: %s", err)
 	}
 
@@ -241,8 +261,8 @@ func resourceComputeExternalVpnGatewayRead(d *schema.ResourceData, meta interfac
 }
 
 func resourceComputeExternalVpnGatewayDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -255,7 +275,7 @@ func resourceComputeExternalVpnGatewayDelete(d *schema.ResourceData, meta interf
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/externalVpnGateways/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/externalVpnGateways/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -268,12 +288,12 @@ func resourceComputeExternalVpnGatewayDelete(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "ExternalVpnGateway")
+		return transport_tpg.HandleNotFoundError(err, d, "ExternalVpnGateway")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting ExternalVpnGateway", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -286,8 +306,8 @@ func resourceComputeExternalVpnGatewayDelete(d *schema.ResourceData, meta interf
 }
 
 func resourceComputeExternalVpnGatewayImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/externalVpnGateways/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -296,7 +316,7 @@ func resourceComputeExternalVpnGatewayImport(d *schema.ResourceData, meta interf
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/externalVpnGateways/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/externalVpnGateways/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -305,19 +325,23 @@ func resourceComputeExternalVpnGatewayImport(d *schema.ResourceData, meta interf
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeExternalVpnGatewayDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeExternalVpnGatewayDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeExternalVpnGatewayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeExternalVpnGatewayLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeExternalVpnGatewayRedundancyType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeExternalVpnGatewayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeExternalVpnGatewayInterface(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeExternalVpnGatewayRedundancyType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeExternalVpnGatewayInterface(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -336,10 +360,10 @@ func flattenComputeExternalVpnGatewayInterface(v interface{}, d *schema.Resource
 	}
 	return transformed
 }
-func flattenComputeExternalVpnGatewayInterfaceId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeExternalVpnGatewayInterfaceId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -353,23 +377,34 @@ func flattenComputeExternalVpnGatewayInterfaceId(v interface{}, d *schema.Resour
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeExternalVpnGatewayInterfaceIpAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeExternalVpnGatewayInterfaceIpAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeExternalVpnGatewayDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeExternalVpnGatewayDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeExternalVpnGatewayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeExternalVpnGatewayLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
+	if v == nil {
+		return map[string]string{}, nil
+	}
+	m := make(map[string]string)
+	for k, val := range v.(map[string]interface{}) {
+		m[k] = val.(string)
+	}
+	return m, nil
+}
+
+func expandComputeExternalVpnGatewayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeExternalVpnGatewayRedundancyType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeExternalVpnGatewayRedundancyType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeExternalVpnGatewayInterface(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeExternalVpnGatewayInterface(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -398,10 +433,10 @@ func expandComputeExternalVpnGatewayInterface(v interface{}, d TerraformResource
 	return req, nil
 }
 
-func expandComputeExternalVpnGatewayInterfaceId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeExternalVpnGatewayInterfaceId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeExternalVpnGatewayInterfaceIpAddress(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeExternalVpnGatewayInterfaceIpAddress(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

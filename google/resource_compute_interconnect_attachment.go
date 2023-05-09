@@ -22,12 +22,16 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 // waitForAttachmentToBeProvisioned waits for an attachment to leave the
 // "UNPROVISIONED" state, to indicate that it's either ready or awaiting partner
 // activity.
-func waitForAttachmentToBeProvisioned(d *schema.ResourceData, config *Config, timeout time.Duration) error {
+func waitForAttachmentToBeProvisioned(d *schema.ResourceData, config *transport_tpg.Config, timeout time.Duration) error {
 	return resource.Retry(timeout, func() *resource.RetryError {
 		if err := resourceComputeInterconnectAttachmentRead(d, config); err != nil {
 			return resource.NonRetryableError(err)
@@ -43,7 +47,7 @@ func waitForAttachmentToBeProvisioned(d *schema.ResourceData, config *Config, ti
 	})
 }
 
-func resourceComputeInterconnectAttachment() *schema.Resource {
+func ResourceComputeInterconnectAttachment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeInterconnectAttachmentCreate,
 		Read:   resourceComputeInterconnectAttachmentRead,
@@ -65,7 +69,7 @@ func resourceComputeInterconnectAttachment() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRegexp(`^[a-z]([-a-z0-9]*[a-z0-9])?$`),
+				ValidateFunc: verify.ValidateRegexp(`^[a-z]([-a-z0-9]*[a-z0-9])?$`),
 				Description: `Name of the resource. Provided by the client when the resource is created. The
 name must be 1-63 characters long, and comply with RFC1035. Specifically, the
 name must be 1-63 characters long and match the regular expression
@@ -77,7 +81,7 @@ letter, or digit, except the last character, which cannot be a dash.`,
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `URL of the cloud router to be used for dynamic routing. This router must be in
 the same region as this InterconnectAttachment. The InterconnectAttachment will
 automatically connect the Interconnect to the network & region within which the
@@ -94,7 +98,7 @@ PARTNER type this will Pre-Activate the interconnect attachment`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"BPS_50M", "BPS_100M", "BPS_200M", "BPS_300M", "BPS_400M", "BPS_500M", "BPS_1G", "BPS_2G", "BPS_5G", "BPS_10G", "BPS_20G", "BPS_50G", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"BPS_50M", "BPS_100M", "BPS_200M", "BPS_300M", "BPS_400M", "BPS_500M", "BPS_1G", "BPS_2G", "BPS_5G", "BPS_10G", "BPS_20G", "BPS_50G", ""}),
 				Description: `Provisioned bandwidth capacity for the interconnect attachment.
 For attachments of type DEDICATED, the user can set the bandwidth.
 For attachments of type PARTNER, the Google Partner that is operating the interconnect must set the bandwidth.
@@ -137,28 +141,27 @@ domain. If not specified, the value will default to AVAILABILITY_DOMAIN_ANY.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"NONE", "IPSEC", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NONE", "IPSEC", ""}),
 				Description: `Indicates the user-supplied encryption option of this interconnect
-attachment:
+attachment. Can only be specified at attachment creation for PARTNER or
+DEDICATED attachments.
 
-NONE is the default value, which means that the attachment carries
-unencrypted traffic. VMs can send traffic to, or receive traffic
-from, this type of attachment.
+* NONE - This is the default value, which means that the VLAN attachment
+carries unencrypted traffic. VMs are able to send traffic to, or receive
+traffic from, such a VLAN attachment.
 
-IPSEC indicates that the attachment carries only traffic encrypted by
-an IPsec device such as an HA VPN gateway. VMs cannot directly send
-traffic to, or receive traffic from, such an attachment. To use
-IPsec-encrypted Cloud Interconnect create the attachment using this
-option.
-
-Not currently available publicly. Default value: "NONE" Possible values: ["NONE", "IPSEC"]`,
+* IPSEC - The VLAN attachment carries only encrypted traffic that is
+encrypted by an IPsec device, such as an HA VPN gateway or third-party
+IPsec VPN. VMs cannot directly send traffic to, or receive traffic from,
+such a VLAN attachment. To use HA VPN over Cloud Interconnect, the VLAN
+attachment must be created with this option. Default value: "NONE" Possible values: ["NONE", "IPSEC"]`,
 				Default: "NONE",
 			},
 			"interconnect": {
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `URL of the underlying Interconnect object that this attachment's
 traffic will traverse through. Required if type is DEDICATED, must not
 be set if type is PARTNER.`,
@@ -167,24 +170,23 @@ be set if type is PARTNER.`,
 				Type:     schema.TypeList,
 				Optional: true,
 				ForceNew: true,
-				Description: `URL of addresses that have been reserved for the interconnect
-attachment, Used only for interconnect attachment that has the
-encryption option as IPSEC.
+				Description: `URL of addresses that have been reserved for the interconnect attachment,
+Used only for interconnect attachment that has the encryption option as
+IPSEC.
 
-The addresses must be RFC 1918 IP address ranges. When creating HA
-VPN gateway over the interconnect attachment, if the attachment is
-configured to use an RFC 1918 IP address, then the VPN gateway's IP
-address will be allocated from the IP address range specified
-here.
+The addresses must be RFC 1918 IP address ranges. When creating HA VPN
+gateway over the interconnect attachment, if the attachment is configured
+to use an RFC 1918 IP address, then the VPN gateway's IP address will be
+allocated from the IP address range specified here.
 
 For example, if the HA VPN gateway's interface 0 is paired to this
-interconnect attachment, then an RFC 1918 IP address for the VPN
-gateway interface 0 will be allocated from the IP address specified
-for this interconnect attachment.
+interconnect attachment, then an RFC 1918 IP address for the VPN gateway
+interface 0 will be allocated from the IP address specified for this
+interconnect attachment.
 
 If this field is not specified for interconnect attachment that has
-encryption option as IPSEC, later on when creating HA VPN gateway on
-this interconnect attachment, the HA VPN gateway's IP address will be
+encryption option as IPSEC, later on when creating HA VPN gateway on this
+interconnect attachment, the HA VPN gateway's IP address will be
 allocated from regional external IP address pool.`,
 				Elem: &schema.Schema{
 					Type:             schema.TypeString,
@@ -210,7 +212,7 @@ this interconnect attachment. Currently, only 1440 and 1500 are allowed. If not 
 				Computed:     true,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"DEDICATED", "PARTNER", "PARTNER_PROVIDER", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"DEDICATED", "PARTNER", "PARTNER_PROVIDER", ""}),
 				Description: `The type of InterconnectAttachment you wish to create. Defaults to
 DEDICATED. Possible values: ["DEDICATED", "PARTNER", "PARTNER_PROVIDER"]`,
 			},
@@ -296,8 +298,8 @@ Google and the customer, going to and from this network and region.`,
 }
 
 func resourceComputeInterconnectAttachmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -388,7 +390,7 @@ func resourceComputeInterconnectAttachmentCreate(d *schema.ResourceData, meta in
 		obj["region"] = regionProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments")
 	if err != nil {
 		return err
 	}
@@ -407,19 +409,19 @@ func resourceComputeInterconnectAttachmentCreate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating InterconnectAttachment: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating InterconnectAttachment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -439,13 +441,13 @@ func resourceComputeInterconnectAttachmentCreate(d *schema.ResourceData, meta in
 }
 
 func resourceComputeInterconnectAttachmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -463,9 +465,9 @@ func resourceComputeInterconnectAttachmentRead(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeInterconnectAttachment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeInterconnectAttachment %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -535,7 +537,7 @@ func resourceComputeInterconnectAttachmentRead(d *schema.ResourceData, meta inte
 	if err := d.Set("region", flattenComputeInterconnectAttachmentRegion(res["region"], d, config)); err != nil {
 		return fmt.Errorf("Error reading InterconnectAttachment: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading InterconnectAttachment: %s", err)
 	}
 
@@ -543,8 +545,8 @@ func resourceComputeInterconnectAttachmentRead(d *schema.ResourceData, meta inte
 }
 
 func resourceComputeInterconnectAttachmentUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -589,7 +591,7 @@ func resourceComputeInterconnectAttachmentUpdate(d *schema.ResourceData, meta in
 		obj["region"] = regionProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -601,7 +603,7 @@ func resourceComputeInterconnectAttachmentUpdate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating InterconnectAttachment %q: %s", d.Id(), err)
@@ -609,7 +611,7 @@ func resourceComputeInterconnectAttachmentUpdate(d *schema.ResourceData, meta in
 		log.Printf("[DEBUG] Finished updating InterconnectAttachment %q: %#v", d.Id(), res)
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Updating InterconnectAttachment", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -621,8 +623,8 @@ func resourceComputeInterconnectAttachmentUpdate(d *schema.ResourceData, meta in
 }
 
 func resourceComputeInterconnectAttachmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -635,7 +637,7 @@ func resourceComputeInterconnectAttachmentDelete(d *schema.ResourceData, meta in
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -651,12 +653,12 @@ func resourceComputeInterconnectAttachmentDelete(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "InterconnectAttachment")
+		return transport_tpg.HandleNotFoundError(err, d, "InterconnectAttachment")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting InterconnectAttachment", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -669,8 +671,8 @@ func resourceComputeInterconnectAttachmentDelete(d *schema.ResourceData, meta in
 }
 
 func resourceComputeInterconnectAttachmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/interconnectAttachments/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -680,7 +682,7 @@ func resourceComputeInterconnectAttachmentImport(d *schema.ResourceData, meta in
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/interconnectAttachments/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -689,27 +691,27 @@ func resourceComputeInterconnectAttachmentImport(d *schema.ResourceData, meta in
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeInterconnectAttachmentAdminEnabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentAdminEnabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentCloudRouterIpAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentCloudRouterIpAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentCustomerRouterIpAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentCustomerRouterIpAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentInterconnect(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentInterconnect(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentMtu(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentMtu(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles int given in float64 format
 	if floatVal, ok := v.(float64); ok {
 		return fmt.Sprintf("%d", int(floatVal))
@@ -717,23 +719,23 @@ func flattenComputeInterconnectAttachmentMtu(v interface{}, d *schema.ResourceDa
 	return v
 }
 
-func flattenComputeInterconnectAttachmentBandwidth(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentBandwidth(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentEdgeAvailabilityDomain(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentEdgeAvailabilityDomain(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentPairingKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentPairingKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentPartnerAsn(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentPartnerAsn(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentPrivateInterconnectInfo(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentPrivateInterconnectInfo(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -746,10 +748,10 @@ func flattenComputeInterconnectAttachmentPrivateInterconnectInfo(v interface{}, 
 		flattenComputeInterconnectAttachmentPrivateInterconnectInfoTag8021q(original["tag8021q"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeInterconnectAttachmentPrivateInterconnectInfoTag8021q(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentPrivateInterconnectInfoTag8021q(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -763,37 +765,37 @@ func flattenComputeInterconnectAttachmentPrivateInterconnectInfoTag8021q(v inter
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeInterconnectAttachmentType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentGoogleReferenceId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentGoogleReferenceId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentRouter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentRouter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeInterconnectAttachmentCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeInterconnectAttachmentVlanTag8021q(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentVlanTag8021q(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -807,14 +809,14 @@ func flattenComputeInterconnectAttachmentVlanTag8021q(v interface{}, d *schema.R
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeInterconnectAttachmentIpsecInternalAddresses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentIpsecInternalAddresses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return convertAndMapStringArr(v.([]interface{}), ConvertSelfLinkToV1)
+	return convertAndMapStringArr(v.([]interface{}), tpgresource.ConvertSelfLinkToV1)
 }
 
-func flattenComputeInterconnectAttachmentEncryption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentEncryption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil || isEmptyValue(reflect.ValueOf(v)) {
 		return "NONE"
 	}
@@ -822,42 +824,42 @@ func flattenComputeInterconnectAttachmentEncryption(v interface{}, d *schema.Res
 	return v
 }
 
-func flattenComputeInterconnectAttachmentRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeInterconnectAttachmentRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func expandComputeInterconnectAttachmentAdminEnabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentAdminEnabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentInterconnect(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentInterconnect(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentMtu(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentMtu(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentBandwidth(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentBandwidth(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentEdgeAvailabilityDomain(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentEdgeAvailabilityDomain(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentRouter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentRouter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("routers", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for router: %s", err)
@@ -865,19 +867,19 @@ func expandComputeInterconnectAttachmentRouter(v interface{}, d TerraformResourc
 	return f.RelativeLink(), nil
 }
 
-func expandComputeInterconnectAttachmentName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentCandidateSubnets(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentCandidateSubnets(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentVlanTag8021q(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentVlanTag8021q(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentIpsecInternalAddresses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentIpsecInternalAddresses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -893,11 +895,11 @@ func expandComputeInterconnectAttachmentIpsecInternalAddresses(v interface{}, d 
 	return req, nil
 }
 
-func expandComputeInterconnectAttachmentEncryption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentEncryption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeInterconnectAttachmentRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeInterconnectAttachmentRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for region: %s", err)

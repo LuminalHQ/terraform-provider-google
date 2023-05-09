@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceSQLDatabase() *schema.Resource {
+func ResourceSQLDatabase() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceSQLDatabaseCreate,
 		Read:   resourceSQLDatabaseRead,
@@ -59,7 +62,7 @@ This does not include the project ID or instance name.`,
 				Type:             schema.TypeString,
 				Computed:         true,
 				Optional:         true,
-				DiffSuppressFunc: caseDiffSuppress,
+				DiffSuppressFunc: tpgresource.CaseDiffSuppress,
 				Description: `The charset value. See MySQL's
 [Supported Character Sets and Collations](https://dev.mysql.com/doc/refman/5.7/en/charset-charsets.html)
 and Postgres' [Character Set Support](https://www.postgresql.org/docs/9.6/static/multibyte.html)
@@ -75,6 +78,15 @@ a value of 'UTF8' at creation time.`,
 and Postgres' [Collation Support](https://www.postgresql.org/docs/9.6/static/collation.html)
 for more details and supported values. Postgres databases only support
 a value of 'en_US.UTF8' at creation time.`,
+			},
+			"deletion_policy": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Default:  "DELETE",
+				Description: `The deletion policy for the database. Setting ABANDON allows the resource
+to be abandoned rather than deleted. This is useful for Postgres, where databases cannot be
+deleted from the API if there are users other than cloudsqlsuperuser with access. Possible
+values are: "ABANDON", "DELETE". Defaults to "DELETE".`,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -92,8 +104,8 @@ a value of 'en_US.UTF8' at creation time.`,
 }
 
 func resourceSQLDatabaseCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -124,14 +136,14 @@ func resourceSQLDatabaseCreate(d *schema.ResourceData, meta interface{}) error {
 		obj["instance"] = instanceProp
 	}
 
-	lockName, err := replaceVars(d, config, "google-sql-database-instance-{{project}}-{{instance}}")
+	lockName, err := ReplaceVars(d, config, "google-sql-database-instance-{{project}}-{{instance}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases")
+	url, err := ReplaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases")
 	if err != nil {
 		return err
 	}
@@ -150,19 +162,19 @@ func resourceSQLDatabaseCreate(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Database: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/instances/{{instance}}/databases/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/instances/{{instance}}/databases/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = sqlAdminOperationWaitTime(
+	err = SqlAdminOperationWaitTime(
 		config, res, project, "Creating Database", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -178,13 +190,13 @@ func resourceSQLDatabaseCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSQLDatabaseRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
+	url, err := ReplaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -202,11 +214,17 @@ func resourceSQLDatabaseRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(transformSQLDatabaseReadError(err), d, fmt.Sprintf("SQLDatabase %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(transformSQLDatabaseReadError(err), d, fmt.Sprintf("SQLDatabase %q", d.Id()))
 	}
 
+	// Explicitly set virtual fields to default values if unset
+	if _, ok := d.GetOkExists("deletion_policy"); !ok {
+		if err := d.Set("deletion_policy", "DELETE"); err != nil {
+			return fmt.Errorf("Error setting deletion_policy: %s", err)
+		}
+	}
 	if err := d.Set("project", project); err != nil {
 		return fmt.Errorf("Error reading Database: %s", err)
 	}
@@ -223,7 +241,7 @@ func resourceSQLDatabaseRead(d *schema.ResourceData, meta interface{}) error {
 	if err := d.Set("instance", flattenSQLDatabaseInstance(res["instance"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Database: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading Database: %s", err)
 	}
 
@@ -231,8 +249,8 @@ func resourceSQLDatabaseRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSQLDatabaseUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -271,14 +289,14 @@ func resourceSQLDatabaseUpdate(d *schema.ResourceData, meta interface{}) error {
 		obj["instance"] = instanceProp
 	}
 
-	lockName, err := replaceVars(d, config, "google-sql-database-instance-{{project}}-{{instance}}")
+	lockName, err := ReplaceVars(d, config, "google-sql-database-instance-{{project}}-{{instance}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
+	url, err := ReplaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -290,7 +308,7 @@ func resourceSQLDatabaseUpdate(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Database %q: %s", d.Id(), err)
@@ -298,7 +316,7 @@ func resourceSQLDatabaseUpdate(d *schema.ResourceData, meta interface{}) error {
 		log.Printf("[DEBUG] Finished updating Database %q: %#v", d.Id(), res)
 	}
 
-	err = sqlAdminOperationWaitTime(
+	err = SqlAdminOperationWaitTime(
 		config, res, project, "Updating Database", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -310,8 +328,8 @@ func resourceSQLDatabaseUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSQLDatabaseDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -324,19 +342,24 @@ func resourceSQLDatabaseDelete(d *schema.ResourceData, meta interface{}) error {
 	}
 	billingProject = project
 
-	lockName, err := replaceVars(d, config, "google-sql-database-instance-{{project}}-{{instance}}")
+	lockName, err := ReplaceVars(d, config, "google-sql-database-instance-{{project}}-{{instance}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
+	url, err := ReplaceVars(d, config, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
 	if err != nil {
 		return err
 	}
 
 	var obj map[string]interface{}
+	if deletionPolicy := d.Get("deletion_policy"); deletionPolicy == "ABANDON" {
+		// Allows for database to be abandoned without deletion to avoid deletion failing
+		// for Postgres databases in some circumstances due to existing SQL users
+		return nil
+	}
 	log.Printf("[DEBUG] Deleting Database %q", d.Id())
 
 	// err == nil indicates that the billing_project value was found
@@ -344,12 +367,12 @@ func resourceSQLDatabaseDelete(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Database")
+		return transport_tpg.HandleNotFoundError(err, d, "Database")
 	}
 
-	err = sqlAdminOperationWaitTime(
+	err = SqlAdminOperationWaitTime(
 		config, res, project, "Deleting Database", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -362,8 +385,8 @@ func resourceSQLDatabaseDelete(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceSQLDatabaseImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/instances/(?P<instance>[^/]+)/databases/(?P<name>[^/]+)",
 		"instances/(?P<instance>[^/]+)/databases/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<instance>[^/]+)/(?P<name>[^/]+)",
@@ -374,43 +397,48 @@ func resourceSQLDatabaseImport(d *schema.ResourceData, meta interface{}) ([]*sch
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/instances/{{instance}}/databases/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/instances/{{instance}}/databases/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
+	// Explicitly set virtual fields to default values on import
+	if err := d.Set("deletion_policy", "DELETE"); err != nil {
+		return nil, fmt.Errorf("Error setting deletion_policy: %s", err)
+	}
+
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenSQLDatabaseCharset(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSQLDatabaseCharset(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSQLDatabaseCollation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSQLDatabaseCollation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSQLDatabaseName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSQLDatabaseName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSQLDatabaseInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSQLDatabaseInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandSQLDatabaseCharset(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSQLDatabaseCharset(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSQLDatabaseCollation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSQLDatabaseCollation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSQLDatabaseName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSQLDatabaseName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSQLDatabaseInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSQLDatabaseInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

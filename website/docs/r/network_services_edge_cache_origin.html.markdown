@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Network services"
-page_title: "Google: google_network_services_edge_cache_origin"
 description: |-
   EdgeCacheOrigin represents a HTTP-reachable backend for an EdgeCacheService.
 ---
@@ -48,10 +47,9 @@ resource "google_network_services_edge_cache_origin" "default" {
 
 
 ```hcl
-
 resource "google_network_services_edge_cache_origin" "fallback" {
   name                 = "my-fallback"
-  origin_address       = "gs://media-edge-fallback"
+  origin_address       = "fallback.example.com"
   description          = "The default bucket for media edge test"
   max_attempts         = 3
   protocol = "HTTP"
@@ -69,6 +67,27 @@ resource "google_network_services_edge_cache_origin" "fallback" {
     response_timeout = "60s"
     read_timeout = "5s"
   }
+  origin_override_action {
+    url_rewrite {
+      host_rewrite = "example.com"
+    }
+    header_action {
+      request_headers_to_add {
+        header_name = "x-header"
+	header_value = "value"
+	replace = true
+      }
+    }
+  }
+  origin_redirect {
+    redirect_conditions = [
+      "MOVED_PERMANENTLY",
+      "FOUND",
+      "SEE_OTHER",
+      "TEMPORARY_REDIRECT",
+      "PERMANENT_REDIRECT",
+    ]
+  }
 }
 
 resource "google_network_services_edge_cache_origin" "default" {
@@ -83,6 +102,40 @@ resource "google_network_services_edge_cache_origin" "default" {
 
   timeout {
     connect_timeout = "10s"
+  }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=network_services_edge_cache_origin_v4auth&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Network Services Edge Cache Origin V4auth
+
+
+```hcl
+resource "google_secret_manager_secret" "secret-basic" {
+  secret_id = "secret-name"
+
+  replication {
+    automatic = true
+  }
+}
+
+resource "google_secret_manager_secret_version" "secret-version-basic" {
+  secret = google_secret_manager_secret.secret-basic.id
+
+  secret_data = "secret-data"
+}
+
+resource "google_network_services_edge_cache_origin" "default" {
+  name           = "my-origin"
+  origin_address = "gs://media-edge-default"
+  description    = "The default bucket for V4 authentication"
+  aws_v4_authentication {
+    access_key_id             = "ACCESSKEYID"
+    secret_access_key_version = google_secret_manager_secret_version.secret-version-basic.id
+    origin_region             = "auto"
   }
 }
 ```
@@ -121,7 +174,7 @@ The following arguments are supported:
   (Optional)
   The protocol to use to connect to the configured origin. Defaults to HTTP2, and it is strongly recommended that users use HTTP2 for both security & performance.
   When using HTTP2 or HTTPS as the protocol, a valid, publicly-signed, unexpired TLS (SSL) certificate must be presented by the origin server.
-  Possible values are `HTTP2`, `HTTPS`, and `HTTP`.
+  Possible values are: `HTTP2`, `HTTPS`, `HTTP`.
 
 * `port` -
   (Optional)
@@ -161,12 +214,28 @@ The following arguments are supported:
   - RETRIABLE_4XX: Retry for retriable 4xx response codes, which include HTTP 409 (Conflict) and HTTP 429 (Too Many Requests)
   - NOT_FOUND: Retry if the origin returns a HTTP 404 (Not Found). This can be useful when generating video content, and the segment is not available yet.
   - FORBIDDEN: Retry if the origin returns a HTTP 403 (Forbidden).
-  Each value may be one of `CONNECT_FAILURE`, `HTTP_5XX`, `GATEWAY_ERROR`, `RETRIABLE_4XX`, `NOT_FOUND`, and `FORBIDDEN`.
+  Each value may be one of: `CONNECT_FAILURE`, `HTTP_5XX`, `GATEWAY_ERROR`, `RETRIABLE_4XX`, `NOT_FOUND`, `FORBIDDEN`.
 
 * `timeout` -
   (Optional)
   The connection and HTTP timeout configuration for this origin.
   Structure is [documented below](#nested_timeout).
+
+* `aws_v4_authentication` -
+  (Optional)
+  Enable AWS Signature Version 4 origin authentication.
+  Structure is [documented below](#nested_aws_v4_authentication).
+
+* `origin_override_action` -
+  (Optional)
+  The override actions, including url rewrites and header
+  additions, for requests that use this origin.
+  Structure is [documented below](#nested_origin_override_action).
+
+* `origin_redirect` -
+  (Optional)
+  Follow redirects from this origin.
+  Structure is [documented below](#nested_origin_redirect).
 
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
@@ -201,6 +270,82 @@ The following arguments are supported:
   The readTimeout is capped by the responseTimeout.  All reads of the HTTP connection/stream must be completed by the deadline set by the responseTimeout.
   If the response headers have already been written to the connection, the response will be truncated and logged.
 
+<a name="nested_aws_v4_authentication"></a>The `aws_v4_authentication` block supports:
+
+* `access_key_id` -
+  (Required)
+  The access key ID your origin uses to identify the key.
+
+* `secret_access_key_version` -
+  (Required)
+  The Secret Manager secret version of the secret access key used by your origin.
+  This is the resource name of the secret version in the format `projects/*/secrets/*/versions/*` where the `*` values are replaced by the project, secret, and version you require.
+
+* `origin_region` -
+  (Required)
+  The name of the AWS region that your origin is in.
+
+<a name="nested_origin_override_action"></a>The `origin_override_action` block supports:
+
+* `url_rewrite` -
+  (Optional)
+  The URL rewrite configuration for request that are
+  handled by this origin.
+  Structure is [documented below](#nested_url_rewrite).
+
+* `header_action` -
+  (Optional)
+  The header actions, including adding and removing
+  headers, for request handled by this origin.
+  Structure is [documented below](#nested_header_action).
+
+
+<a name="nested_url_rewrite"></a>The `url_rewrite` block supports:
+
+* `host_rewrite` -
+  (Optional)
+  Prior to forwarding the request to the selected
+  origin, the request's host header is replaced with
+  contents of the hostRewrite.
+  This value must be between 1 and 255 characters.
+
+<a name="nested_header_action"></a>The `header_action` block supports:
+
+* `request_headers_to_add` -
+  (Optional)
+  Describes a header to add.
+  You may add a maximum of 25 request headers.
+  Structure is [documented below](#nested_request_headers_to_add).
+
+
+<a name="nested_request_headers_to_add"></a>The `request_headers_to_add` block supports:
+
+* `header_name` -
+  (Required)
+  The name of the header to add.
+
+* `header_value` -
+  (Required)
+  The value of the header to add.
+
+* `replace` -
+  (Optional)
+  Whether to replace all existing headers with the same name.
+  By default, added header values are appended
+  to the response or request headers with the
+  same field names. The added values are
+  separated by commas.
+  To overwrite existing values, set `replace` to `true`.
+
+<a name="nested_origin_redirect"></a>The `origin_redirect` block supports:
+
+* `redirect_conditions` -
+  (Optional)
+  The set of redirect response codes that the CDN
+  follows. Values of
+  [RedirectConditions](https://cloud.google.com/media-cdn/docs/reference/rest/v1/projects.locations.edgeCacheOrigins#redirectconditions)
+  are accepted.
+
 ## Attributes Reference
 
 In addition to the arguments listed above, the following computed attributes are exported:
@@ -211,7 +356,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 60 minutes.
 - `update` - Default is 60 minutes.
@@ -230,4 +375,4 @@ $ terraform import google_network_services_edge_cache_origin.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

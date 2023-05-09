@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_managed_ssl_certificate"
 description: |-
   An SslCertificate resource, used for HTTPS load balancing.
 ---
@@ -108,23 +107,10 @@ resource "google_compute_http_health_check" "default" {
   timeout_sec        = 1
 }
 
-resource "google_dns_managed_zone" "zone" {
-  name     = "dnszone"
-  dns_name = "sslcert.tf-test.club."
-}
-
 resource "google_compute_global_forwarding_rule" "default" {
   name       = "forwarding-rule"
   target     = google_compute_target_https_proxy.default.id
   port_range = 443
-}
-
-resource "google_dns_record_set" "set" {
-  name         = "sslcert.tf-test.club."
-  type         = "A"
-  ttl          = 3600
-  managed_zone = google_dns_managed_zone.zone.name
-  rrdatas      = [google_compute_global_forwarding_rule.default.ip_address]
 }
 ```
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
@@ -240,7 +226,7 @@ The following arguments are supported:
   Enum field whose value is always `MANAGED` - used to signal to the API
   which type this is.
   Default value is `MANAGED`.
-  Possible values are `MANAGED`.
+  Possible values are: `MANAGED`.
 
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
@@ -269,14 +255,14 @@ In addition to the arguments listed above, the following computed attributes are
   Domains associated with the certificate via Subject Alternative Name.
 
 * `expire_time` -
-  Expire time of the certificate.
+  Expire time of the certificate in RFC3339 text format.
 * `self_link` - The URI of the created resource.
 
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 30 minutes.
 - `delete` - Default is 30 minutes.
@@ -294,4 +280,4 @@ $ terraform import google_compute_managed_ssl_certificate.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

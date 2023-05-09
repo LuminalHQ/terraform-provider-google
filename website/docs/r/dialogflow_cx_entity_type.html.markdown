@@ -13,14 +13,13 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Dialogflow CX"
-page_title: "Google: google_dialogflow_cx_entity_type"
 description: |-
   Entities are extracted from user input and represent parameters that are meaningful to your application.
 ---
 
 # google\_dialogflow\_cx\_entity\_type
 
-Entities are extracted from user input and represent parameters that are meaningful to your application. 
+Entities are extracted from user input and represent parameters that are meaningful to your application.
 For example, a date range, a proper name such as a geographic location or landmark, and so on. Entities represent actionable data for your application.
 
 
@@ -86,7 +85,7 @@ The following arguments are supported:
   * KIND_MAP: Map entity types allow mapping of a group of synonyms to a canonical value.
   * KIND_LIST: List entity types contain a set of entries that do not map to canonical values. However, list entity types can contain references to other entity types (with or without aliases).
   * KIND_REGEXP: Regexp entity types allow to specify regular expressions in entries values.
-  Possible values are `KIND_MAP`, `KIND_LIST`, and `KIND_REGEXP`.
+  Possible values are: `KIND_MAP`, `KIND_LIST`, `KIND_REGEXP`.
 
 * `entities` -
   (Required)
@@ -115,11 +114,11 @@ The following arguments are supported:
   Represents kinds of entities.
   * AUTO_EXPANSION_MODE_UNSPECIFIED: Auto expansion disabled for the entity.
   * AUTO_EXPANSION_MODE_DEFAULT: Allows an agent to recognize values that have not been explicitly listed in the entity.
-  Possible values are `AUTO_EXPANSION_MODE_DEFAULT` and `AUTO_EXPANSION_MODE_UNSPECIFIED`.
+  Possible values are: `AUTO_EXPANSION_MODE_DEFAULT`, `AUTO_EXPANSION_MODE_UNSPECIFIED`.
 
 * `excluded_phrases` -
   (Optional)
-  Collection of exceptional words and phrases that shouldn't be matched. For example, if you have a size entity type with entry giant(an adjective), you might consider adding giants(a noun) as an exclusion. 
+  Collection of exceptional words and phrases that shouldn't be matched. For example, if you have a size entity type with entry giant(an adjective), you might consider adding giants(a noun) as an exclusion.
   If the kind of entity type is KIND_MAP, then the phrases specified by entities and excluded phrases should be mutually exclusive.
   Structure is [documented below](#nested_excluded_phrases).
 
@@ -133,7 +132,7 @@ The following arguments are supported:
 
 * `parent` -
   (Optional)
-  The agent to create a entity type for. 
+  The agent to create a entity type for.
   Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>.
 
 * `language_code` -
@@ -165,7 +164,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 40 minutes.
 - `update` - Default is 40 minutes.

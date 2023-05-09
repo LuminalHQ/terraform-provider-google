@@ -3,6 +3,7 @@ package google
 import (
 	"errors"
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"strconv"
 	"testing"
 
@@ -13,9 +14,9 @@ import (
 func TestAccDataSourceGoogleCloudRunLocations_basic(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDataSourceGoogleCloudRunLocationsBasic,

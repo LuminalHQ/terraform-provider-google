@@ -22,6 +22,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 func sslPolicyCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, v interface{}) error {
@@ -45,7 +49,7 @@ func sslPolicyCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, v inte
 	return nil
 }
 
-func resourceComputeSslPolicy() *schema.Resource {
+func ResourceComputeSslPolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeSslPolicyCreate,
 		Read:   resourceComputeSslPolicyRead,
@@ -104,7 +108,7 @@ for which ciphers are available to use. **Note**: this argument
 			"min_tls_version": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"TLS_1_0", "TLS_1_1", "TLS_1_2", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"TLS_1_0", "TLS_1_1", "TLS_1_2", ""}),
 				Description: `The minimum version of SSL protocol that can be used by the clients
 to establish a connection with the load balancer. Default value: "TLS_1_0" Possible values: ["TLS_1_0", "TLS_1_1", "TLS_1_2"]`,
 				Default: "TLS_1_0",
@@ -112,7 +116,7 @@ to establish a connection with the load balancer. Default value: "TLS_1_0" Possi
 			"profile": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"COMPATIBLE", "MODERN", "RESTRICTED", "CUSTOM", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"COMPATIBLE", "MODERN", "RESTRICTED", "CUSTOM", ""}),
 				Description: `Profile specifies the set of SSL features that can be used by the
 load balancer when negotiating SSL with clients. If using 'CUSTOM',
 the set of SSL features to enable must be specified in the
@@ -159,8 +163,8 @@ object. This field is used in optimistic locking.`,
 }
 
 func resourceComputeSslPolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -197,7 +201,7 @@ func resourceComputeSslPolicyCreate(d *schema.ResourceData, meta interface{}) er
 		obj["customFeatures"] = customFeaturesProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies")
 	if err != nil {
 		return err
 	}
@@ -216,19 +220,19 @@ func resourceComputeSslPolicyCreate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating SslPolicy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/sslPolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/sslPolicies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating SslPolicy", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -244,13 +248,13 @@ func resourceComputeSslPolicyCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeSslPolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -268,9 +272,9 @@ func resourceComputeSslPolicyRead(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeSslPolicy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeSslPolicy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -301,7 +305,7 @@ func resourceComputeSslPolicyRead(d *schema.ResourceData, meta interface{}) erro
 	if err := d.Set("fingerprint", flattenComputeSslPolicyFingerprint(res["fingerprint"], d, config)); err != nil {
 		return fmt.Errorf("Error reading SslPolicy: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading SslPolicy: %s", err)
 	}
 
@@ -309,8 +313,8 @@ func resourceComputeSslPolicyRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceComputeSslPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -348,7 +352,7 @@ func resourceComputeSslPolicyUpdate(d *schema.ResourceData, meta interface{}) er
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -360,7 +364,7 @@ func resourceComputeSslPolicyUpdate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating SslPolicy %q: %s", d.Id(), err)
@@ -368,7 +372,7 @@ func resourceComputeSslPolicyUpdate(d *schema.ResourceData, meta interface{}) er
 		log.Printf("[DEBUG] Finished updating SslPolicy %q: %#v", d.Id(), res)
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Updating SslPolicy", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -380,8 +384,8 @@ func resourceComputeSslPolicyUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeSslPolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -394,7 +398,7 @@ func resourceComputeSslPolicyDelete(d *schema.ResourceData, meta interface{}) er
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslPolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -407,12 +411,12 @@ func resourceComputeSslPolicyDelete(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "SslPolicy")
+		return transport_tpg.HandleNotFoundError(err, d, "SslPolicy")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting SslPolicy", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -425,8 +429,8 @@ func resourceComputeSslPolicyDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeSslPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/sslPolicies/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -435,7 +439,7 @@ func resourceComputeSslPolicyImport(d *schema.ResourceData, meta interface{}) ([
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/sslPolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/sslPolicies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -444,61 +448,61 @@ func resourceComputeSslPolicyImport(d *schema.ResourceData, meta interface{}) ([
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeSslPolicyCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSslPolicyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSslPolicyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSslPolicyProfile(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyProfile(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSslPolicyMinTlsVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyMinTlsVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSslPolicyEnabledFeatures(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyEnabledFeatures(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeSslPolicyCustomFeatures(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyCustomFeatures(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeSslPolicyFingerprint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSslPolicyFingerprint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeSslPolicyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSslPolicyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSslPolicyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSslPolicyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSslPolicyProfile(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSslPolicyProfile(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSslPolicyMinTlsVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSslPolicyMinTlsVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSslPolicyCustomFeatures(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSslPolicyCustomFeatures(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }

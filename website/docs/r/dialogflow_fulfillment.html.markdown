@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Dialogflow"
-page_title: "Google: google_dialogflow_fulfillment"
 description: |-
   By default, your agent responds to a matched intent with a static response.
 ---
@@ -91,7 +90,7 @@ The following arguments are supported:
   (Required)
   The type of the feature that enabled for fulfillment.
   * SMALLTALK: Fulfillment is enabled for SmallTalk.
-  Possible values are `SMALLTALK`.
+  Possible values are: `SMALLTALK`.
 
 <a name="nested_generic_web_service"></a>The `generic_web_service` block supports:
 
@@ -118,14 +117,14 @@ In addition to the arguments listed above, the following computed attributes are
 * `id` - an identifier for the resource with format `{{name}}`
 
 * `name` -
-  The unique identifier of the fulfillment. 
+  The unique identifier of the fulfillment.
   Format: projects/<Project ID>/agent/fulfillment - projects/<Project ID>/locations/<Location ID>/agent/fulfillment
 
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -142,4 +141,4 @@ $ terraform import google_dialogflow_fulfillment.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

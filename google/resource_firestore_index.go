@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 /*
@@ -29,7 +32,7 @@ import (
  * end of the fields list if not present. We are suppressing
  * this server generated field.
  */
-func firestoreIFieldsDiffSuppressFunc(k, old, new string, d TerraformResourceDataChange) bool {
+func FirestoreIFieldsDiffSuppressFunc(k, old, new string, d TerraformResourceDataChange) bool {
 	kLength := "fields.#"
 	oldLength, newLength := d.GetChange(kLength)
 	oldInt, ok := oldLength.(int)
@@ -58,10 +61,10 @@ func firestoreIFieldsDiffSuppressFunc(k, old, new string, d TerraformResourceDat
 }
 
 func firestoreIFieldsDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
-	return firestoreIFieldsDiffSuppressFunc(k, old, new, d)
+	return FirestoreIFieldsDiffSuppressFunc(k, old, new, d)
 }
 
-func resourceFirestoreIndex() *schema.Resource {
+func ResourceFirestoreIndex() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceFirestoreIndexCreate,
 		Read:   resourceFirestoreIndexRead,
@@ -101,7 +104,7 @@ ordered '"ASCENDING"' (unless explicitly specified otherwise).`,
 							Type:         schema.TypeString,
 							Optional:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"CONTAINS", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"CONTAINS", ""}),
 							Description: `Indicates that this field supports operations on arrayValues. Only one of 'order' and 'arrayConfig' can
 be specified. Possible values: ["CONTAINS"]`,
 						},
@@ -115,7 +118,7 @@ be specified. Possible values: ["CONTAINS"]`,
 							Type:         schema.TypeString,
 							Optional:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"ASCENDING", "DESCENDING", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"ASCENDING", "DESCENDING", ""}),
 							Description: `Indicates that this field supports ordering by the specified order or comparing using =, <, <=, >, >=.
 Only one of 'order' and 'arrayConfig' can be specified. Possible values: ["ASCENDING", "DESCENDING"]`,
 						},
@@ -133,7 +136,7 @@ Only one of 'order' and 'arrayConfig' can be specified. Possible values: ["ASCEN
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"COLLECTION", "COLLECTION_GROUP", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"COLLECTION", "COLLECTION_GROUP", ""}),
 				Description:  `The scope at which a query is run. Default value: "COLLECTION" Possible values: ["COLLECTION", "COLLECTION_GROUP"]`,
 				Default:      "COLLECTION",
 			},
@@ -155,8 +158,8 @@ Only one of 'order' and 'arrayConfig' can be specified. Possible values: ["ASCEN
 }
 
 func resourceFirestoreIndexCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -192,7 +195,7 @@ func resourceFirestoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{FirestoreBasePath}}projects/{{project}}/databases/{{database}}/collectionGroups/{{collection}}/indexes")
+	url, err := ReplaceVars(d, config, "{{FirestoreBasePath}}projects/{{project}}/databases/{{database}}/collectionGroups/{{collection}}/indexes")
 	if err != nil {
 		return err
 	}
@@ -211,13 +214,13 @@ func resourceFirestoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Index: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -226,12 +229,13 @@ func resourceFirestoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = firestoreOperationWaitTimeWithResponse(
+	err = FirestoreOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Index", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Index: %s", err)
 	}
 
@@ -240,7 +244,7 @@ func resourceFirestoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{name}}")
+	id, err = ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -262,13 +266,13 @@ func resourceFirestoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceFirestoreIndexRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{FirestoreBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{FirestoreBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -286,9 +290,9 @@ func resourceFirestoreIndexRead(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("FirestoreIndex %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("FirestoreIndex %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -309,8 +313,8 @@ func resourceFirestoreIndexRead(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceFirestoreIndexDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -323,7 +327,7 @@ func resourceFirestoreIndexDelete(d *schema.ResourceData, meta interface{}) erro
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{FirestoreBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{FirestoreBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -336,12 +340,12 @@ func resourceFirestoreIndexDelete(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Index")
+		return transport_tpg.HandleNotFoundError(err, d, "Index")
 	}
 
-	err = firestoreOperationWaitTime(
+	err = FirestoreOperationWaitTime(
 		config, res, project, "Deleting Index", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -355,10 +359,10 @@ func resourceFirestoreIndexDelete(d *schema.ResourceData, meta interface{}) erro
 
 func resourceFirestoreIndexImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -383,15 +387,15 @@ func resourceFirestoreIndexImport(d *schema.ResourceData, meta interface{}) ([]*
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenFirestoreIndexName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenFirestoreIndexName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenFirestoreIndexQueryScope(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenFirestoreIndexQueryScope(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenFirestoreIndexFields(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenFirestoreIndexFields(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -411,31 +415,31 @@ func flattenFirestoreIndexFields(v interface{}, d *schema.ResourceData, config *
 	}
 	return transformed
 }
-func flattenFirestoreIndexFieldsFieldPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenFirestoreIndexFieldsFieldPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenFirestoreIndexFieldsOrder(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenFirestoreIndexFieldsOrder(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenFirestoreIndexFieldsArrayConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenFirestoreIndexFieldsArrayConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandFirestoreIndexDatabase(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexDatabase(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandFirestoreIndexCollection(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexCollection(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandFirestoreIndexQueryScope(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexQueryScope(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandFirestoreIndexFields(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexFields(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -471,15 +475,15 @@ func expandFirestoreIndexFields(v interface{}, d TerraformResourceData, config *
 	return req, nil
 }
 
-func expandFirestoreIndexFieldsFieldPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexFieldsFieldPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandFirestoreIndexFieldsOrder(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexFieldsOrder(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandFirestoreIndexFieldsArrayConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandFirestoreIndexFieldsArrayConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

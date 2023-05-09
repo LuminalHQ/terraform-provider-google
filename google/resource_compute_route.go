@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeRoute() *schema.Resource {
+func ResourceComputeRoute() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeRouteCreate,
 		Read:   resourceComputeRouteRead,
@@ -50,7 +54,7 @@ Only IPv4 is supported.`,
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRegexp(`^[a-z]([-a-z0-9]*[a-z0-9])?$`),
+				ValidateFunc: verify.ValidateRegexp(`^[a-z]([-a-z0-9]*[a-z0-9])?$`),
 				Description: `Name of the resource. Provided by the client when the resource is
 created. The name must be 1-63 characters long, and comply with
 RFC1035.  Specifically, the name must be 1-63 characters long and
@@ -63,7 +67,7 @@ last character, which cannot be a dash.`,
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `The network that this route applies to.`,
 			},
 			"description": {
@@ -77,7 +81,7 @@ when you create the resource.`,
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `URL to a gateway that should handle matching packets.
 Currently, you can only specify the internet gateway, using a full or
 partial valid URL:
@@ -91,7 +95,7 @@ partial valid URL:
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareIpAddressOrSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareIpAddressOrSelfLinkOrResourceName,
 				Description: `The IP address or URL to a forwarding rule of type
 loadBalancingScheme=INTERNAL that should handle matching
 packets.
@@ -190,8 +194,8 @@ Default value is 1000. Valid range is 0 through 65535.`,
 }
 
 func resourceComputeRouteCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -264,14 +268,14 @@ func resourceComputeRouteCreate(d *schema.ResourceData, meta interface{}) error 
 		obj["nextHopIlb"] = nextHopIlbProp
 	}
 
-	lockName, err := replaceVars(d, config, "projects/{{project}}/global/networks/{{network}}/peerings")
+	lockName, err := ReplaceVars(d, config, "projects/{{project}}/global/networks/{{network}}/peerings")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/routes")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/routes")
 	if err != nil {
 		return err
 	}
@@ -290,19 +294,19 @@ func resourceComputeRouteCreate(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isPeeringOperationInProgress)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsPeeringOperationInProgress)
 	if err != nil {
 		return fmt.Errorf("Error creating Route: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/routes/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/routes/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating Route", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -318,13 +322,13 @@ func resourceComputeRouteCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceComputeRouteRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/routes/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/routes/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -342,9 +346,9 @@ func resourceComputeRouteRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isPeeringOperationInProgress)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsPeeringOperationInProgress)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeRoute %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeRoute %q", d.Id()))
 	}
 
 	res, err = resourceComputeRouteDecoder(d, meta, res)
@@ -399,7 +403,7 @@ func resourceComputeRouteRead(d *schema.ResourceData, meta interface{}) error {
 	if err := d.Set("next_hop_ilb", flattenComputeRouteNextHopIlb(res["nextHopIlb"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Route: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading Route: %s", err)
 	}
 
@@ -407,8 +411,8 @@ func resourceComputeRouteRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceComputeRouteDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -421,14 +425,14 @@ func resourceComputeRouteDelete(d *schema.ResourceData, meta interface{}) error 
 	}
 	billingProject = project
 
-	lockName, err := replaceVars(d, config, "projects/{{project}}/global/networks/{{network}}/peerings")
+	lockName, err := ReplaceVars(d, config, "projects/{{project}}/global/networks/{{network}}/peerings")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/routes/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/routes/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -441,12 +445,12 @@ func resourceComputeRouteDelete(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isPeeringOperationInProgress)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsPeeringOperationInProgress)
 	if err != nil {
-		return handleNotFoundError(err, d, "Route")
+		return transport_tpg.HandleNotFoundError(err, d, "Route")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting Route", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -459,8 +463,8 @@ func resourceComputeRouteDelete(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceComputeRouteImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/routes/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -469,7 +473,7 @@ func resourceComputeRouteImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/routes/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/routes/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -478,29 +482,29 @@ func resourceComputeRouteImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeRouteDestRange(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteDestRange(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRouteDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRouteName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRouteNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeRoutePriority(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRoutePriority(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -514,56 +518,56 @@ func flattenComputeRoutePriority(v interface{}, d *schema.ResourceData, config *
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeRouteTags(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteTags(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeRouteNextHopGateway(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNextHopGateway(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRouteNextHopInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNextHopInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeRouteNextHopIp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNextHopIp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRouteNextHopVpnTunnel(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNextHopVpnTunnel(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeRouteNextHopNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNextHopNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRouteNextHopIlb(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRouteNextHopIlb(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeRouteDestRange(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteDestRange(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRouteDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRouteName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRouteNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("networks", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for network: %s", err)
@@ -571,23 +575,23 @@ func expandComputeRouteNetwork(v interface{}, d TerraformResourceData, config *C
 	return f.RelativeLink(), nil
 }
 
-func expandComputeRoutePriority(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRoutePriority(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRouteTags(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteTags(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v.(*schema.Set).List(), nil
 }
 
-func expandComputeRouteNextHopGateway(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteNextHopGateway(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == "default-internet-gateway" {
-		return replaceVars(d, config, "projects/{{project}}/global/gateways/default-internet-gateway")
+		return ReplaceVars(d, config, "projects/{{project}}/global/gateways/default-internet-gateway")
 	} else {
 		return v, nil
 	}
 }
 
-func expandComputeRouteNextHopInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteNextHopInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == "" {
 		return v, nil
 	}
@@ -596,7 +600,7 @@ func expandComputeRouteNextHopInstance(v interface{}, d TerraformResourceData, c
 		return nil, err
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -608,11 +612,11 @@ func expandComputeRouteNextHopInstance(v interface{}, d TerraformResourceData, c
 	return nextInstance.SelfLink, nil
 }
 
-func expandComputeRouteNextHopIp(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteNextHopIp(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRouteNextHopVpnTunnel(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteNextHopVpnTunnel(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("vpnTunnels", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for next_hop_vpn_tunnel: %s", err)
@@ -620,13 +624,13 @@ func expandComputeRouteNextHopVpnTunnel(v interface{}, d TerraformResourceData, 
 	return f.RelativeLink(), nil
 }
 
-func expandComputeRouteNextHopIlb(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRouteNextHopIlb(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 func resourceComputeRouteDecoder(d *schema.ResourceData, meta interface{}, res map[string]interface{}) (map[string]interface{}, error) {
 	if v, ok := res["nextHopInstance"]; ok {
-		val, err := parseZonalFieldValue("instances", v.(string), "project", "next_hop_instance_zone", d, meta.(*Config), true)
+		val, err := parseZonalFieldValue("instances", v.(string), "project", "next_hop_instance_zone", d, meta.(*transport_tpg.Config), true)
 		if err != nil {
 			return nil, err
 		}

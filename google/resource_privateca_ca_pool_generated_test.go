@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccPrivatecaCaPool_privatecaCapoolBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPrivatecaCaPoolDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckPrivatecaCaPoolDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPrivatecaCaPool_privatecaCapoolBasicExample(context),
@@ -69,13 +72,13 @@ func TestAccPrivatecaCaPool_privatecaCapoolAllFieldsExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPrivatecaCaPoolDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckPrivatecaCaPoolDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPrivatecaCaPool_privatecaCapoolAllFieldsExample(context),
@@ -166,6 +169,17 @@ resource "google_privateca_ca_pool" "default" {
           time_stamping = true
         }
       }
+      name_constraints {
+        critical                  = true
+        permitted_dns_names       = ["*.example1.com", "*.example2.com"]
+        excluded_dns_names        = ["*.deny.example1.com", "*.deny.example2.com"]
+        permitted_ip_ranges       = ["10.0.0.0/8", "11.0.0.0/8"]
+        excluded_ip_ranges        = ["10.1.1.0/24", "11.1.1.0/24"]
+        permitted_email_addresses = [".example1.com", ".example2.com"]
+        excluded_email_addresses  = [".deny.example1.com", ".deny.example2.com"]
+        permitted_uris            = [".example1.com", ".example2.com"]
+        excluded_uris             = [".deny.example1.com", ".deny.example2.com"]
+      }
     }
   }
 }
@@ -182,9 +196,9 @@ func testAccCheckPrivatecaCaPoolDestroyProducer(t *testing.T) func(s *terraform.
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{PrivatecaBasePath}}projects/{{project}}/locations/{{location}}/caPools/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{PrivatecaBasePath}}projects/{{project}}/locations/{{location}}/caPools/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -195,7 +209,7 @@ func testAccCheckPrivatecaCaPoolDestroyProducer(t *testing.T) func(s *terraform.
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("PrivatecaCaPool still exists at %s", url)
 			}

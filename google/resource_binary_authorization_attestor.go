@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func compareSignatureAlgorithm(_, old, new string, _ *schema.ResourceData) bool {
+func CompareSignatureAlgorithm(_, old, new string, _ *schema.ResourceData) bool {
 	// See https://cloud.google.com/binary-authorization/docs/reference/rest/v1/projects.attestors#signaturealgorithm
 	normalizedAlgorithms := map[string]string{
 		"ECDSA_P256_SHA256":   "ECDSA_P256_SHA256",
@@ -52,7 +55,7 @@ func compareSignatureAlgorithm(_, old, new string, _ *schema.ResourceData) bool 
 	return false
 }
 
-func resourceBinaryAuthorizationAttestor() *schema.Resource {
+func ResourceBinaryAuthorizationAttestor() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceBinaryAuthorizationAttestorCreate,
 		Read:   resourceBinaryAuthorizationAttestorRead,
@@ -81,7 +84,7 @@ func resourceBinaryAuthorizationAttestor() *schema.Resource {
 							Type:             schema.TypeString,
 							Required:         true,
 							ForceNew:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description: `The resource name of a ATTESTATION_AUTHORITY Note, created by the
 user. If the Note is in a different project from the Attestor, it
 should be specified in the format 'projects/*/notes/*' (or the legacy
@@ -152,7 +155,7 @@ encoding of the public key.`,
 												"signature_algorithm": {
 													Type:             schema.TypeString,
 													Optional:         true,
-													DiffSuppressFunc: compareSignatureAlgorithm,
+													DiffSuppressFunc: CompareSignatureAlgorithm,
 													Description: `The signature algorithm used to verify a message against
 a signature using this key. These signature algorithm must
 match the structure and any object identifiers encoded in
@@ -205,8 +208,8 @@ displayed in chooser dialogs.`,
 }
 
 func resourceBinaryAuthorizationAttestorCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -231,7 +234,7 @@ func resourceBinaryAuthorizationAttestorCreate(d *schema.ResourceData, meta inte
 		obj["userOwnedGrafeasNote"] = userOwnedGrafeasNoteProp
 	}
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors?attestorId={{name}}")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors?attestorId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -250,13 +253,13 @@ func resourceBinaryAuthorizationAttestorCreate(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Attestor: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/attestors/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/attestors/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -268,13 +271,13 @@ func resourceBinaryAuthorizationAttestorCreate(d *schema.ResourceData, meta inte
 }
 
 func resourceBinaryAuthorizationAttestorRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors/{{name}}")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -292,9 +295,9 @@ func resourceBinaryAuthorizationAttestorRead(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("BinaryAuthorizationAttestor %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("BinaryAuthorizationAttestor %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -315,8 +318,8 @@ func resourceBinaryAuthorizationAttestorRead(d *schema.ResourceData, meta interf
 }
 
 func resourceBinaryAuthorizationAttestorUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -349,7 +352,7 @@ func resourceBinaryAuthorizationAttestorUpdate(d *schema.ResourceData, meta inte
 		obj["userOwnedGrafeasNote"] = userOwnedGrafeasNoteProp
 	}
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors/{{name}}")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -361,7 +364,7 @@ func resourceBinaryAuthorizationAttestorUpdate(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Attestor %q: %s", d.Id(), err)
@@ -373,8 +376,8 @@ func resourceBinaryAuthorizationAttestorUpdate(d *schema.ResourceData, meta inte
 }
 
 func resourceBinaryAuthorizationAttestorDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -387,7 +390,7 @@ func resourceBinaryAuthorizationAttestorDelete(d *schema.ResourceData, meta inte
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors/{{name}}")
+	url, err := ReplaceVars(d, config, "{{BinaryAuthorizationBasePath}}projects/{{project}}/attestors/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -400,9 +403,9 @@ func resourceBinaryAuthorizationAttestorDelete(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Attestor")
+		return transport_tpg.HandleNotFoundError(err, d, "Attestor")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Attestor %q: %#v", d.Id(), res)
@@ -410,8 +413,8 @@ func resourceBinaryAuthorizationAttestorDelete(d *schema.ResourceData, meta inte
 }
 
 func resourceBinaryAuthorizationAttestorImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/attestors/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -420,7 +423,7 @@ func resourceBinaryAuthorizationAttestorImport(d *schema.ResourceData, meta inte
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/attestors/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/attestors/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -429,18 +432,18 @@ func resourceBinaryAuthorizationAttestorImport(d *schema.ResourceData, meta inte
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenBinaryAuthorizationAttestorName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenBinaryAuthorizationAttestorDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNote(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNote(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -457,11 +460,11 @@ func flattenBinaryAuthorizationAttestorAttestationAuthorityNote(v interface{}, d
 		flattenBinaryAuthorizationAttestorAttestationAuthorityNoteDelegationServiceAccountEmail(original["delegationServiceAccountEmail"], d, config)
 	return []interface{}{transformed}
 }
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNoteNoteReference(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNoteNoteReference(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeys(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeys(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -482,19 +485,19 @@ func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeys(v inte
 	}
 	return transformed
 }
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysComment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysComment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysAsciiArmoredPgpPublicKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysAsciiArmoredPgpPublicKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -509,27 +512,27 @@ func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPub
 		flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeySignatureAlgorithm(original["signatureAlgorithm"], d, config)
 	return []interface{}{transformed}
 }
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeyPublicKeyPem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeyPublicKeyPem(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeySignatureAlgorithm(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeySignatureAlgorithm(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenBinaryAuthorizationAttestorAttestationAuthorityNoteDelegationServiceAccountEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenBinaryAuthorizationAttestorAttestationAuthorityNoteDelegationServiceAccountEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandBinaryAuthorizationAttestorName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return replaceVars(d, config, "projects/{{project}}/attestors/{{name}}")
+func expandBinaryAuthorizationAttestorName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return ReplaceVars(d, config, "projects/{{project}}/attestors/{{name}}")
 }
 
-func expandBinaryAuthorizationAttestorDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNote(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNote(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -562,7 +565,7 @@ func expandBinaryAuthorizationAttestorAttestationAuthorityNote(v interface{}, d 
 	return transformed, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNoteNoteReference(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNoteNoteReference(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	r := regexp.MustCompile("projects/(.+)/notes/(.+)")
 	if r.MatchString(v.(string)) {
 		return v.(string), nil
@@ -576,7 +579,7 @@ func expandBinaryAuthorizationAttestorAttestationAuthorityNoteNoteReference(v in
 	return fmt.Sprintf("projects/%s/notes/%s", project, v.(string)), nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeys(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeys(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -619,19 +622,19 @@ func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeys(v inter
 	return req, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysComment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysComment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysAsciiArmoredPgpPublicKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysAsciiArmoredPgpPublicKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -657,14 +660,14 @@ func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPubl
 	return transformed, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeyPublicKeyPem(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeyPublicKeyPem(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeySignatureAlgorithm(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNotePublicKeysPkixPublicKeySignatureAlgorithm(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandBinaryAuthorizationAttestorAttestationAuthorityNoteDelegationServiceAccountEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandBinaryAuthorizationAttestorAttestationAuthorityNoteDelegationServiceAccountEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

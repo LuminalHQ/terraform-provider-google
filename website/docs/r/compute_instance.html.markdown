@@ -1,6 +1,5 @@
 ---
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_instance"
 description: |-
   Manages a VM instance resource within GCE.
 ---
@@ -30,6 +29,9 @@ resource "google_compute_instance" "default" {
   boot_disk {
     initialize_params {
       image = "debian-cloud/debian-11"
+      labels = {
+        my_label = "value"
+      }
     }
   }
 
@@ -118,7 +120,8 @@ The following arguments are supported:
 
 * `metadata` - (Optional) Metadata key/value pairs to make available from
     within the instance. Ssh keys attached in the Cloud Console will be removed.
-    Add them to your config in order to keep them attached to your instance.
+    Add them to your config in order to keep them attached to your instance. A
+    list of default metadata values (e.g. ssh-keys) can be found [here](https://cloud.google.com/compute/docs/metadata/default-metadata-values)
 
 -> Depending on the OS you choose for your instance, some metadata keys have
    special functionality.  Most linux-based images will run the content of
@@ -167,7 +170,7 @@ is desired, you will need to modify your state file manually using
 * `enable_display` - (Optional) Enable [Virtual Displays](https://cloud.google.com/compute/docs/instances/enable-instance-virtual-display#verify_display_driver) on this instance.
 **Note**: [`allow_stopping_for_update`](#allow_stopping_for_update) must be set to true or your instance must have a `desired_status` of `TERMINATED` in order to update this field.
 
-* `resource_policies` (Optional) -- A list of short names or self_links of resource policies to attach to the instance. Modifying this list will cause the instance to recreate. Currently a max of 1 resource policy is supported.
+* `resource_policies` (Optional) -- A list of self_links of resource policies to attach to the instance. Modifying this list will cause the instance to recreate. Currently a max of 1 resource policy is supported.
 
 * `reservation_affinity` - (Optional) Specifies the reservations that this instance can consume from.
     Structure is [documented below](#nested_reservation_affinity).
@@ -230,6 +233,9 @@ is desired, you will need to modify your state file manually using
     [google_compute_image data source](/docs/providers/google/d/compute_image.html).
     For instance, the image `centos-6-v20180104` includes its family name `centos-6`.
     These images can be referred by family name here.
+
+* `labels` - (Optional) A set of key/value label pairs assigned to the disk. This  
+    field is only applicable for persistent disks.
 
 <a name="nested_scratch_disk"></a>The `scratch_disk` block supports:
 
@@ -340,8 +346,7 @@ specified, then this instance will have no external IPv6 Internet access. Struct
 
 <a name="nested_service_account"></a>The `service_account` block supports:
 
-* `email` - (Optional) The service account e-mail address. If not given, the
-    default Google Compute Engine service account is used.
+* `email` - (Optional) The service account e-mail address.
     **Note**: [`allow_stopping_for_update`](#allow_stopping_for_update) must be set to true or your instance must have a `desired_status` of `TERMINATED` in order to update this field.
 
 * `scopes` - (Required) A list of service scopes. Both OAuth2 URLs and gcloud
@@ -376,8 +381,21 @@ specified, then this instance will have no external IPv6 Internet access. Struct
     `false`. For more info about
     `SPOT`, read [here](https://cloud.google.com/compute/docs/instances/spot)
     
-* `instance_termination_action` - (Optional) Describe the type of termination action for `SPOT` VM. Can be `STOP` or `DELETE`.  Read more on [here](https://cloud.google.com/compute/docs/instances/create-use-spot) 
+* `instance_termination_action` - (Optional) Describe the type of termination action for VM. Can be `STOP` or `DELETE`.  Read more on [here](https://cloud.google.com/compute/docs/instances/create-use-spot) 
 
+* `max_run_duration` -  (Optional) [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html) The duration of the instance. Instance will run and be terminated after then, the termination action could be defined in `instance_termination_action`. Only support `DELETE` `instance_termination_action` at this point. Structure is [documented below](#nested_max_run_duration).
+<a name="nested_max_run_duration"></a>The `max_run_duration` block supports:
+
+* `nanos` - (Optional) Span of time that's a fraction of a second at nanosecond
+	resolution. Durations less than one second are represented with a 0
+	`seconds` field and a positive `nanos` field. Must be from 0 to
+	 999,999,999 inclusive.
+
+* `seconds` - (Required) Span of time at a resolution of a second. Must be from 0 to
+   315,576,000,000 inclusive. Note: these bounds are computed from: 60
+   sec/min * 60 min/hr * 24 hr/day * 365.25 days/year * 10000 years.
+
+* `maintenance_interval` - (Optional) [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html) Specifies the frequency of planned maintenance events. The accepted values are: `PERIODIC`.
 <a name="nested_guest_accelerator"></a>The `guest_accelerator` block supports:
 
 * `type` (Required) - The accelerator type resource to expose to this instance. E.g. `nvidia-tesla-k80`.
@@ -413,6 +431,8 @@ specified, then this instance will have no external IPv6 Internet access. Struct
 * `enable_nested_virtualization` (Optional) Defines whether the instance should have [nested virtualization](#on_host_maintenance)  enabled. Defaults to false.
 
 * `threads_per_core` (Optional) he number of threads per physical core. To disable [simultaneous multithreading (SMT)](https://cloud.google.com/compute/docs/instances/disabling-smt) set this to 1.
+
+* `visible_core_count` (Optional) The number of physical cores to expose to an instance. [visible cores info (VC)](https://cloud.google.com/compute/docs/instances/customize-visible-cores).
 
 <a name="nested_reservation_affinity"></a>The `reservation_affinity` block supports:
 
@@ -474,7 +494,7 @@ The field is output only, an IPv6 address from a subnetwork associated with the 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options: configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

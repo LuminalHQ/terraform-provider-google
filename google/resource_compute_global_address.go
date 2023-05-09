@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeGlobalAddress() *schema.Resource {
+func ResourceComputeGlobalAddress() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeGlobalAddressCreate,
 		Read:   resourceComputeGlobalAddressRead,
@@ -64,8 +68,8 @@ address or omitted to allow GCP to choose a valid one for you.`,
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
-				ValidateFunc:     validateEnum([]string{"EXTERNAL", "INTERNAL", ""}),
-				DiffSuppressFunc: emptyOrDefaultStringSuppress("EXTERNAL"),
+				ValidateFunc:     verify.ValidateEnum([]string{"EXTERNAL", "INTERNAL", ""}),
+				DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress("EXTERNAL"),
 				Description: `The type of the address to reserve.
 
 * EXTERNAL indicates public/external single IP address.
@@ -82,8 +86,8 @@ address or omitted to allow GCP to choose a valid one for you.`,
 				Type:             schema.TypeString,
 				Optional:         true,
 				ForceNew:         true,
-				ValidateFunc:     validateEnum([]string{"IPV4", "IPV6", ""}),
-				DiffSuppressFunc: emptyOrDefaultStringSuppress("IPV4"),
+				ValidateFunc:     verify.ValidateEnum([]string{"IPV4", "IPV6", ""}),
+				DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress("IPV4"),
 				Description:      `The IP Version that will be used by this address. The default value is 'IPV4'. Possible values: ["IPV4", "IPV6"]`,
 			},
 			"network": {
@@ -138,8 +142,8 @@ or addressType=INTERNAL when purpose=PRIVATE_SERVICE_CONNECT`,
 }
 
 func resourceComputeGlobalAddressCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -194,7 +198,7 @@ func resourceComputeGlobalAddressCreate(d *schema.ResourceData, meta interface{}
 		obj["network"] = networkProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/addresses")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/addresses")
 	if err != nil {
 		return err
 	}
@@ -213,19 +217,19 @@ func resourceComputeGlobalAddressCreate(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating GlobalAddress: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/addresses/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/addresses/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating GlobalAddress", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -241,13 +245,13 @@ func resourceComputeGlobalAddressCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceComputeGlobalAddressRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/addresses/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/addresses/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -265,9 +269,9 @@ func resourceComputeGlobalAddressRead(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeGlobalAddress %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeGlobalAddress %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -301,7 +305,7 @@ func resourceComputeGlobalAddressRead(d *schema.ResourceData, meta interface{}) 
 	if err := d.Set("network", flattenComputeGlobalAddressNetwork(res["network"], d, config)); err != nil {
 		return fmt.Errorf("Error reading GlobalAddress: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading GlobalAddress: %s", err)
 	}
 
@@ -309,8 +313,8 @@ func resourceComputeGlobalAddressRead(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceComputeGlobalAddressDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -323,7 +327,7 @@ func resourceComputeGlobalAddressDelete(d *schema.ResourceData, meta interface{}
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/addresses/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/addresses/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -336,12 +340,12 @@ func resourceComputeGlobalAddressDelete(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "GlobalAddress")
+		return transport_tpg.HandleNotFoundError(err, d, "GlobalAddress")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting GlobalAddress", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -354,8 +358,8 @@ func resourceComputeGlobalAddressDelete(d *schema.ResourceData, meta interface{}
 }
 
 func resourceComputeGlobalAddressImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/addresses/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -364,7 +368,7 @@ func resourceComputeGlobalAddressImport(d *schema.ResourceData, meta interface{}
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/addresses/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/addresses/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -373,30 +377,30 @@ func resourceComputeGlobalAddressImport(d *schema.ResourceData, meta interface{}
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeGlobalAddressAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressIpVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressIpVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressPrefixLength(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressPrefixLength(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -410,50 +414,50 @@ func flattenComputeGlobalAddressPrefixLength(v interface{}, d *schema.ResourceDa
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeGlobalAddressAddressType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressAddressType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressPurpose(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressPurpose(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalAddressNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalAddressNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func expandComputeGlobalAddressAddress(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressAddress(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressIpVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressIpVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressPrefixLength(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressPrefixLength(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressAddressType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressAddressType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressPurpose(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressPurpose(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalAddressNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalAddressNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("networks", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for network: %s", err)

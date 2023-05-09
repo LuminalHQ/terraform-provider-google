@@ -5,6 +5,8 @@ import (
 	neturl "net/url"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 type monitoringServiceTypeStateSetter func(map[string]interface{}, *schema.ResourceData, interface{}) error
@@ -19,8 +21,8 @@ func dataSourceMonitoringServiceType(
 	typeStateSetter monitoringServiceTypeStateSetter) *schema.Resource {
 
 	// Convert monitoring schema to ds schema
-	dsSchema := datasourceSchemaFromResourceSchema(resourceMonitoringService().Schema)
-	addOptionalFieldsToSchema(dsSchema, "project")
+	dsSchema := tpgresource.DatasourceSchemaFromResourceSchema(ResourceMonitoringService().Schema)
+	tpgresource.AddOptionalFieldsToSchema(dsSchema, "project")
 
 	// Add schema specific to the service type
 	dsSchema = mergeSchemas(typeSchema, dsSchema)
@@ -36,8 +38,8 @@ func dataSourceMonitoringServiceType(
 // It takes the list query filter (i.e. ?filter=$listFilter) and a ReadFunc to handle reading any type-specific schema.
 func dataSourceMonitoringServiceTypeReadFromList(listFilter string, typeStateSetter monitoringServiceTypeStateSetter) schema.ReadFunc {
 	return func(d *schema.ResourceData, meta interface{}) error {
-		config := meta.(*Config)
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		config := meta.(*transport_tpg.Config)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return err
 		}
@@ -47,18 +49,18 @@ func dataSourceMonitoringServiceTypeReadFromList(listFilter string, typeStateSet
 			return err
 		}
 
-		filters, err := replaceVars(d, config, listFilter)
+		filters, err := ReplaceVars(d, config, listFilter)
 		if err != nil {
 			return err
 		}
 
 		listUrlTmpl := "{{MonitoringBasePath}}v3/projects/{{project}}/services?filter=" + neturl.QueryEscape(filters)
-		url, err := replaceVars(d, config, listUrlTmpl)
+		url, err := ReplaceVars(d, config, listUrlTmpl)
 		if err != nil {
 			return err
 		}
 
-		resp, err := sendRequest(config, "GET", project, url, userAgent, nil, isMonitoringConcurrentEditError)
+		resp, err := transport_tpg.SendRequest(config, "GET", project, url, userAgent, nil, transport_tpg.IsMonitoringConcurrentEditError)
 		if err != nil {
 			return fmt.Errorf("unable to list Monitoring Service for data source: %v", err)
 		}

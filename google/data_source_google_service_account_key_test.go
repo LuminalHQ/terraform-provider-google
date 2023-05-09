@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"regexp"
 	"testing"
 
@@ -12,17 +13,17 @@ func TestAccDatasourceGoogleServiceAccountKey_basic(t *testing.T) {
 	t.Parallel()
 
 	resourceName := "data.google_service_account_key.acceptance"
-	account := fmt.Sprintf("tf-test-%d", randInt(t))
+	account := fmt.Sprintf("tf-test-%d", RandInt(t))
 	serviceAccountName := fmt.Sprintf(
 		"projects/%s/serviceAccounts/%s@%s.iam.gserviceaccount.com",
-		getTestProjectFromEnv(),
+		acctest.GetTestProjectFromEnv(),
 		account,
-		getTestProjectFromEnv(),
+		acctest.GetTestProjectFromEnv(),
 	)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDatasourceGoogleServiceAccountKey(account),

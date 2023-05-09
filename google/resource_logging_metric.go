@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceLoggingMetric() *schema.Resource {
+func ResourceLoggingMetric() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceLoggingMetricCreate,
 		Read:   resourceLoggingMetricRead,
@@ -47,57 +50,6 @@ func resourceLoggingMetric() *schema.Resource {
 				Description: `An advanced logs filter (https://cloud.google.com/logging/docs/view/advanced-filters) which
 is used to match log entries.`,
 			},
-			"metric_descriptor": {
-				Type:        schema.TypeList,
-				Required:    true,
-				Description: `The metric descriptor associated with the logs-based metric.`,
-				MaxItems:    1,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"metric_kind": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validateEnum([]string{"DELTA", "GAUGE", "CUMULATIVE"}),
-							Description: `Whether the metric records instantaneous values, changes to a value, etc.
-Some combinations of metricKind and valueType might not be supported.
-For counter metrics, set this to DELTA. Possible values: ["DELTA", "GAUGE", "CUMULATIVE"]`,
-						},
-						"value_type": {
-							Type:         schema.TypeString,
-							Required:     true,
-							ValidateFunc: validateEnum([]string{"BOOL", "INT64", "DOUBLE", "STRING", "DISTRIBUTION", "MONEY"}),
-							Description: `Whether the measurement is an integer, a floating-point number, etc.
-Some combinations of metricKind and valueType might not be supported.
-For counter metrics, set this to INT64. Possible values: ["BOOL", "INT64", "DOUBLE", "STRING", "DISTRIBUTION", "MONEY"]`,
-						},
-						"display_name": {
-							Type:     schema.TypeString,
-							Optional: true,
-							Description: `A concise name for the metric, which can be displayed in user interfaces. Use sentence case 
-without an ending period, for example "Request count". This field is optional but it is 
-recommended to be set for any metrics associated with user-visible concepts, such as Quota.`,
-						},
-						"labels": {
-							Type:     schema.TypeSet,
-							Optional: true,
-							Description: `The set of labels that can be used to describe a specific instance of this metric type. For
-example, the appengine.googleapis.com/http/server/response_latencies metric type has a label
-for the HTTP response code, response_code, so you can look at latencies for successful responses
-or just for responses that failed.`,
-							Elem: loggingMetricMetricDescriptorLabelsSchema(),
-							// Default schema.HashSchema is used.
-						},
-						"unit": {
-							Type:     schema.TypeString,
-							Optional: true,
-							Description: `The unit in which the metric value is reported. It is only applicable if the valueType is
-'INT64', 'DOUBLE', or 'DISTRIBUTION'. The supported units are a subset of
-[The Unified Code for Units of Measure](http://unitsofmeasure.org/ucum.html) standard`,
-							Default: "1",
-						},
-					},
-				},
-			},
 			"name": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -106,6 +58,12 @@ Metric identifiers are limited to 100 characters and can include only the follow
 characters A-Z, a-z, 0-9, and the special characters _-.,+!*',()%/. The forward-slash
 character (/) denotes a hierarchy of name pieces, and it cannot be the first character
 of the name.`,
+			},
+			"bucket_name": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Description: `The resource name of the Log Bucket that owns the Log Metric. Only Log Buckets in projects
+are supported. The bucket has to be in the same project as the metric.`,
 			},
 			"bucket_options": {
 				Type:     schema.TypeList,
@@ -203,6 +161,11 @@ Each bucket represents a constant absolute uncertainty on the specific value in 
 				Description: `A description of this metric, which is used in documentation. The maximum length of the
 description is 8000 characters.`,
 			},
+			"disabled": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: `If set to True, then this metric is disabled and it does not generate any points.`,
+			},
 			"label_extractors": {
 				Type:     schema.TypeMap,
 				Optional: true,
@@ -211,6 +174,61 @@ entry field and assign as the label value. Each label key specified in the Label
 have an associated extractor expression in this map. The syntax of the extractor expression is
 the same as for the valueExtractor field.`,
 				Elem: &schema.Schema{Type: schema.TypeString},
+			},
+			"metric_descriptor": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Optional: true,
+				Description: `The optional metric descriptor associated with the logs-based metric.
+If unspecified, it uses a default metric descriptor with a DELTA metric kind,
+INT64 value type, with no labels and a unit of "1". Such a metric counts the
+number of log entries matching the filter expression.`,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"metric_kind": {
+							Type:         schema.TypeString,
+							Required:     true,
+							ValidateFunc: verify.ValidateEnum([]string{"DELTA", "GAUGE", "CUMULATIVE"}),
+							Description: `Whether the metric records instantaneous values, changes to a value, etc.
+Some combinations of metricKind and valueType might not be supported.
+For counter metrics, set this to DELTA. Possible values: ["DELTA", "GAUGE", "CUMULATIVE"]`,
+						},
+						"value_type": {
+							Type:         schema.TypeString,
+							Required:     true,
+							ValidateFunc: verify.ValidateEnum([]string{"BOOL", "INT64", "DOUBLE", "STRING", "DISTRIBUTION", "MONEY"}),
+							Description: `Whether the measurement is an integer, a floating-point number, etc.
+Some combinations of metricKind and valueType might not be supported.
+For counter metrics, set this to INT64. Possible values: ["BOOL", "INT64", "DOUBLE", "STRING", "DISTRIBUTION", "MONEY"]`,
+						},
+						"display_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Description: `A concise name for the metric, which can be displayed in user interfaces. Use sentence case
+without an ending period, for example "Request count". This field is optional but it is
+recommended to be set for any metrics associated with user-visible concepts, such as Quota.`,
+						},
+						"labels": {
+							Type:     schema.TypeSet,
+							Optional: true,
+							Description: `The set of labels that can be used to describe a specific instance of this metric type. For
+example, the appengine.googleapis.com/http/server/response_latencies metric type has a label
+for the HTTP response code, response_code, so you can look at latencies for successful responses
+or just for responses that failed.`,
+							Elem: loggingMetricMetricDescriptorLabelsSchema(),
+							// Default schema.HashSchema is used.
+						},
+						"unit": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Description: `The unit in which the metric value is reported. It is only applicable if the valueType is
+'INT64', 'DOUBLE', or 'DISTRIBUTION'. The supported units are a subset of
+[The Unified Code for Units of Measure](http://unitsofmeasure.org/ucum.html) standard`,
+							Default: "1",
+						},
+					},
+				},
 			},
 			"value_extractor": {
 				Type:     schema.TypeString,
@@ -252,7 +270,7 @@ func loggingMetricMetricDescriptorLabelsSchema() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"BOOL", "INT64", "STRING", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"BOOL", "INT64", "STRING", ""}),
 				Description:  `The type of data that can be assigned to the label. Default value: "STRING" Possible values: ["BOOL", "INT64", "STRING"]`,
 				Default:      "STRING",
 			},
@@ -261,8 +279,8 @@ func loggingMetricMetricDescriptorLabelsSchema() *schema.Resource {
 }
 
 func resourceLoggingMetricCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -279,6 +297,18 @@ func resourceLoggingMetricCreate(d *schema.ResourceData, meta interface{}) error
 		return err
 	} else if v, ok := d.GetOkExists("description"); !isEmptyValue(reflect.ValueOf(descriptionProp)) && (ok || !reflect.DeepEqual(v, descriptionProp)) {
 		obj["description"] = descriptionProp
+	}
+	bucketNameProp, err := expandLoggingMetricBucketName(d.Get("bucket_name"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("bucket_name"); !isEmptyValue(reflect.ValueOf(bucketNameProp)) && (ok || !reflect.DeepEqual(v, bucketNameProp)) {
+		obj["bucketName"] = bucketNameProp
+	}
+	disabledProp, err := expandLoggingMetricDisabled(d.Get("disabled"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("disabled"); !isEmptyValue(reflect.ValueOf(disabledProp)) && (ok || !reflect.DeepEqual(v, disabledProp)) {
+		obj["disabled"] = disabledProp
 	}
 	filterProp, err := expandLoggingMetricFilter(d.Get("filter"), d, config)
 	if err != nil {
@@ -311,14 +341,14 @@ func resourceLoggingMetricCreate(d *schema.ResourceData, meta interface{}) error
 		obj["bucketOptions"] = bucketOptionsProp
 	}
 
-	lockName, err := replaceVars(d, config, "customMetric/{{project}}")
+	lockName, err := ReplaceVars(d, config, "customMetric/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics")
+	url, err := ReplaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics")
 	if err != nil {
 		return err
 	}
@@ -337,13 +367,13 @@ func resourceLoggingMetricCreate(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Metric: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -373,13 +403,13 @@ func resourceLoggingMetricCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceLoggingMetricRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics/{{%name}}")
+	url, err := ReplaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics/{{%name}}")
 	if err != nil {
 		return err
 	}
@@ -397,9 +427,9 @@ func resourceLoggingMetricRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("LoggingMetric %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("LoggingMetric %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -410,6 +440,12 @@ func resourceLoggingMetricRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("Error reading Metric: %s", err)
 	}
 	if err := d.Set("description", flattenLoggingMetricDescription(res["description"], d, config)); err != nil {
+		return fmt.Errorf("Error reading Metric: %s", err)
+	}
+	if err := d.Set("bucket_name", flattenLoggingMetricBucketName(res["bucketName"], d, config)); err != nil {
+		return fmt.Errorf("Error reading Metric: %s", err)
+	}
+	if err := d.Set("disabled", flattenLoggingMetricDisabled(res["disabled"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Metric: %s", err)
 	}
 	if err := d.Set("filter", flattenLoggingMetricFilter(res["filter"], d, config)); err != nil {
@@ -432,8 +468,8 @@ func resourceLoggingMetricRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceLoggingMetricUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -458,6 +494,18 @@ func resourceLoggingMetricUpdate(d *schema.ResourceData, meta interface{}) error
 		return err
 	} else if v, ok := d.GetOkExists("description"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, descriptionProp)) {
 		obj["description"] = descriptionProp
+	}
+	bucketNameProp, err := expandLoggingMetricBucketName(d.Get("bucket_name"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("bucket_name"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, bucketNameProp)) {
+		obj["bucketName"] = bucketNameProp
+	}
+	disabledProp, err := expandLoggingMetricDisabled(d.Get("disabled"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("disabled"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, disabledProp)) {
+		obj["disabled"] = disabledProp
 	}
 	filterProp, err := expandLoggingMetricFilter(d.Get("filter"), d, config)
 	if err != nil {
@@ -490,14 +538,14 @@ func resourceLoggingMetricUpdate(d *schema.ResourceData, meta interface{}) error
 		obj["bucketOptions"] = bucketOptionsProp
 	}
 
-	lockName, err := replaceVars(d, config, "customMetric/{{project}}")
+	lockName, err := ReplaceVars(d, config, "customMetric/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics/{{%name}}")
+	url, err := ReplaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics/{{%name}}")
 	if err != nil {
 		return err
 	}
@@ -509,7 +557,7 @@ func resourceLoggingMetricUpdate(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Metric %q: %s", d.Id(), err)
@@ -521,8 +569,8 @@ func resourceLoggingMetricUpdate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceLoggingMetricDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -535,14 +583,14 @@ func resourceLoggingMetricDelete(d *schema.ResourceData, meta interface{}) error
 	}
 	billingProject = project
 
-	lockName, err := replaceVars(d, config, "customMetric/{{project}}")
+	lockName, err := ReplaceVars(d, config, "customMetric/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics/{{%name}}")
+	url, err := ReplaceVars(d, config, "{{LoggingBasePath}}projects/{{project}}/metrics/{{%name}}")
 	if err != nil {
 		return err
 	}
@@ -555,9 +603,9 @@ func resourceLoggingMetricDelete(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Metric")
+		return transport_tpg.HandleNotFoundError(err, d, "Metric")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Metric %q: %#v", d.Id(), res)
@@ -566,29 +614,37 @@ func resourceLoggingMetricDelete(d *schema.ResourceData, meta interface{}) error
 
 func resourceLoggingMetricImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenLoggingMetricName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricFilter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptor(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricDisabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenLoggingMetricFilter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenLoggingMetricMetricDescriptor(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -609,19 +665,19 @@ func flattenLoggingMetricMetricDescriptor(v interface{}, d *schema.ResourceData,
 		flattenLoggingMetricMetricDescriptorDisplayName(original["displayName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenLoggingMetricMetricDescriptorUnit(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorUnit(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptorValueType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorValueType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptorMetricKind(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorMetricKind(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptorLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -641,15 +697,15 @@ func flattenLoggingMetricMetricDescriptorLabels(v interface{}, d *schema.Resourc
 	}
 	return transformed
 }
-func flattenLoggingMetricMetricDescriptorLabelsKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorLabelsKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptorLabelsDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorLabelsDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptorLabelsValueType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorLabelsValueType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil || isEmptyValue(reflect.ValueOf(v)) {
 		return "STRING"
 	}
@@ -657,19 +713,19 @@ func flattenLoggingMetricMetricDescriptorLabelsValueType(v interface{}, d *schem
 	return v
 }
 
-func flattenLoggingMetricMetricDescriptorDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricMetricDescriptorDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricLabelExtractors(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricLabelExtractors(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricValueExtractor(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricValueExtractor(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricBucketOptions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -686,7 +742,7 @@ func flattenLoggingMetricBucketOptions(v interface{}, d *schema.ResourceData, co
 		flattenLoggingMetricBucketOptionsExplicitBuckets(original["explicitBuckets"], d, config)
 	return []interface{}{transformed}
 }
-func flattenLoggingMetricBucketOptionsLinearBuckets(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsLinearBuckets(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -703,10 +759,10 @@ func flattenLoggingMetricBucketOptionsLinearBuckets(v interface{}, d *schema.Res
 		flattenLoggingMetricBucketOptionsLinearBucketsOffset(original["offset"], d, config)
 	return []interface{}{transformed}
 }
-func flattenLoggingMetricBucketOptionsLinearBucketsNumFiniteBuckets(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsLinearBucketsNumFiniteBuckets(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -720,15 +776,15 @@ func flattenLoggingMetricBucketOptionsLinearBucketsNumFiniteBuckets(v interface{
 	return v // let terraform core handle it otherwise
 }
 
-func flattenLoggingMetricBucketOptionsLinearBucketsWidth(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsLinearBucketsWidth(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricBucketOptionsLinearBucketsOffset(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsLinearBucketsOffset(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricBucketOptionsExponentialBuckets(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsExponentialBuckets(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -745,10 +801,10 @@ func flattenLoggingMetricBucketOptionsExponentialBuckets(v interface{}, d *schem
 		flattenLoggingMetricBucketOptionsExponentialBucketsScale(original["scale"], d, config)
 	return []interface{}{transformed}
 }
-func flattenLoggingMetricBucketOptionsExponentialBucketsNumFiniteBuckets(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsExponentialBucketsNumFiniteBuckets(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -762,15 +818,15 @@ func flattenLoggingMetricBucketOptionsExponentialBucketsNumFiniteBuckets(v inter
 	return v // let terraform core handle it otherwise
 }
 
-func flattenLoggingMetricBucketOptionsExponentialBucketsGrowthFactor(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsExponentialBucketsGrowthFactor(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricBucketOptionsExponentialBucketsScale(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsExponentialBucketsScale(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenLoggingMetricBucketOptionsExplicitBuckets(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsExplicitBuckets(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -783,23 +839,31 @@ func flattenLoggingMetricBucketOptionsExplicitBuckets(v interface{}, d *schema.R
 		flattenLoggingMetricBucketOptionsExplicitBucketsBounds(original["bounds"], d, config)
 	return []interface{}{transformed}
 }
-func flattenLoggingMetricBucketOptionsExplicitBucketsBounds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenLoggingMetricBucketOptionsExplicitBucketsBounds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandLoggingMetricName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricFilter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptor(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricDisabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandLoggingMetricFilter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandLoggingMetricMetricDescriptor(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -846,19 +910,19 @@ func expandLoggingMetricMetricDescriptor(v interface{}, d TerraformResourceData,
 	return transformed, nil
 }
 
-func expandLoggingMetricMetricDescriptorUnit(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorUnit(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptorValueType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorValueType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptorMetricKind(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorMetricKind(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptorLabels(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -895,23 +959,23 @@ func expandLoggingMetricMetricDescriptorLabels(v interface{}, d TerraformResourc
 	return req, nil
 }
 
-func expandLoggingMetricMetricDescriptorLabelsKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorLabelsKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptorLabelsDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorLabelsDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptorLabelsValueType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorLabelsValueType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricMetricDescriptorDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricMetricDescriptorDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricLabelExtractors(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandLoggingMetricLabelExtractors(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -922,11 +986,11 @@ func expandLoggingMetricLabelExtractors(v interface{}, d TerraformResourceData, 
 	return m, nil
 }
 
-func expandLoggingMetricValueExtractor(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricValueExtractor(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -959,7 +1023,7 @@ func expandLoggingMetricBucketOptions(v interface{}, d TerraformResourceData, co
 	return transformed, nil
 }
 
-func expandLoggingMetricBucketOptionsLinearBuckets(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsLinearBuckets(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -992,19 +1056,19 @@ func expandLoggingMetricBucketOptionsLinearBuckets(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandLoggingMetricBucketOptionsLinearBucketsNumFiniteBuckets(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsLinearBucketsNumFiniteBuckets(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptionsLinearBucketsWidth(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsLinearBucketsWidth(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptionsLinearBucketsOffset(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsLinearBucketsOffset(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptionsExponentialBuckets(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsExponentialBuckets(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1037,19 +1101,19 @@ func expandLoggingMetricBucketOptionsExponentialBuckets(v interface{}, d Terrafo
 	return transformed, nil
 }
 
-func expandLoggingMetricBucketOptionsExponentialBucketsNumFiniteBuckets(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsExponentialBucketsNumFiniteBuckets(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptionsExponentialBucketsGrowthFactor(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsExponentialBucketsGrowthFactor(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptionsExponentialBucketsScale(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsExponentialBucketsScale(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandLoggingMetricBucketOptionsExplicitBuckets(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsExplicitBuckets(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1068,6 +1132,6 @@ func expandLoggingMetricBucketOptionsExplicitBuckets(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandLoggingMetricBucketOptionsExplicitBucketsBounds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandLoggingMetricBucketOptionsExplicitBucketsBounds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

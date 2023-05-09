@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceComputeRegionTargetHttpProxy() *schema.Resource {
+func ResourceComputeRegionTargetHttpProxy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeRegionTargetHttpProxyCreate,
 		Read:   resourceComputeRegionTargetHttpProxyRead,
@@ -101,8 +104,8 @@ If it is not provided, the provider region is used.`,
 }
 
 func resourceComputeRegionTargetHttpProxyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -133,7 +136,7 @@ func resourceComputeRegionTargetHttpProxyCreate(d *schema.ResourceData, meta int
 		obj["region"] = regionProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies")
 	if err != nil {
 		return err
 	}
@@ -152,19 +155,19 @@ func resourceComputeRegionTargetHttpProxyCreate(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating RegionTargetHttpProxy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating RegionTargetHttpProxy", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -180,13 +183,13 @@ func resourceComputeRegionTargetHttpProxyCreate(d *schema.ResourceData, meta int
 }
 
 func resourceComputeRegionTargetHttpProxyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -204,9 +207,9 @@ func resourceComputeRegionTargetHttpProxyRead(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeRegionTargetHttpProxy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeRegionTargetHttpProxy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -231,7 +234,7 @@ func resourceComputeRegionTargetHttpProxyRead(d *schema.ResourceData, meta inter
 	if err := d.Set("region", flattenComputeRegionTargetHttpProxyRegion(res["region"], d, config)); err != nil {
 		return fmt.Errorf("Error reading RegionTargetHttpProxy: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading RegionTargetHttpProxy: %s", err)
 	}
 
@@ -239,8 +242,8 @@ func resourceComputeRegionTargetHttpProxyRead(d *schema.ResourceData, meta inter
 }
 
 func resourceComputeRegionTargetHttpProxyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -265,7 +268,7 @@ func resourceComputeRegionTargetHttpProxyUpdate(d *schema.ResourceData, meta int
 			obj["urlMap"] = urlMapProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}/setUrlMap")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}/setUrlMap")
 		if err != nil {
 			return err
 		}
@@ -275,14 +278,14 @@ func resourceComputeRegionTargetHttpProxyUpdate(d *schema.ResourceData, meta int
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating RegionTargetHttpProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating RegionTargetHttpProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating RegionTargetHttpProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -296,8 +299,8 @@ func resourceComputeRegionTargetHttpProxyUpdate(d *schema.ResourceData, meta int
 }
 
 func resourceComputeRegionTargetHttpProxyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -310,7 +313,7 @@ func resourceComputeRegionTargetHttpProxyDelete(d *schema.ResourceData, meta int
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -323,12 +326,12 @@ func resourceComputeRegionTargetHttpProxyDelete(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "RegionTargetHttpProxy")
+		return transport_tpg.HandleNotFoundError(err, d, "RegionTargetHttpProxy")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting RegionTargetHttpProxy", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -341,8 +344,8 @@ func resourceComputeRegionTargetHttpProxyDelete(d *schema.ResourceData, meta int
 }
 
 func resourceComputeRegionTargetHttpProxyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/targetHttpProxies/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -352,7 +355,7 @@ func resourceComputeRegionTargetHttpProxyImport(d *schema.ResourceData, meta int
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/targetHttpProxies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -361,18 +364,18 @@ func resourceComputeRegionTargetHttpProxyImport(d *schema.ResourceData, meta int
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeRegionTargetHttpProxyCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionTargetHttpProxyCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionTargetHttpProxyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionTargetHttpProxyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionTargetHttpProxyProxyId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionTargetHttpProxyProxyId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -386,33 +389,33 @@ func flattenComputeRegionTargetHttpProxyProxyId(v interface{}, d *schema.Resourc
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeRegionTargetHttpProxyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionTargetHttpProxyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionTargetHttpProxyUrlMap(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionTargetHttpProxyUrlMap(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeRegionTargetHttpProxyRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionTargetHttpProxyRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandComputeRegionTargetHttpProxyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionTargetHttpProxyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionTargetHttpProxyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionTargetHttpProxyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionTargetHttpProxyUrlMap(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionTargetHttpProxyUrlMap(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("urlMaps", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for url_map: %s", err)
@@ -420,7 +423,7 @@ func expandComputeRegionTargetHttpProxyUrlMap(v interface{}, d TerraformResource
 	return f.RelativeLink(), nil
 }
 
-func expandComputeRegionTargetHttpProxyRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionTargetHttpProxyRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for region: %s", err)

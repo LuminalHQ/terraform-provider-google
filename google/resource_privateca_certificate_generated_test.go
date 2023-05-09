@@ -21,21 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccPrivatecaCertificate_privatecaCertificateConfigExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"pool":          "static-ca-pool",
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPrivatecaCertificateDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckPrivatecaCertificateDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPrivatecaCertificate_privatecaCertificateConfigExample(context),
@@ -52,12 +54,16 @@ func TestAccPrivatecaCertificate_privatecaCertificateConfigExample(t *testing.T)
 
 func testAccPrivatecaCertificate_privatecaCertificateConfigExample(context map[string]interface{}) string {
 	return Nprintf(`
-resource "google_privateca_certificate_authority" "test-ca" {
-  certificate_authority_id = "tf-test-my-certificate-authority%{random_suffix}"
+resource "google_privateca_ca_pool" "default" {
   location = "us-central1"
-  pool = "%{pool}"
-  ignore_active_certificates_on_deletion = true
-  deletion_protection = false
+  name = "tf-test-my-pool%{random_suffix}"
+  tier = "ENTERPRISE"
+}
+
+resource "google_privateca_certificate_authority" "default" {
+  location = "us-central1"
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority_id = "my-authority"
   config {
     subject_config {
       subject {
@@ -86,13 +92,18 @@ resource "google_privateca_certificate_authority" "test-ca" {
   key_spec {
     algorithm = "RSA_PKCS1_4096_SHA256"
   }
+
+  // Disable CA deletion related safe checks for easier cleanup.
+  deletion_protection                    = false
+  skip_grace_period                      = true
+  ignore_active_certificates_on_deletion = true
 }
 
 resource "google_privateca_certificate" "default" {
-  pool = "%{pool}"
   location = "us-central1"
-  certificate_authority = google_privateca_certificate_authority.test-ca.certificate_authority_id
-  lifetime = "860s"
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority = google_privateca_certificate_authority.default.certificate_authority_id
+  lifetime = "86000s"
   name = "tf-test-my-certificate%{random_suffix}"
   config {
     subject_config  {
@@ -113,7 +124,7 @@ resource "google_privateca_certificate" "default" {
     }
     x509_config {
       ca_options {
-        is_ca = false
+        is_ca = true
       }
       key_usage {
         base_key_usage {
@@ -123,6 +134,17 @@ resource "google_privateca_certificate" "default" {
         extended_key_usage {
           server_auth = false
         }
+      }
+      name_constraints {
+        critical                  = true
+        permitted_dns_names       = ["*.example.com"]
+        excluded_dns_names        = ["*.deny.example.com"]
+        permitted_ip_ranges       = ["10.0.0.0/8"]
+        excluded_ip_ranges        = ["10.1.1.0/24"]
+        permitted_email_addresses = [".example.com"]
+        excluded_email_addresses  = [".deny.example.com"]
+        permitted_uris            = [".example.com"]
+        excluded_uris             = [".deny.example.com"]
       }
     }
     public_key {
@@ -138,15 +160,14 @@ func TestAccPrivatecaCertificate_privatecaCertificateWithTemplateExample(t *test
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"pool":          "static-ca-pool",
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPrivatecaCertificateDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckPrivatecaCertificateDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPrivatecaCertificate_privatecaCertificateWithTemplateExample(context),
@@ -163,7 +184,13 @@ func TestAccPrivatecaCertificate_privatecaCertificateWithTemplateExample(t *test
 
 func testAccPrivatecaCertificate_privatecaCertificateWithTemplateExample(context map[string]interface{}) string {
 	return Nprintf(`
-resource "google_privateca_certificate_template" "template" {
+resource "google_privateca_ca_pool" "default" {
+  location = "us-central1"
+  name = "tf-test-my-pool%{random_suffix}"
+  tier = "ENTERPRISE"
+}
+
+resource "google_privateca_certificate_template" "default" {
   location    = "us-central1"
   name = "tf-test-my-certificate-template%{random_suffix}"
   description = "An updated sample certificate template"
@@ -238,11 +265,10 @@ resource "google_privateca_certificate_template" "template" {
   }
 }
 
-resource "google_privateca_certificate_authority" "test-ca" {
-  pool = "%{pool}"
-  certificate_authority_id = "tf-test-my-certificate-authority%{random_suffix}"
+resource "google_privateca_certificate_authority" "default" {
   location = "us-central1"
-  deletion_protection = false
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority_id = "my-authority"
   config {
     subject_config {
       subject {
@@ -273,17 +299,22 @@ resource "google_privateca_certificate_authority" "test-ca" {
   key_spec {
     algorithm = "RSA_PKCS1_4096_SHA256"
   }
+
+  // Disable CA deletion related safe checks for easier cleanup.
+  deletion_protection                    = false
+  skip_grace_period                      = true
+  ignore_active_certificates_on_deletion = true
 }
 
 
 resource "google_privateca_certificate" "default" {
-  pool = "%{pool}"
   location = "us-central1"
-  certificate_authority = google_privateca_certificate_authority.test-ca.certificate_authority_id
-  lifetime = "860s"
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority = google_privateca_certificate_authority.default.certificate_authority_id
   name = "tf-test-my-certificate%{random_suffix}"
+  lifetime = "860s"
   pem_csr = file("test-fixtures/rsa_csr.pem")
-  certificate_template = google_privateca_certificate_template.template.id
+  certificate_template = google_privateca_certificate_template.default.id
 }
 `, context)
 }
@@ -292,15 +323,14 @@ func TestAccPrivatecaCertificate_privatecaCertificateCsrExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"pool":          "static-ca-pool",
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPrivatecaCertificateDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckPrivatecaCertificateDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPrivatecaCertificate_privatecaCertificateCsrExample(context),
@@ -317,11 +347,16 @@ func TestAccPrivatecaCertificate_privatecaCertificateCsrExample(t *testing.T) {
 
 func testAccPrivatecaCertificate_privatecaCertificateCsrExample(context map[string]interface{}) string {
 	return Nprintf(`
-resource "google_privateca_certificate_authority" "test-ca" {
-  pool = "%{pool}"
-  certificate_authority_id = "tf-test-my-certificate-authority%{random_suffix}"
+resource "google_privateca_ca_pool" "default" {
   location = "us-central1"
-  deletion_protection = false
+  name = "tf-test-my-pool%{random_suffix}"
+  tier = "ENTERPRISE"
+}
+
+resource "google_privateca_certificate_authority" "default" {
+  location = "us-central1"
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority_id = "my-authority"
   config {
     subject_config {
       subject {
@@ -352,15 +387,20 @@ resource "google_privateca_certificate_authority" "test-ca" {
   key_spec {
     algorithm = "RSA_PKCS1_4096_SHA256"
   }
+
+  // Disable CA deletion related safe checks for easier cleanup.
+  deletion_protection                    = false
+  skip_grace_period                      = true
+  ignore_active_certificates_on_deletion = true
 }
 
 
 resource "google_privateca_certificate" "default" {
-  pool = "%{pool}"
   location = "us-central1"
-  certificate_authority = google_privateca_certificate_authority.test-ca.certificate_authority_id
-  lifetime = "860s"
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority = google_privateca_certificate_authority.default.certificate_authority_id
   name = "tf-test-my-certificate%{random_suffix}"
+  lifetime = "860s"
   pem_csr = file("test-fixtures/rsa_csr.pem")
 }
 `, context)
@@ -370,15 +410,14 @@ func TestAccPrivatecaCertificate_privatecaCertificateNoAuthorityExample(t *testi
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"pool":          "static-ca-pool",
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckPrivatecaCertificateDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckPrivatecaCertificateDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccPrivatecaCertificate_privatecaCertificateNoAuthorityExample(context),
@@ -395,13 +434,16 @@ func TestAccPrivatecaCertificate_privatecaCertificateNoAuthorityExample(t *testi
 
 func testAccPrivatecaCertificate_privatecaCertificateNoAuthorityExample(context map[string]interface{}) string {
 	return Nprintf(`
-resource "google_privateca_certificate_authority" "authority" {
-  // This example assumes this pool already exists.
-  // Pools cannot be deleted in normal test circumstances, so we depend on static pools
-  pool = "%{pool}"
-  certificate_authority_id = "tf-test-my-authority%{random_suffix}"
+resource "google_privateca_ca_pool" "default" {
   location = "us-central1"
-  deletion_protection = false
+  name = "tf-test-my-pool%{random_suffix}"
+  tier = "ENTERPRISE"
+}
+
+resource "google_privateca_certificate_authority" "default" {
+  location = "us-central1"
+  pool = google_privateca_ca_pool.default.name
+  certificate_authority_id = "my-authority"
   config {
     subject_config {
       subject {
@@ -432,14 +474,19 @@ resource "google_privateca_certificate_authority" "authority" {
   key_spec {
     algorithm = "RSA_PKCS1_4096_SHA256"
   }
+
+  // Disable CA deletion related safe checks for easier cleanup.
+  deletion_protection                    = false
+  skip_grace_period                      = true
+  ignore_active_certificates_on_deletion = true
 }
 
 
 resource "google_privateca_certificate" "default" {
-  pool = "%{pool}"
   location = "us-central1"
-  lifetime = "860s"
+  pool = google_privateca_ca_pool.default.name
   name = "tf-test-my-certificate%{random_suffix}"
+  lifetime = "860s"
   config {
     subject_config  {
       subject {
@@ -473,7 +520,7 @@ resource "google_privateca_certificate" "default" {
   }
   // Certificates require an authority to exist in the pool, though they don't
   // need to be explicitly connected to it
-  depends_on = [google_privateca_certificate_authority.authority]
+  depends_on = [google_privateca_certificate_authority.default]
 }
 `, context)
 }
@@ -488,24 +535,23 @@ func testAccCheckPrivatecaCertificateDestroyProducer(t *testing.T) func(s *terra
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{PrivatecaBasePath}}projects/{{project}}/locations/{{location}}/caPools/{{pool}}/certificates/{{name}}")
-
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{PrivatecaBasePath}}projects/{{project}}/locations/{{location}}/caPools/{{pool}}/certificates/{{name}}")
 			if err != nil {
 				return err
 			}
 
-			res, err := sendRequest(config, "GET", "", url, config.userAgent, nil)
-			if err != nil {
-				return err
+			billingProject := ""
+
+			if config.BillingProject != "" {
+				billingProject = config.BillingProject
 			}
 
-			if _, ok := res["revocationDetails"]; !ok {
-				return fmt.Errorf("CertificateAuthority.Certificate Revocation expected %s got %s, want revocationDetails.revocationTime", url, s)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
+			if err == nil {
+				return fmt.Errorf("PrivatecaCertificate still exists at %s", url)
 			}
-
-			return nil
 		}
 
 		return nil

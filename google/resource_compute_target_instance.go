@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeTargetInstance() *schema.Resource {
+func ResourceComputeTargetInstance() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeTargetInstanceCreate,
 		Read:   resourceComputeTargetInstanceRead,
@@ -44,7 +48,7 @@ func resourceComputeTargetInstance() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `The Compute instance VM handling traffic for this target instance.
 Accepts the instance self-link, relative path
 (e.g. 'projects/project/zones/zone/instances/instance') or name. If
@@ -74,7 +78,7 @@ character, which cannot be a dash.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"NO_NAT", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NO_NAT", ""}),
 				Description: `NAT option controlling how IPs are NAT'ed to the instance.
 Currently only NO_NAT (default value) is supported. Default value: "NO_NAT" Possible values: ["NO_NAT"]`,
 				Default: "NO_NAT",
@@ -108,8 +112,8 @@ Currently only NO_NAT (default value) is supported. Default value: "NO_NAT" Poss
 }
 
 func resourceComputeTargetInstanceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -146,7 +150,7 @@ func resourceComputeTargetInstanceCreate(d *schema.ResourceData, meta interface{
 		obj["zone"] = zoneProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/targetInstances")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/targetInstances")
 	if err != nil {
 		return err
 	}
@@ -165,19 +169,19 @@ func resourceComputeTargetInstanceCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating TargetInstance: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating TargetInstance", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -193,13 +197,13 @@ func resourceComputeTargetInstanceCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetInstanceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -217,9 +221,9 @@ func resourceComputeTargetInstanceRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeTargetInstance %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeTargetInstance %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -244,7 +248,7 @@ func resourceComputeTargetInstanceRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("zone", flattenComputeTargetInstanceZone(res["zone"], d, config)); err != nil {
 		return fmt.Errorf("Error reading TargetInstance: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading TargetInstance: %s", err)
 	}
 
@@ -252,8 +256,8 @@ func resourceComputeTargetInstanceRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeTargetInstanceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -266,7 +270,7 @@ func resourceComputeTargetInstanceDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -279,12 +283,12 @@ func resourceComputeTargetInstanceDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "TargetInstance")
+		return transport_tpg.HandleNotFoundError(err, d, "TargetInstance")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting TargetInstance", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -297,8 +301,8 @@ func resourceComputeTargetInstanceDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetInstanceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/zones/(?P<zone>[^/]+)/targetInstances/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<zone>[^/]+)/(?P<name>[^/]+)",
@@ -308,7 +312,7 @@ func resourceComputeTargetInstanceImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/targetInstances/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -317,45 +321,45 @@ func resourceComputeTargetInstanceImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeTargetInstanceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetInstanceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetInstanceCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetInstanceCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetInstanceDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetInstanceDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetInstanceInstance(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetInstanceInstance(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeTargetInstanceNatPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetInstanceNatPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetInstanceZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetInstanceZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func expandComputeTargetInstanceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetInstanceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetInstanceDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetInstanceDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetInstanceInstance(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetInstanceInstance(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	// This method returns a full self link from a partial self link.
 	if v == nil || v.(string) == "" {
 		// It does not try to construct anything from empty.
@@ -365,14 +369,14 @@ func expandComputeTargetInstanceInstance(v interface{}, d TerraformResourceData,
 		return v, nil
 	} else if strings.HasPrefix(v.(string), "projects/") {
 		// If the self link references a project, we'll just stuck the compute prefix on it
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}"+v.(string))
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}"+v.(string))
 		if err != nil {
 			return "", err
 		}
 		return url, nil
 	} else if strings.HasPrefix(v.(string), "regions/") || strings.HasPrefix(v.(string), "zones/") {
 		// For regional or zonal resources which include their region or zone, just put the project in front.
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/")
 		if err != nil {
 			return nil, err
 		}
@@ -381,18 +385,18 @@ func expandComputeTargetInstanceInstance(v interface{}, d TerraformResourceData,
 	// Anything else is assumed to be a regional resource, with a partial link that begins with the resource name.
 	// This isn't very likely - it's a last-ditch effort to extract something useful here.  We can do a better job
 	// as soon as MultiResourceRefs are working since we'll know the types that this field is supposed to point to.
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/")
 	if err != nil {
 		return nil, err
 	}
 	return url + v.(string), nil
 }
 
-func expandComputeTargetInstanceNatPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetInstanceNatPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetInstanceZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetInstanceZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("zones", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for zone: %s", err)

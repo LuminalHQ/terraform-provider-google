@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Certificate Authority Service"
-page_title: "Google: google_privateca_certificate_authority"
 description: |-
   A CertificateAuthority represents an individual Certificate Authority.
 ---
@@ -105,8 +104,6 @@ resource "google_privateca_certificate_authority" "root-ca" {
   pool = "ca-pool"
   certificate_authority_id = "my-certificate-authority-root"
   location = "us-central1"
-  deletion_protection = false
-  ignore_active_certificates_on_deletion = true
   config {
     subject_config {
       subject {
@@ -137,6 +134,11 @@ resource "google_privateca_certificate_authority" "root-ca" {
   key_spec {
     algorithm = "RSA_PKCS1_4096_SHA256"
   }
+
+  // Disable CA deletion related safe checks for easier cleanup.
+  deletion_protection                    = false
+  skip_grace_period                      = true
+  ignore_active_certificates_on_deletion = true
 }
 
 resource "google_privateca_certificate_authority" "default" {
@@ -252,6 +254,17 @@ resource "google_privateca_certificate_authority" "default" {
           server_auth = false
         }
       }
+      name_constraints {
+        critical                  = true
+        permitted_dns_names       = ["*.example.com"]
+        excluded_dns_names        = ["*.deny.example.com"]
+        permitted_ip_ranges       = ["10.0.0.0/8"]
+        excluded_ip_ranges        = ["10.1.1.0/24"]
+        permitted_email_addresses = [".example.com"]
+        excluded_email_addresses  = [".deny.example.com"]
+        permitted_uris            = [".example.com"]
+        excluded_uris             = [".deny.example.com"]
+      }
     }
   }
 
@@ -333,6 +346,11 @@ The following arguments are supported:
   Indicates the intended use for keys that correspond to a certificate.
   Structure is [documented below](#nested_key_usage).
 
+* `name_constraints` -
+  (Optional)
+  Describes the X.509 name constraints extension.
+  Structure is [documented below](#nested_name_constraints).
+
 
 <a name="nested_additional_extensions"></a>The `additional_extensions` block supports:
 
@@ -371,18 +389,19 @@ The following arguments are supported:
 
 * `non_ca` -
   (Optional)
-  When true, the "CA" in Basic Constraints extension will be set to false. 
+  When true, the "CA" in Basic Constraints extension will be set to false.
   If both `is_ca` and `non_ca` are unset, the extension will be omitted from the CA certificate.
 
 * `max_issuer_path_length` -
   (Optional)
   Refers to the "path length constraint" in Basic Constraints extension. For a CA certificate, this value describes the depth of
-  subordinate CA certificates that are allowed. If this value is less than 0, the request will fail.
+  subordinate CA certificates that are allowed. If this value is less than 0, the request will fail. Setting the value to 0
+  requires setting `zero_max_issuer_path_length = true`.
 
 * `zero_max_issuer_path_length` -
   (Optional)
   When true, the "path length constraint" in Basic Constraints extension will be set to 0.
-  if both `max_issuer_path_length` and `zero_max_issuer_path_length` are unset,
+  If both `max_issuer_path_length` and `zero_max_issuer_path_length` are unset,
   the max path length will be omitted from the CA certificate.
 
 <a name="nested_key_usage"></a>The `key_usage` block supports:
@@ -473,6 +492,68 @@ The following arguments are supported:
   (Required)
   An ObjectId specifies an object identifier (OID). These provide context and describe types in ASN.1 messages.
 
+<a name="nested_name_constraints"></a>The `name_constraints` block supports:
+
+* `critical` -
+  (Required)
+  Indicates whether or not the name constraints are marked critical.
+
+* `permitted_dns_names` -
+  (Optional)
+  Contains permitted DNS names. Any DNS name that can be
+  constructed by simply adding zero or more labels to
+  the left-hand side of the name satisfies the name constraint.
+  For example, `example.com`, `www.example.com`, `www.sub.example.com`
+  would satisfy `example.com` while `example1.com` does not.
+
+* `excluded_dns_names` -
+  (Optional)
+  Contains excluded DNS names. Any DNS name that can be
+  constructed by simply adding zero or more labels to
+  the left-hand side of the name satisfies the name constraint.
+  For example, `example.com`, `www.example.com`, `www.sub.example.com`
+  would satisfy `example.com` while `example1.com` does not.
+
+* `permitted_ip_ranges` -
+  (Optional)
+  Contains the permitted IP ranges. For IPv4 addresses, the ranges
+  are expressed using CIDR notation as specified in RFC 4632.
+  For IPv6 addresses, the ranges are expressed in similar encoding as IPv4
+  addresses.
+
+* `excluded_ip_ranges` -
+  (Optional)
+  Contains the excluded IP ranges. For IPv4 addresses, the ranges
+  are expressed using CIDR notation as specified in RFC 4632.
+  For IPv6 addresses, the ranges are expressed in similar encoding as IPv4
+  addresses.
+
+* `permitted_email_addresses` -
+  (Optional)
+  Contains the permitted email addresses. The value can be a particular
+  email address, a hostname to indicate all email addresses on that host or
+  a domain with a leading period (e.g. `.example.com`) to indicate
+  all email addresses in that domain.
+
+* `excluded_email_addresses` -
+  (Optional)
+  Contains the excluded email addresses. The value can be a particular
+  email address, a hostname to indicate all email addresses on that host or
+  a domain with a leading period (e.g. `.example.com`) to indicate
+  all email addresses in that domain.
+
+* `permitted_uris` -
+  (Optional)
+  Contains the permitted URIs that apply to the host part of the name.
+  The value can be a hostname or a domain with a
+  leading period (like `.example.com`)
+
+* `excluded_uris` -
+  (Optional)
+  Contains the excluded URIs that apply to the host part of the name.
+  The value can be a hostname or a domain with a
+  leading period (like `.example.com`)
+
 <a name="nested_subject_config"></a>The `subject_config` block supports:
 
 * `subject` -
@@ -549,7 +630,7 @@ The following arguments are supported:
   (Optional)
   The algorithm to use for creating a managed Cloud KMS key for a for a simplified
   experience. All managed keys will be have their ProtectionLevel as HSM.
-  Possible values are `SIGN_HASH_ALGORITHM_UNSPECIFIED`, `RSA_PSS_2048_SHA256`, `RSA_PSS_3072_SHA256`, `RSA_PSS_4096_SHA256`, `RSA_PKCS1_2048_SHA256`, `RSA_PKCS1_3072_SHA256`, `RSA_PKCS1_4096_SHA256`, `EC_P256_SHA256`, and `EC_P384_SHA384`.
+  Possible values are: `SIGN_HASH_ALGORITHM_UNSPECIFIED`, `RSA_PSS_2048_SHA256`, `RSA_PSS_3072_SHA256`, `RSA_PSS_4096_SHA256`, `RSA_PKCS1_2048_SHA256`, `RSA_PKCS1_3072_SHA256`, `RSA_PKCS1_4096_SHA256`, `EC_P256_SHA256`, `EC_P384_SHA384`.
 
 - - -
 
@@ -563,13 +644,20 @@ The following arguments are supported:
   This field allows the CA to be deleted even if the CA has active certs. Active certs include both unrevoked and unexpired certs.
   Use with care. Defaults to `false`.
 
+* `skip_grace_period` -
+  (Optional)
+  If this flag is set, the Certificate Authority will be deleted as soon as
+  possible without a 30-day grace period where undeletion would have been
+  allowed. If you proceed, there will be no way to recover this CA.
+  Use with care. Defaults to `false`.
+
 * `type` -
   (Optional)
   The Type of this CertificateAuthority.
   ~> **Note:** For `SUBORDINATE` Certificate Authorities, they need to
   be activated before they can issue certificates.
   Default value is `SELF_SIGNED`.
-  Possible values are `SELF_SIGNED` and `SUBORDINATE`.
+  Possible values are: `SELF_SIGNED`, `SUBORDINATE`.
 
 * `lifetime` -
   (Optional)
@@ -617,7 +705,7 @@ in Terraform state, a `terraform destroy` or `terraform apply` that would delete
 
 * `pem_issuer_chain` -
   (Optional)
-  Contains the PEM certificate chain for the issuers of this CertificateAuthority, 
+  Contains the PEM certificate chain for the issuers of this CertificateAuthority,
   but not pem certificate for this CA itself.
   Structure is [documented below](#nested_pem_issuer_chain).
 
@@ -665,17 +753,19 @@ In addition to the arguments listed above, the following computed attributes are
 <a name="nested_access_urls"></a>The `access_urls` block contains:
 
 * `ca_certificate_access_url` -
+  (Output)
   The URL where this CertificateAuthority's CA certificate is published. This will only be
   set for CAs that have been activated.
 
 * `crl_access_urls` -
+  (Output)
   The URL where this CertificateAuthority's CRLs are published. This will only be set for
   CAs that have been activated.
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -694,4 +784,4 @@ $ terraform import google_privateca_certificate_authority.default {{location}}/{
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

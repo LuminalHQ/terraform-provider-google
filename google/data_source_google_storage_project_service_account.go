@@ -2,10 +2,12 @@ package google
 
 import (
 	"fmt"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func dataSourceGoogleStorageProjectServiceAccount() *schema.Resource {
+func DataSourceGoogleStorageProjectServiceAccount() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceGoogleStorageProjectServiceAccountRead,
 		Schema: map[string]*schema.Schema{
@@ -24,13 +26,17 @@ func dataSourceGoogleStorageProjectServiceAccount() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
+			"member": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 		},
 	}
 }
 
 func dataSourceGoogleStorageProjectServiceAccountRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -48,7 +54,7 @@ func dataSourceGoogleStorageProjectServiceAccountRead(d *schema.ResourceData, me
 
 	serviceAccount, err := serviceAccountGetRequest.Do()
 	if err != nil {
-		return handleNotFoundError(err, d, "GCS service account not found")
+		return transport_tpg.HandleNotFoundError(err, d, "GCS service account not found")
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -56,6 +62,9 @@ func dataSourceGoogleStorageProjectServiceAccountRead(d *schema.ResourceData, me
 	}
 	if err := d.Set("email_address", serviceAccount.EmailAddress); err != nil {
 		return fmt.Errorf("Error setting email_address: %s", err)
+	}
+	if err := d.Set("member", "serviceAccount:"+serviceAccount.EmailAddress); err != nil {
+		return fmt.Errorf("Error setting member: %s", err)
 	}
 
 	d.SetId(serviceAccount.EmailAddress)

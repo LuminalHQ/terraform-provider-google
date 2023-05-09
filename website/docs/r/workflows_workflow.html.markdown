@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Workflows"
-page_title: "Google: google_workflows_workflow"
 description: |-
   Workflow program to be executed by Workflows.
 ---
@@ -103,11 +102,20 @@ The following arguments are supported:
   (Optional)
   Name of the service account associated with the latest workflow version. This service
   account represents the identity of the workflow and determines what permissions the workflow has.
-  Format: projects/{project}/serviceAccounts/{account}.
+  Format: projects/{project}/serviceAccounts/{account} or {account}.
+  Using - as a wildcard for the {project} or not providing one at all will infer the project from the account.
+  The {account} value can be the email address or the unique_id of the service account.
+  If not provided, workflow will use the project's default service account.
+  Modifying this field for an existing workflow results in a new workflow revision.
 
 * `source_contents` -
   (Optional)
   Workflow code to be executed. The size limit is 32KB.
+
+* `crypto_key_name` -
+  (Optional)
+  The KMS key used to encrypt workflow and execution data.
+  Format: projects/{project}/locations/{location}/keyRings/{keyRing}/cryptoKeys/{cryptoKey}
 
 * `region` -
   (Optional)
@@ -141,7 +149,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -153,4 +161,4 @@ This resource does not support import.
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -24,9 +24,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"google.golang.org/api/googleapi"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceComputeRegionDisk() *schema.Resource {
+func ResourceComputeRegionDisk() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeRegionDiskCreate,
 		Read:   resourceComputeRegionDiskRead,
@@ -172,6 +175,21 @@ valid values:
 * 'global/snapshots/snapshot'
 * 'snapshot'`,
 			},
+			"source_disk": {
+				Type:             schema.TypeString,
+				Optional:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: sourceDiskDiffSupress,
+				Description: `The source disk used to create this disk. You can provide this as a partial or full URL to the resource.
+For example, the following are valid values:
+
+* https://www.googleapis.com/compute/v1/projects/{project}/zones/{zone}/disks/{disk}
+* https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}/disks/{disk}
+* projects/{project}/zones/{zone}/disks/{disk}
+* projects/{project}/regions/{region}/disks/{disk}
+* zones/{zone}/disks/{disk}
+* regions/{region}/disks/{disk}`,
+			},
 			"source_snapshot_encryption_key": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -228,6 +246,13 @@ internally during updates.`,
 				Computed:    true,
 				Description: `Last detach timestamp in RFC3339 text format.`,
 			},
+			"source_disk_id": {
+				Type:     schema.TypeString,
+				Computed: true,
+				Description: `The ID value of the disk used to create this image. This value may
+be used to determine whether the image was taken from the current
+or a previous instance of a given disk name.`,
+			},
 			"source_snapshot_id": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -264,8 +289,8 @@ project/zones/zone/instances/instance`,
 }
 
 func resourceComputeRegionDiskCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -319,6 +344,12 @@ func resourceComputeRegionDiskCreate(d *schema.ResourceData, meta interface{}) e
 	} else if v, ok := d.GetOkExists("type"); !isEmptyValue(reflect.ValueOf(typeProp)) && (ok || !reflect.DeepEqual(v, typeProp)) {
 		obj["type"] = typeProp
 	}
+	sourceDiskProp, err := expandComputeRegionDiskSourceDisk(d.Get("source_disk"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("source_disk"); !isEmptyValue(reflect.ValueOf(sourceDiskProp)) && (ok || !reflect.DeepEqual(v, sourceDiskProp)) {
+		obj["sourceDisk"] = sourceDiskProp
+	}
 	regionProp, err := expandComputeRegionDiskRegion(d.Get("region"), d, config)
 	if err != nil {
 		return err
@@ -349,7 +380,7 @@ func resourceComputeRegionDiskCreate(d *schema.ResourceData, meta interface{}) e
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks")
 	if err != nil {
 		return err
 	}
@@ -368,19 +399,19 @@ func resourceComputeRegionDiskCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating RegionDisk: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/disks/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/disks/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating RegionDisk", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -396,13 +427,13 @@ func resourceComputeRegionDiskCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeRegionDiskRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -420,9 +451,9 @@ func resourceComputeRegionDiskRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeRegionDisk %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeRegionDisk %q", d.Id()))
 	}
 
 	res, err = resourceComputeRegionDiskDecoder(d, meta, res)
@@ -477,6 +508,12 @@ func resourceComputeRegionDiskRead(d *schema.ResourceData, meta interface{}) err
 	if err := d.Set("type", flattenComputeRegionDiskType(res["type"], d, config)); err != nil {
 		return fmt.Errorf("Error reading RegionDisk: %s", err)
 	}
+	if err := d.Set("source_disk", flattenComputeRegionDiskSourceDisk(res["sourceDisk"], d, config)); err != nil {
+		return fmt.Errorf("Error reading RegionDisk: %s", err)
+	}
+	if err := d.Set("source_disk_id", flattenComputeRegionDiskSourceDiskId(res["sourceDiskId"], d, config)); err != nil {
+		return fmt.Errorf("Error reading RegionDisk: %s", err)
+	}
 	if err := d.Set("region", flattenComputeRegionDiskRegion(res["region"], d, config)); err != nil {
 		return fmt.Errorf("Error reading RegionDisk: %s", err)
 	}
@@ -492,7 +529,7 @@ func resourceComputeRegionDiskRead(d *schema.ResourceData, meta interface{}) err
 	if err := d.Set("source_snapshot_id", flattenComputeRegionDiskSourceSnapshotId(res["sourceSnapshotId"], d, config)); err != nil {
 		return fmt.Errorf("Error reading RegionDisk: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading RegionDisk: %s", err)
 	}
 
@@ -500,8 +537,8 @@ func resourceComputeRegionDiskRead(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeRegionDiskUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -532,7 +569,7 @@ func resourceComputeRegionDiskUpdate(d *schema.ResourceData, meta interface{}) e
 			obj["labels"] = labelsProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}/setLabels")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}/setLabels")
 		if err != nil {
 			return err
 		}
@@ -542,14 +579,14 @@ func resourceComputeRegionDiskUpdate(d *schema.ResourceData, meta interface{}) e
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating RegionDisk %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating RegionDisk %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating RegionDisk", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -566,7 +603,7 @@ func resourceComputeRegionDiskUpdate(d *schema.ResourceData, meta interface{}) e
 			obj["sizeGb"] = sizeGbProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}/resize")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}/resize")
 		if err != nil {
 			return err
 		}
@@ -576,14 +613,14 @@ func resourceComputeRegionDiskUpdate(d *schema.ResourceData, meta interface{}) e
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating RegionDisk %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating RegionDisk %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating RegionDisk", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -597,8 +634,8 @@ func resourceComputeRegionDiskUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -611,15 +648,15 @@ func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/disks/{{name}}")
 	if err != nil {
 		return err
 	}
 
 	var obj map[string]interface{}
-	readRes, err := sendRequest(config, "GET", project, url, userAgent, nil)
+	readRes, err := transport_tpg.SendRequest(config, "GET", project, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeDisk %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeDisk %q", d.Id()))
 	}
 
 	// if disks are attached to instances, they must be detached before the disk can be deleted
@@ -629,7 +666,7 @@ func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) e
 
 		for _, instance := range convertStringArr(v) {
 			self := d.Get("self_link").(string)
-			instanceProject, instanceZone, instanceName, err := GetLocationalResourcePropertiesFromSelfLinkString(instance)
+			instanceProject, instanceZone, instanceName, err := tpgresource.GetLocationalResourcePropertiesFromSelfLinkString(instance)
 			if err != nil {
 				return err
 			}
@@ -646,7 +683,7 @@ func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) e
 				if compareSelfLinkOrResourceName("", disk.Source, self, nil) {
 					detachCalls = append(detachCalls, detachArgs{
 						project:    instanceProject,
-						zone:       GetResourceNameFromSelfLink(i.Zone),
+						zone:       tpgresource.GetResourceNameFromSelfLink(i.Zone),
 						instance:   i.Name,
 						deviceName: disk.DeviceName,
 					})
@@ -660,7 +697,7 @@ func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) e
 				return fmt.Errorf("Error detaching disk %s from instance %s/%s/%s: %s", call.deviceName, call.project,
 					call.zone, call.instance, err.Error())
 			}
-			err = computeOperationWaitTime(config, op, call.project,
+			err = ComputeOperationWaitTime(config, op, call.project,
 				fmt.Sprintf("Detaching disk from %s/%s/%s", call.project, call.zone, call.instance), userAgent, d.Timeout(schema.TimeoutDelete))
 			if err != nil {
 				if opErr, ok := err.(ComputeOperationError); ok && len(opErr.Errors) == 1 && opErr.Errors[0].Code == "RESOURCE_NOT_FOUND" {
@@ -678,12 +715,12 @@ func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "RegionDisk")
+		return transport_tpg.HandleNotFoundError(err, d, "RegionDisk")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting RegionDisk", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -696,8 +733,8 @@ func resourceComputeRegionDiskDelete(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeRegionDiskImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/disks/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -707,7 +744,7 @@ func resourceComputeRegionDiskImport(d *schema.ResourceData, meta interface{}) (
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/disks/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/disks/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -716,38 +753,38 @@ func resourceComputeRegionDiskImport(d *schema.ResourceData, meta interface{}) (
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeRegionDiskLabelFingerprint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskLabelFingerprint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskLastAttachTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskLastAttachTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskLastDetachTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskLastDetachTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskSize(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSize(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -761,17 +798,17 @@ func flattenComputeRegionDiskSize(v interface{}, d *schema.ResourceData, config 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeRegionDiskUsers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskUsers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return convertAndMapStringArr(v.([]interface{}), ConvertSelfLinkToV1)
+	return convertAndMapStringArr(v.([]interface{}), tpgresource.ConvertSelfLinkToV1)
 }
 
-func flattenComputeRegionDiskPhysicalBlockSizeBytes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskPhysicalBlockSizeBytes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -785,28 +822,36 @@ func flattenComputeRegionDiskPhysicalBlockSizeBytes(v interface{}, d *schema.Res
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeRegionDiskReplicaZones(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskReplicaZones(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return convertAndMapStringArr(v.([]interface{}), ConvertSelfLinkToV1)
+	return convertAndMapStringArr(v.([]interface{}), tpgresource.ConvertSelfLinkToV1)
 }
 
-func flattenComputeRegionDiskType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenComputeRegionDiskRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSourceDisk(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeRegionDiskSourceDiskId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeRegionDiskRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenComputeRegionDiskDiskEncryptionKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskDiskEncryptionKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -823,26 +868,26 @@ func flattenComputeRegionDiskDiskEncryptionKey(v interface{}, d *schema.Resource
 		flattenComputeRegionDiskDiskEncryptionKeyKmsKeyName(original["kmsKeyName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeRegionDiskDiskEncryptionKeyRawKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskDiskEncryptionKeyRawKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskDiskEncryptionKeySha256(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskDiskEncryptionKeySha256(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskDiskEncryptionKeyKmsKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskDiskEncryptionKeyKmsKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskSnapshot(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSnapshot(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeRegionDiskSourceSnapshotEncryptionKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSourceSnapshotEncryptionKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -857,27 +902,27 @@ func flattenComputeRegionDiskSourceSnapshotEncryptionKey(v interface{}, d *schem
 		flattenComputeRegionDiskSourceSnapshotEncryptionKeySha256(original["sha256"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeRegionDiskSourceSnapshotEncryptionKeyRawKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSourceSnapshotEncryptionKeyRawKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskSourceSnapshotEncryptionKeySha256(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSourceSnapshotEncryptionKeySha256(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeRegionDiskSourceSnapshotId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeRegionDiskSourceSnapshotId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeRegionDiskLabelFingerprint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskLabelFingerprint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandComputeRegionDiskLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -888,19 +933,19 @@ func expandComputeRegionDiskLabels(v interface{}, d TerraformResourceData, confi
 	return m, nil
 }
 
-func expandComputeRegionDiskName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskSize(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskSize(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskPhysicalBlockSizeBytes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskPhysicalBlockSizeBytes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskReplicaZones(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskReplicaZones(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -916,7 +961,7 @@ func expandComputeRegionDiskReplicaZones(v interface{}, d TerraformResourceData,
 	return req, nil
 }
 
-func expandComputeRegionDiskType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("diskTypes", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for type: %s", err)
@@ -924,7 +969,11 @@ func expandComputeRegionDiskType(v interface{}, d TerraformResourceData, config 
 	return f.RelativeLink(), nil
 }
 
-func expandComputeRegionDiskRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskSourceDisk(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeRegionDiskRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for region: %s", err)
@@ -932,7 +981,7 @@ func expandComputeRegionDiskRegion(v interface{}, d TerraformResourceData, confi
 	return f.RelativeLink(), nil
 }
 
-func expandComputeRegionDiskDiskEncryptionKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskDiskEncryptionKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -965,19 +1014,19 @@ func expandComputeRegionDiskDiskEncryptionKey(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandComputeRegionDiskDiskEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskDiskEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskDiskEncryptionKeySha256(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskDiskEncryptionKeySha256(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskDiskEncryptionKeyKmsKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskDiskEncryptionKeyKmsKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskSnapshot(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskSnapshot(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("snapshots", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for snapshot: %s", err)
@@ -985,7 +1034,7 @@ func expandComputeRegionDiskSnapshot(v interface{}, d TerraformResourceData, con
 	return f.RelativeLink(), nil
 }
 
-func expandComputeRegionDiskSourceSnapshotEncryptionKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskSourceSnapshotEncryptionKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1011,23 +1060,23 @@ func expandComputeRegionDiskSourceSnapshotEncryptionKey(v interface{}, d Terrafo
 	return transformed, nil
 }
 
-func expandComputeRegionDiskSourceSnapshotEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskSourceSnapshotEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeRegionDiskSourceSnapshotEncryptionKeySha256(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeRegionDiskSourceSnapshotEncryptionKeySha256(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 func resourceComputeRegionDiskEncoder(d *schema.ResourceData, meta interface{}, obj map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	project, err := getProject(d, config)
 	if err != nil {
 		return nil, err
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -1066,6 +1115,7 @@ func resourceComputeRegionDiskDecoder(d *schema.ResourceData, meta interface{}, 
 		transformed := make(map[string]interface{})
 		// The raw key won't be returned, so we need to use the original.
 		transformed["rawKey"] = d.Get("disk_encryption_key.0.raw_key")
+		transformed["rsaEncryptedKey"] = d.Get("disk_encryption_key.0.rsa_encrypted_key")
 		transformed["sha256"] = original["sha256"]
 
 		if kmsKeyName, ok := original["kmsKeyName"]; ok {

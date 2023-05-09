@@ -24,21 +24,24 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccDataplexLake_BasicLake(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_name":  getTestProjectFromEnv(),
-		"region":        getTestRegionFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"region":        acctest.GetTestRegionFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckDataplexLakeDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDataplexLakeDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDataplexLake_BasicLake(context),
@@ -108,7 +111,7 @@ func testAccCheckDataplexLakeDestroyProducer(t *testing.T) func(s *terraform.Sta
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
 			billingProject := ""
 			if config.BillingProject != "" {
@@ -128,7 +131,7 @@ func testAccCheckDataplexLakeDestroyProducer(t *testing.T) func(s *terraform.Sta
 				UpdateTime:     dcl.StringOrNil(rs.Primary.Attributes["update_time"]),
 			}
 
-			client := NewDCLDataplexClient(config, config.userAgent, billingProject, 0)
+			client := transport_tpg.NewDCLDataplexClient(config, config.UserAgent, billingProject, 0)
 			_, err := client.GetLake(context.Background(), obj)
 			if err == nil {
 				return fmt.Errorf("google_dataplex_lake still exists %v", obj)

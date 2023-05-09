@@ -22,6 +22,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 func customDiffDeploymentManagerDeployment(_ context.Context, d *schema.ResourceDiff, meta interface{}) error {
@@ -49,7 +52,7 @@ func customDiffDeploymentManagerDeployment(_ context.Context, d *schema.Resource
 	return nil
 }
 
-func resourceDeploymentManagerDeployment() *schema.Resource {
+func ResourceDeploymentManagerDeployment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDeploymentManagerDeploymentCreate,
 		Read:   resourceDeploymentManagerDeploymentRead,
@@ -127,7 +130,7 @@ configuration.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"ACQUIRE", "CREATE_OR_ACQUIRE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ACQUIRE", "CREATE_OR_ACQUIRE", ""}),
 				Description: `Set the policy to use for creating new resources. Only used on
 create and update. Valid values are 'CREATE_OR_ACQUIRE' (default) or
 'ACQUIRE'. If set to 'ACQUIRE' and resources do not already exist,
@@ -139,7 +142,7 @@ actually affect the deployment, just how it is updated. Default value: "CREATE_O
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"ABANDON", "DELETE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ABANDON", "DELETE", ""}),
 				Description: `Set the policy to use for deleting new resources on update/delete.
 Valid values are 'DELETE' (default) or 'ABANDON'. If 'DELETE',
 resource is deleted after removal from Deployment Manager. If
@@ -218,8 +221,8 @@ func deploymentmanagerDeploymentLabelsSchema() *schema.Resource {
 }
 
 func resourceDeploymentManagerDeploymentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -250,7 +253,7 @@ func resourceDeploymentManagerDeploymentCreate(d *schema.ResourceData, meta inte
 		obj["target"] = targetProp
 	}
 
-	url, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments?preview={{preview}}&createPolicy={{create_policy}}")
+	url, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments?preview={{preview}}&createPolicy={{create_policy}}")
 	if err != nil {
 		return err
 	}
@@ -269,19 +272,19 @@ func resourceDeploymentManagerDeploymentCreate(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Deployment: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/deployments/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/deployments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = deploymentManagerOperationWaitTime(
+	err = DeploymentManagerOperationWaitTime(
 		config, res, project, "Creating Deployment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -298,13 +301,13 @@ func resourceDeploymentManagerDeploymentCreate(d *schema.ResourceData, meta inte
 }
 
 func resourceDeploymentManagerDeploymentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -322,9 +325,9 @@ func resourceDeploymentManagerDeploymentRead(d *schema.ResourceData, meta interf
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DeploymentManagerDeployment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DeploymentManagerDeployment %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -354,8 +357,8 @@ func resourceDeploymentManagerDeploymentRead(d *schema.ResourceData, meta interf
 }
 
 func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -373,7 +376,7 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 	if d.HasChange("preview") {
 		obj := make(map[string]interface{})
 
-		getUrl, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}")
+		getUrl, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}")
 		if err != nil {
 			return err
 		}
@@ -383,14 +386,14 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 			billingProject = bp
 		}
 
-		getRes, err := sendRequest(config, "GET", billingProject, getUrl, userAgent, nil)
+		getRes, err := transport_tpg.SendRequest(config, "GET", billingProject, getUrl, userAgent, nil)
 		if err != nil {
-			return handleNotFoundError(err, d, fmt.Sprintf("DeploymentManagerDeployment %q", d.Id()))
+			return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DeploymentManagerDeployment %q", d.Id()))
 		}
 
 		obj["fingerprint"] = getRes["fingerprint"]
 
-		url, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}?preview={{preview}}&createPolicy={{create_policy}}&deletePolicy={{delete_policy}}")
+		url, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}?preview={{preview}}&createPolicy={{create_policy}}&deletePolicy={{delete_policy}}")
 		if err != nil {
 			return err
 		}
@@ -400,14 +403,14 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Deployment %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating Deployment %q: %#v", d.Id(), res)
 		}
 
-		err = deploymentManagerOperationWaitTime(
+		err = DeploymentManagerOperationWaitTime(
 			config, res, project, "Updating Deployment", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -417,7 +420,7 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 	if d.HasChange("description") || d.HasChange("labels") || d.HasChange("target") {
 		obj := make(map[string]interface{})
 
-		getUrl, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}")
+		getUrl, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}")
 		if err != nil {
 			return err
 		}
@@ -427,9 +430,9 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 			billingProject = bp
 		}
 
-		getRes, err := sendRequest(config, "GET", billingProject, getUrl, userAgent, nil)
+		getRes, err := transport_tpg.SendRequest(config, "GET", billingProject, getUrl, userAgent, nil)
 		if err != nil {
-			return handleNotFoundError(err, d, fmt.Sprintf("DeploymentManagerDeployment %q", d.Id()))
+			return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DeploymentManagerDeployment %q", d.Id()))
 		}
 
 		obj["fingerprint"] = getRes["fingerprint"]
@@ -453,7 +456,7 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 			obj["target"] = targetProp
 		}
 
-		url, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}?preview={{preview}}&createPolicy={{create_policy}}&deletePolicy={{delete_policy}}")
+		url, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}?preview={{preview}}&createPolicy={{create_policy}}&deletePolicy={{delete_policy}}")
 		if err != nil {
 			return err
 		}
@@ -463,14 +466,14 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Deployment %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating Deployment %q: %#v", d.Id(), res)
 		}
 
-		err = deploymentManagerOperationWaitTime(
+		err = DeploymentManagerOperationWaitTime(
 			config, res, project, "Updating Deployment", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -484,8 +487,8 @@ func resourceDeploymentManagerDeploymentUpdate(d *schema.ResourceData, meta inte
 }
 
 func resourceDeploymentManagerDeploymentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -498,7 +501,7 @@ func resourceDeploymentManagerDeploymentDelete(d *schema.ResourceData, meta inte
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}?deletePolicy={{delete_policy}}")
+	url, err := ReplaceVars(d, config, "{{DeploymentManagerBasePath}}projects/{{project}}/global/deployments/{{name}}?deletePolicy={{delete_policy}}")
 	if err != nil {
 		return err
 	}
@@ -511,12 +514,12 @@ func resourceDeploymentManagerDeploymentDelete(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Deployment")
+		return transport_tpg.HandleNotFoundError(err, d, "Deployment")
 	}
 
-	err = deploymentManagerOperationWaitTime(
+	err = DeploymentManagerOperationWaitTime(
 		config, res, project, "Deleting Deployment", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -529,8 +532,8 @@ func resourceDeploymentManagerDeploymentDelete(d *schema.ResourceData, meta inte
 }
 
 func resourceDeploymentManagerDeploymentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/deployments/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -539,7 +542,7 @@ func resourceDeploymentManagerDeploymentImport(d *schema.ResourceData, meta inte
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/deployments/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/deployments/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -548,15 +551,15 @@ func resourceDeploymentManagerDeploymentImport(d *schema.ResourceData, meta inte
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDeploymentManagerDeploymentName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDeploymentManagerDeploymentDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDeploymentManagerDeploymentLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -575,35 +578,35 @@ func flattenDeploymentManagerDeploymentLabels(v interface{}, d *schema.ResourceD
 	}
 	return transformed
 }
-func flattenDeploymentManagerDeploymentLabelsKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentLabelsKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDeploymentManagerDeploymentLabelsValue(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentLabelsValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDeploymentManagerDeploymentDeploymentId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentDeploymentId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDeploymentManagerDeploymentManifest(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentManifest(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDeploymentManagerDeploymentSelfLink(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDeploymentManagerDeploymentSelfLink(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDeploymentManagerDeploymentName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDeploymentManagerDeploymentDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDeploymentManagerDeploymentLabels(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -633,15 +636,15 @@ func expandDeploymentManagerDeploymentLabels(v interface{}, d TerraformResourceD
 	return req, nil
 }
 
-func expandDeploymentManagerDeploymentLabelsKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentLabelsKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDeploymentManagerDeploymentLabelsValue(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentLabelsValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDeploymentManagerDeploymentTarget(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentTarget(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -667,7 +670,7 @@ func expandDeploymentManagerDeploymentTarget(v interface{}, d TerraformResourceD
 	return transformed, nil
 }
 
-func expandDeploymentManagerDeploymentTargetConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentTargetConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -686,11 +689,11 @@ func expandDeploymentManagerDeploymentTargetConfig(v interface{}, d TerraformRes
 	return transformed, nil
 }
 
-func expandDeploymentManagerDeploymentTargetConfigContent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentTargetConfigContent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDeploymentManagerDeploymentTargetImports(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentTargetImports(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -719,11 +722,11 @@ func expandDeploymentManagerDeploymentTargetImports(v interface{}, d TerraformRe
 	return req, nil
 }
 
-func expandDeploymentManagerDeploymentTargetImportsContent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentTargetImportsContent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDeploymentManagerDeploymentTargetImportsName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDeploymentManagerDeploymentTargetImportsName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

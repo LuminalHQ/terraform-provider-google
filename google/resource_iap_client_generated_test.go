@@ -21,21 +21,24 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccIapClient_iapClientExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"org_id":        getTestOrgFromEnv(t),
-		"org_domain":    getTestOrgDomainFromEnv(t),
-		"random_suffix": randString(t, 10),
+		"org_id":        acctest.GetTestOrgFromEnv(t),
+		"org_domain":    acctest.GetTestOrgDomainFromEnv(t),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckIapClientDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckIapClientDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccIapClient_iapClientExample(context),
@@ -53,8 +56,8 @@ func TestAccIapClient_iapClientExample(t *testing.T) {
 func testAccIapClient_iapClientExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_project" "project" {
-  project_id = "tf-test%{random_suffix}"
-  name       = "tf-test%{random_suffix}"
+  project_id = "tf-test-my-project%{random_suffix}"
+  name       = "tf-test-my-project%{random_suffix}"
   org_id     = "%{org_id}"
 }
 
@@ -86,9 +89,9 @@ func testAccCheckIapClientDestroyProducer(t *testing.T) func(s *terraform.State)
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{IapBasePath}}{{brand}}/identityAwareProxyClients/{{client_id}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{IapBasePath}}{{brand}}/identityAwareProxyClients/{{client_id}}")
 			if err != nil {
 				return err
 			}
@@ -99,7 +102,7 @@ func testAccCheckIapClientDestroyProducer(t *testing.T) func(s *terraform.State)
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil, iapClient409Operation)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil, transport_tpg.IapClient409Operation)
 			if err == nil {
 				return fmt.Errorf("IapClient still exists at %s", url)
 			}

@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeNodeTemplate() *schema.Resource {
+func ResourceComputeNodeTemplate() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeNodeTemplateCreate,
 		Read:   resourceComputeNodeTemplateRead,
@@ -43,7 +47,7 @@ func resourceComputeNodeTemplate() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"ENABLED", "NONE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ENABLED", "NONE", ""}),
 				Description:  `CPU overcommit. Default value: "NONE" Possible values: ["ENABLED", "NONE"]`,
 				Default:      "NONE",
 			},
@@ -132,7 +136,7 @@ where the nodes should restart following a maintenance event.`,
 							Type:         schema.TypeString,
 							Required:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"RESTART_NODE_ON_ANY_SERVER", "RESTART_NODE_ON_MINIMAL_SERVERS"}),
+							ValidateFunc: verify.ValidateEnum([]string{"RESTART_NODE_ON_ANY_SERVER", "RESTART_NODE_ON_MINIMAL_SERVERS"}),
 							Description: `Type of server binding policy. If 'RESTART_NODE_ON_ANY_SERVER',
 nodes using this template will restart on any physical server
 following a maintenance event.
@@ -170,8 +174,8 @@ nodes will experience outages while maintenance is applied. Possible values: ["R
 }
 
 func resourceComputeNodeTemplateCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -226,7 +230,7 @@ func resourceComputeNodeTemplateCreate(d *schema.ResourceData, meta interface{})
 		obj["region"] = regionProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/nodeTemplates")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/nodeTemplates")
 	if err != nil {
 		return err
 	}
@@ -245,19 +249,19 @@ func resourceComputeNodeTemplateCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating NodeTemplate: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating NodeTemplate", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -273,13 +277,13 @@ func resourceComputeNodeTemplateCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeNodeTemplateRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -297,9 +301,9 @@ func resourceComputeNodeTemplateRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeNodeTemplate %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeNodeTemplate %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -333,7 +337,7 @@ func resourceComputeNodeTemplateRead(d *schema.ResourceData, meta interface{}) e
 	if err := d.Set("region", flattenComputeNodeTemplateRegion(res["region"], d, config)); err != nil {
 		return fmt.Errorf("Error reading NodeTemplate: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading NodeTemplate: %s", err)
 	}
 
@@ -341,8 +345,8 @@ func resourceComputeNodeTemplateRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComputeNodeTemplateDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -355,7 +359,7 @@ func resourceComputeNodeTemplateDelete(d *schema.ResourceData, meta interface{})
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -368,12 +372,12 @@ func resourceComputeNodeTemplateDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "NodeTemplate")
+		return transport_tpg.HandleNotFoundError(err, d, "NodeTemplate")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting NodeTemplate", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -386,8 +390,8 @@ func resourceComputeNodeTemplateDelete(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeNodeTemplateImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/nodeTemplates/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -397,7 +401,7 @@ func resourceComputeNodeTemplateImport(d *schema.ResourceData, meta interface{})
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/nodeTemplates/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -406,27 +410,27 @@ func resourceComputeNodeTemplateImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeNodeTemplateCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateNodeAffinityLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateNodeAffinityLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateNodeType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateNodeType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateNodeTypeFlexibility(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateNodeTypeFlexibility(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -443,19 +447,19 @@ func flattenComputeNodeTemplateNodeTypeFlexibility(v interface{}, d *schema.Reso
 		flattenComputeNodeTemplateNodeTypeFlexibilityLocalSsd(original["localSsd"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeNodeTemplateNodeTypeFlexibilityCpus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateNodeTypeFlexibilityCpus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateNodeTypeFlexibilityMemory(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateNodeTypeFlexibilityMemory(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateNodeTypeFlexibilityLocalSsd(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateNodeTypeFlexibilityLocalSsd(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateServerBinding(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateServerBinding(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -468,30 +472,30 @@ func flattenComputeNodeTemplateServerBinding(v interface{}, d *schema.ResourceDa
 		flattenComputeNodeTemplateServerBindingType(original["type"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeNodeTemplateServerBindingType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateServerBindingType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateCpuOvercommitType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateCpuOvercommitType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeTemplateRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeTemplateRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandComputeNodeTemplateDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateNodeAffinityLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandComputeNodeTemplateNodeAffinityLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -502,11 +506,11 @@ func expandComputeNodeTemplateNodeAffinityLabels(v interface{}, d TerraformResou
 	return m, nil
 }
 
-func expandComputeNodeTemplateNodeType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateNodeType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateNodeTypeFlexibility(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateNodeTypeFlexibility(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -539,19 +543,19 @@ func expandComputeNodeTemplateNodeTypeFlexibility(v interface{}, d TerraformReso
 	return transformed, nil
 }
 
-func expandComputeNodeTemplateNodeTypeFlexibilityCpus(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateNodeTypeFlexibilityCpus(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateNodeTypeFlexibilityMemory(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateNodeTypeFlexibilityMemory(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateNodeTypeFlexibilityLocalSsd(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateNodeTypeFlexibilityLocalSsd(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateServerBinding(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateServerBinding(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -570,15 +574,15 @@ func expandComputeNodeTemplateServerBinding(v interface{}, d TerraformResourceDa
 	return transformed, nil
 }
 
-func expandComputeNodeTemplateServerBindingType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateServerBindingType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateCpuOvercommitType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateCpuOvercommitType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeTemplateRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeTemplateRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for region: %s", err)

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_disk"
 description: |-
   Persistent disks are durable storage devices that function similarly to
   the physical disks in a desktop or a server.
@@ -44,8 +43,9 @@ To get more information about Disk, see:
 * How-to Guides
     * [Adding a persistent disk](https://cloud.google.com/compute/docs/disks/add-persistent-disk)
 
-~> **Warning:** All arguments including `disk_encryption_key.raw_key` will be stored in the raw
-state as plain-text. [Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `disk_encryption_key.raw_key`, `disk_encryption_key.rsa_encrypted_key`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=disk_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
@@ -64,6 +64,39 @@ resource "google_compute_disk" "default" {
   labels = {
     environment = "dev"
   }
+  physical_block_size_bytes = 4096
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=disk_async&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Disk Async
+
+
+```hcl
+resource "google_compute_disk" "primary" {
+  provider = google-beta
+
+  name  = "async-test-disk"
+  type  = "pd-ssd"
+  zone  = "us-central1-a"
+
+  physical_block_size_bytes = 4096
+}
+
+resource "google_compute_disk" "secondary" {
+  provider = google-beta
+
+  name  = "async-secondary-test-disk"
+  type  = "pd-ssd"
+  zone  = "us-east1-c"
+
+  async_primary_disk {
+    disk = google_compute_disk.primary.id
+  }
+
   physical_block_size_bytes = 4096
 }
 ```
@@ -122,6 +155,17 @@ The following arguments are supported:
   (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
   Specifies the disk interface to use for attaching this disk, which is either SCSI or NVME. The default is SCSI.
 
+* `source_disk` -
+  (Optional)
+  The source disk used to create this disk. You can provide this as a partial or full URL to the resource.
+  For example, the following are valid values:
+  * https://www.googleapis.com/compute/v1/projects/{project}/zones/{zone}/disks/{disk}
+  * https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}/disks/{disk}
+  * projects/{project}/zones/{zone}/disks/{disk}
+  * projects/{project}/regions/{region}/disks/{disk}
+  * zones/{zone}/disks/{disk}
+  * regions/{region}/disks/{disk}
+
 * `type` -
   (Optional)
   URL of the disk type resource describing which disk type to use to
@@ -145,7 +189,7 @@ The following arguments are supported:
   ~>**NOTE** This value does not support updating the
   resource policy, as resource policies can not be updated more than
   one at a time. Use
-  [`google_compute_disk_resource_policy_attachment`](https://www.terraform.io/docs/providers/google/r/compute_disk_resource_policy_attachment.html)
+  [`google_compute_disk_resource_policy_attachment`](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_disk_resource_policy_attachment)
   to allow for updating the resource policy attached to the disk.
 
 * `multi_writer` -
@@ -155,6 +199,11 @@ The following arguments are supported:
 * `provisioned_iops` -
   (Optional)
   Indicates how many IOPS must be provisioned for the disk.
+
+* `async_primary_disk` -
+  (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
+  A nested object resource
+  Structure is [documented below](#nested_async_primary_disk).
 
 * `zone` -
   (Optional)
@@ -201,6 +250,12 @@ The following arguments are supported:
     If it is not provided, the provider project is used.
 
 
+<a name="nested_async_primary_disk"></a>The `async_primary_disk` block supports:
+
+* `disk` -
+  (Required)
+  Primary disk for asynchronous disk replication.
+
 <a name="nested_source_image_encryption_key"></a>The `source_image_encryption_key` block supports:
 
 * `raw_key` -
@@ -209,6 +264,7 @@ The following arguments are supported:
   RFC 4648 base64 to either encrypt or decrypt this resource.
 
 * `sha256` -
+  (Output)
   The RFC 4648 base64 encoded SHA-256 hash of the customer-supplied
   encryption key that protects this resource.
 
@@ -233,7 +289,15 @@ The following arguments are supported:
   RFC 4648 base64 to either encrypt or decrypt this resource.
   **Note**: This property is sensitive and will not be displayed in the plan.
 
+* `rsa_encrypted_key` -
+  (Optional)
+  Specifies an RFC 4648 base64 encoded, RSA-wrapped 2048-bit
+  customer-supplied encryption key to either encrypt or decrypt
+  this resource. You can provide either the rawKey or the rsaEncryptedKey.
+  **Note**: This property is sensitive and will not be displayed in the plan.
+
 * `sha256` -
+  (Output)
   The RFC 4648 base64 encoded SHA-256 hash of the customer-supplied
   encryption key that protects this resource.
 
@@ -266,6 +330,7 @@ The following arguments are supported:
   See https://cloud.google.com/compute/docs/disks/customer-managed-encryption#encrypt_a_new_persistent_disk_with_your_own_keys
 
 * `sha256` -
+  (Output)
   The RFC 4648 base64 encoded SHA-256 hash of the customer-supplied
   encryption key that protects this resource.
 
@@ -297,6 +362,11 @@ In addition to the arguments listed above, the following computed attributes are
   Links to the users of the disk (attached instances) in form:
   project/zones/zone/instances/instance
 
+* `source_disk_id` -
+  The ID value of the disk used to create this image. This value may
+  be used to determine whether the image was taken from the current
+  or a previous instance of a given disk name.
+
 * `source_image_id` -
   The ID value of the image used to create this disk. This value
   identifies the exact image that was used to create this persistent
@@ -317,7 +387,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -337,4 +407,4 @@ $ terraform import google_compute_disk.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

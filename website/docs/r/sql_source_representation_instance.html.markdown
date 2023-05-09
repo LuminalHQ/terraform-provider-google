@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud SQL"
-page_title: "Google: google_sql_source_representation_instance"
 description: |-
   A source representation instance is a Cloud SQL instance that represents
   the source database server to the Cloud SQL replica.
@@ -29,6 +28,10 @@ affect billing. You cannot update the source representation instance.
 
 
 
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `on_premises_configuration.password`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=sql_source_representation_instance_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
     <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
@@ -39,11 +42,34 @@ affect billing. You cannot update the source representation instance.
 
 ```hcl
 resource "google_sql_source_representation_instance" "instance" {
-  name             = "my-instance"
-  region           = "us-central1"
-  database_version = "MYSQL_8_0"
-  host             = "10.20.30.40"
-  port             = 3306
+  name               = "my-instance"
+  region             = "us-central1"
+  database_version   = "MYSQL_8_0"
+  host               = "10.20.30.40"
+  port               = 3306
+  username           = "some-user"
+  password           = "password-for-the-user"
+  dump_file_path     = "gs://replica-bucket/source-database.sql.gz"
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=sql_source_representation_instance_postgres&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Sql Source Representation Instance Postgres
+
+
+```hcl
+resource "google_sql_source_representation_instance" "instance" {
+  name               = "my-instance"
+  region             = "us-central1"
+  database_version   = "POSTGRES_9_6"
+  host               = "10.20.30.40"
+  port               = 3306
+  username           = "some-user"
+  password           = "password-for-the-user"
+  dump_file_path     = "gs://replica-bucket/source-database.sql.gz"
 }
 ```
 
@@ -59,7 +85,7 @@ The following arguments are supported:
 * `database_version` -
   (Required)
   The MySQL version running on your source database server.
-  Possible values are `MYSQL_5_5`, `MYSQL_5_6`, `MYSQL_5_7`, and `MYSQL_8_0`.
+  Possible values are: `MYSQL_5_6`, `MYSQL_5_7`, `MYSQL_8_0`, `POSTGRES_9_6`, `POSTGRES_10`, `POSTGRES_11`, `POSTGRES_12`, `POSTGRES_13`, `POSTGRES_14`.
 
 * `host` -
   (Required)
@@ -79,6 +105,31 @@ The following arguments are supported:
   The externally accessible port for the source database server.
   Defaults to 3306.
 
+* `username` -
+  (Optional)
+  The replication user account on the external server.
+
+* `password` -
+  (Optional)
+  The password for the replication user account.
+  **Note**: This property is sensitive and will not be displayed in the plan.
+
+* `dump_file_path` -
+  (Optional)
+  A file in the bucket that contains the data from the external server.
+
+* `ca_certificate` -
+  (Optional)
+  The CA certificate on the external server. Include only if SSL/TLS is used on the external server.
+
+* `client_certificate` -
+  (Optional)
+  The client certificate on the external server. Required only for server-client authentication. Include only if SSL/TLS is used on the external server.
+
+* `client_key` -
+  (Optional)
+  The private key file for the client certificate on the external server. Required only for server-client authentication. Include only if SSL/TLS is used on the external server.
+
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
@@ -93,7 +144,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `delete` - Default is 20 minutes.
@@ -111,4 +162,4 @@ $ terraform import google_sql_source_representation_instance.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

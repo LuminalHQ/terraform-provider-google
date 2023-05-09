@@ -2,6 +2,8 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -20,23 +22,24 @@ func projectIamBindingImportStep(resourceName, pid, role string) resource.TestSt
 func TestAccProjectIamBinding_basic(t *testing.T) {
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	member := "user:admin@hashicorptest.com"
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply an IAM binding
 			{
-				Config: testAccProjectAssociateBindingBasic(pid, pname, org, role),
+				Config: testAccProjectAssociateBindingBasic(pid, org, role, member),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 		},
@@ -47,29 +50,30 @@ func TestAccProjectIamBinding_basic(t *testing.T) {
 func TestAccProjectIamBinding_multiple(t *testing.T) {
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
 	role2 := "roles/viewer"
+	member := "user:admin@hashicorptest.com"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply an IAM binding
 			{
-				Config: testAccProjectAssociateBindingBasic(pid, pname, org, role),
+				Config: testAccProjectAssociateBindingBasic(pid, org, role, member),
 			},
 			// Apply another IAM binding
 			{
-				Config: testAccProjectAssociateBindingMultiple(pid, pname, org, role, role2),
+				Config: testAccProjectAssociateBindingMultiple(pid, org, role, role2),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 			projectIamBindingImportStep("google_project_iam_binding.multiple", pid, role2),
@@ -80,28 +84,28 @@ func TestAccProjectIamBinding_multiple(t *testing.T) {
 // Test that multiple IAM bindings can be applied to a project all at once
 func TestAccProjectIamBinding_multipleAtOnce(t *testing.T) {
 	// Multiple fine-grained resources
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
 	role2 := "roles/viewer"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply an IAM binding
 			{
-				Config: testAccProjectAssociateBindingMultiple(pid, pname, org, role, role2),
+				Config: testAccProjectAssociateBindingMultiple(pid, org, role, role2),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 			projectIamBindingImportStep("google_project_iam_binding.multiple", pid, role2),
@@ -113,36 +117,37 @@ func TestAccProjectIamBinding_multipleAtOnce(t *testing.T) {
 func TestAccProjectIamBinding_update(t *testing.T) {
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
+	member := "user:admin@hashicorptest.com"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply an IAM binding
 			{
-				Config: testAccProjectAssociateBindingBasic(pid, pname, org, role),
+				Config: testAccProjectAssociateBindingBasic(pid, org, role, member),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 
 			// Apply an updated IAM binding
 			{
-				Config: testAccProjectAssociateBindingUpdated(pid, pname, org, role),
+				Config: testAccProjectAssociateBindingUpdated(pid, org, role),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 
 			// Drop the original member
 			{
-				Config: testAccProjectAssociateBindingDropMemberFromBasic(pid, pname, org, role),
+				Config: testAccProjectAssociateBindingDropMemberFromBasic(pid, org, role),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 		},
@@ -152,35 +157,35 @@ func TestAccProjectIamBinding_update(t *testing.T) {
 // Test that an IAM binding can be removed from a project
 func TestAccProjectIamBinding_remove(t *testing.T) {
 	// Multiple fine-grained resources
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
 	role2 := "roles/viewer"
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply multiple IAM bindings
 			{
-				Config: testAccProjectAssociateBindingMultiple(pid, pname, org, role, role2),
+				Config: testAccProjectAssociateBindingMultiple(pid, org, role, role2),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 			projectIamBindingImportStep("google_project_iam_binding.multiple", pid, role2),
 
 			// Remove the bindings
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
@@ -193,23 +198,23 @@ func TestAccProjectIamBinding_remove(t *testing.T) {
 func TestAccProjectIamBinding_noMembers(t *testing.T) {
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply an IAM binding
 			{
-				Config: testAccProjectAssociateBindingNoMembers(pid, pname, org, role),
+				Config: testAccProjectAssociateBindingNoMembers(pid, org, role),
 			},
 			projectIamBindingImportStep("google_project_iam_binding.acceptance", pid, role),
 		},
@@ -219,24 +224,24 @@ func TestAccProjectIamBinding_noMembers(t *testing.T) {
 func TestAccProjectIamBinding_withCondition(t *testing.T) {
 	t.Parallel()
 
-	org := getTestOrgFromEnv(t)
-	pid := fmt.Sprintf("tf-test-%d", randInt(t))
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
 	role := "roles/compute.instanceAdmin"
 	conditionTitle := "expires_after_2019_12_31"
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			// Create a new project
 			{
-				Config: testAccProject_create(pid, pname, org),
+				Config: testAccProject_create(pid, org),
 				Check: resource.ComposeTestCheckFunc(
 					testAccProjectExistingPolicy(t, pid),
 				),
 			},
 			// Apply an IAM binding
 			{
-				Config: testAccProjectAssociateBinding_withCondition(pid, pname, org, role, conditionTitle),
+				Config: testAccProjectAssociateBinding_withCondition(pid, org, role, conditionTitle),
 			},
 			{
 				ResourceName:      "google_project_iam_binding.acceptance",
@@ -248,7 +253,29 @@ func TestAccProjectIamBinding_withCondition(t *testing.T) {
 	})
 }
 
-func testAccProjectAssociateBindingBasic(pid, name, org, role string) string {
+// Test that an IAM binding with invalid members returns an error.
+func TestAccProjectIamBinding_invalidMembers(t *testing.T) {
+	t.Parallel()
+
+	org := acctest.GetTestOrgFromEnv(t)
+	pid := fmt.Sprintf("tf-test-%d", RandInt(t))
+	role := "roles/compute.instanceAdmin"
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccProjectAssociateBindingBasic(pid, org, role, "admin@hashicorptest.com"),
+				ExpectError: regexp.MustCompile("invalid value for members\\.0 \\(IAM members must have one of the values outlined here: https://cloud.google.com/billing/docs/reference/rest/v1/Policy#Binding\\)"),
+			},
+			{
+				Config: testAccProjectAssociateBindingBasic(pid, org, role, "user:admin@hashicorptest.com"),
+			},
+		},
+	})
+}
+
+func testAccProjectAssociateBindingBasic(pid, org, role, member string) string {
 	return fmt.Sprintf(`
 resource "google_project" "acceptance" {
   project_id = "%s"
@@ -258,13 +285,13 @@ resource "google_project" "acceptance" {
 
 resource "google_project_iam_binding" "acceptance" {
   project = google_project.acceptance.project_id
-  members = ["user:admin@hashicorptest.com"]
+  members = ["%s"]
   role    = "%s"
 }
-`, pid, name, org, role)
+`, pid, pid, org, member, role)
 }
 
-func testAccProjectAssociateBindingMultiple(pid, name, org, role, role2 string) string {
+func testAccProjectAssociateBindingMultiple(pid, org, role, role2 string) string {
 	return fmt.Sprintf(`
 resource "google_project" "acceptance" {
   project_id = "%s"
@@ -283,10 +310,10 @@ resource "google_project_iam_binding" "multiple" {
   members = ["user:gterraformtest1@gmail.com"]
   role    = "%s"
 }
-`, pid, name, org, role, role2)
+`, pid, pid, org, role, role2)
 }
 
-func testAccProjectAssociateBindingUpdated(pid, name, org, role string) string {
+func testAccProjectAssociateBindingUpdated(pid, org, role string) string {
 	return fmt.Sprintf(`
 resource "google_project" "acceptance" {
   project_id = "%s"
@@ -299,10 +326,10 @@ resource "google_project_iam_binding" "acceptance" {
   members = ["user:admin@hashicorptest.com", "user:gterraformtest1@gmail.com"]
   role    = "%s"
 }
-`, pid, name, org, role)
+`, pid, pid, org, role)
 }
 
-func testAccProjectAssociateBindingDropMemberFromBasic(pid, name, org, role string) string {
+func testAccProjectAssociateBindingDropMemberFromBasic(pid, org, role string) string {
 	return fmt.Sprintf(`
 resource "google_project" "acceptance" {
   project_id = "%s"
@@ -315,10 +342,10 @@ resource "google_project_iam_binding" "acceptance" {
   members = ["user:gterraformtest1@gmail.com"]
   role    = "%s"
 }
-`, pid, name, org, role)
+`, pid, pid, org, role)
 }
 
-func testAccProjectAssociateBindingNoMembers(pid, name, org, role string) string {
+func testAccProjectAssociateBindingNoMembers(pid, org, role string) string {
 	return fmt.Sprintf(`
 resource "google_project" "acceptance" {
   project_id = "%s"
@@ -331,10 +358,10 @@ resource "google_project_iam_binding" "acceptance" {
   members = []
   role    = "%s"
 }
-`, pid, name, org, role)
+`, pid, pid, org, role)
 }
 
-func testAccProjectAssociateBinding_withCondition(pid, name, org, role, conditionTitle string) string {
+func testAccProjectAssociateBinding_withCondition(pid, org, role, conditionTitle string) string {
 	return fmt.Sprintf(`
 resource "google_project" "acceptance" {
   project_id = "%s"
@@ -352,5 +379,5 @@ resource "google_project_iam_binding" "acceptance" {
     expression  = "request.time < timestamp(\"2020-01-01T00:00:00Z\")"
   }
 }
-`, pid, name, org, role, conditionTitle)
+`, pid, pid, org, role, conditionTitle)
 }

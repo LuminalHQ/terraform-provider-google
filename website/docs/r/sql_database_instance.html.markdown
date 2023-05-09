@@ -1,6 +1,5 @@
 ---
 subcategory: "Cloud SQL"
-page_title: "Google: google_sql_database_instance"
 description: |-
   Creates a new SQL database instance in Google Cloud SQL.
 ---
@@ -145,8 +144,9 @@ resource "google_sql_database_instance" "instance" {
   settings {
     tier = "db-f1-micro"
     ip_configuration {
-      ipv4_enabled    = false
-      private_network = google_compute_network.private_network.id
+      ipv4_enabled                                  = false
+      private_network                               = google_compute_network.private_network.id
+      enable_private_path_for_google_cloud_services = true
     }
   }
 }
@@ -184,6 +184,8 @@ includes an up-to-date reference of supported versions.
     created. This is done because after a name is used, it cannot be reused for
     up to [one week](https://cloud.google.com/sql/docs/delete-instance).
 
+* `maintenance_version`  - (Optional) The current software version on the instance. This attribute can not be set during creation. Refer to `available_maintenance_versions` attribute to see what `maintenance_version` are available for upgrade. When this attribute gets updated, it will cause an instance restart. Setting a `maintenance_version` value that is older than the current one on the instance will be ignored.
+
 * `master_instance_name` - (Optional) The name of the existing instance that will
     act as the master in the replication setup. Note, this requires the master to
     have `binary_log_enabled` set, as well as existing backups.
@@ -194,7 +196,7 @@ includes an up-to-date reference of supported versions.
 * `replica_configuration` - (Optional) The configuration for replication. The
     configuration is detailed below. Valid only for MySQL instances.
 
-* `root_password` - (Optional) Initial root password. Required for MS SQL Server.
+* `root_password` - (Optional) Initial root password. Can be updated. Required for MS SQL Server.
 
 * `encryption_key_name` - (Optional)
     The full path to the encryption key used for the CMEK disk encryption.  Setting
@@ -206,8 +208,10 @@ includes an up-to-date reference of supported versions.
     That service account needs the `Cloud KMS > Cloud KMS CryptoKey Encrypter/Decrypter` role on your
     key - please see [this step](https://cloud.google.com/sql/docs/mysql/configure-cmek#grantkey).
 
-* `deletion_protection` - (Optional, Default: `true` ) Whether or not to allow Terraform to destroy the instance. Unless this field is set to false
-in Terraform state, a `terraform destroy` or `terraform apply` command that deletes the instance will fail.
+* `deletion_protection` - (Optional) Whether or not to allow Terraform to destroy the instance. Unless this field is set to false
+in Terraform state, a `terraform destroy` or `terraform apply` command that deletes the instance will fail. Defaults to `true`.
+
+  ~> **NOTE:** This flag only protects instances from deletion within Terraform. To protect your instances from accidental deletion across all surfaces (API, gcloud, Cloud Console and Terraform), use the API flag `settings.deletion_protection_enabled`.
 
 * `restore_backup_context` - (optional) The context needed to restore the database to a backup run. This field will
     cause Terraform to trigger the database to restore from the backup run indicated. The configuration is detailed below.
@@ -227,22 +231,26 @@ The `settings` block supports:
 * `activation_policy` - (Optional) This specifies when the instance should be
     active. Can be either `ALWAYS`, `NEVER` or `ON_DEMAND`.
 
-* `availability_type` - (Optional, Default: `ZONAL`) The availability type of the Cloud SQL
+* `availability_type` - (Optional) The availability type of the Cloud SQL
   instance, high availability (`REGIONAL`) or single zone (`ZONAL`).' For all instances, ensure that
   `settings.backup_configuration.enabled` is set to `true`.
   For MySQL instances, ensure that `settings.backup_configuration.binary_log_enabled` is set to `true`.
-  For Postgres instances, ensure that `settings.backup_configuration.point_in_time_recovery_enabled`
-  is set to `true`.
+  For Postgres and SQL Server instances, ensure that `settings.backup_configuration.point_in_time_recovery_enabled`
+  is set to `true`. Defaults to `ZONAL`.
 
 * `collation` - (Optional) The name of server instance collation.
 
-* `disk_autoresize` - (Optional, Default: `true`) Enables auto-resizing of the storage size. Set to false if you want to set `disk_size`.
+* `connector_enforcement` - (Optional) Specifies if connections must use Cloud SQL connectors.
 
-* `disk_autoresize_limit` - (Optional, Default: `0`) The maximum size to which storage capacity can be automatically increased. The default value is 0, which specifies that there is no limit.
+* `deletion_protection_enabled` - (Optional) Enables deletion protection of an instance at the GCP level. Enabling this protection will guard against accidental deletion across all surfaces (API, gcloud, Cloud Console and Terraform) by enabling the [GCP Cloud SQL instance deletion protection](https://cloud.google.com/sql/docs/postgres/deletion-protection). Terraform provider support was introduced in version 4.48.0. Defaults to `false`.
 
-* `disk_size` - (Optional, Default: `10`) The size of data disk, in GB. Size of a running instance cannot be reduced but can be increased. If you want to set this field, set `disk_autoresize` to false.
+* `disk_autoresize` - (Optional) Enables auto-resizing of the storage size. Defaults to `true`.
 
-* `disk_type` - (Optional, Default: `PD_SSD`) The type of data disk: PD_SSD or PD_HDD.
+* `disk_autoresize_limit` - (Optional) The maximum size to which storage capacity can be automatically increased. The default value is 0, which specifies that there is no limit.
+
+* `disk_size` - (Optional) The size of data disk, in GB. Size of a running instance cannot be reduced but can be increased. The minimum value is 10GB.
+
+* `disk_type` - (Optional) The type of data disk: PD_SSD or PD_HDD. Defaults to `PD_SSD`.
 
 * `pricing_plan` - (Optional) Pricing plan for this instance, can only be `PER_USE`.
 
@@ -259,13 +267,23 @@ The optional `settings.active_directory_config` subblock supports:
 * `domain` - (Required) The domain name for the active directory (e.g., mydomain.com).
     Can only be used with SQL Server.
 
+The optional `settings.deny_maintenance_period` subblock supports:
+
+* `end_date` - (Required) "deny maintenance period" end date. If the year of the end date is empty, the year of the start date also must be empty. In this case, it means the no maintenance interval recurs every year. The date is in format yyyy-mm-dd i.e., 2020-11-01, or mm-dd, i.e., 11-01
+
+* `start_date` - (Required) "deny maintenance period" start date. If the year of the start date is empty, the year of the end date also must be empty. In this case, it means the deny maintenance period recurs every year. The date is in format yyyy-mm-dd i.e., 2020-11-01, or mm-dd, i.e., 11-01
+
+* `time` - (Required) Time in UTC when the "deny maintenance period" starts on startDate and ends on endDate. The time is in format: HH:mm:SS, i.e., 00:00:00
+
 The optional `settings.sql_server_audit_config` subblock supports:
 
-* `bucket` - (Required) The name of the destination bucket (e.g., gs://mybucket).
+* `bucket` - (Optional) The name of the destination bucket (e.g., gs://mybucket).
 
 * `upload_interval` - (Optional) How often to upload generated audit files. A duration in seconds with up to nine fractional digits, terminated by 's'. Example: "3.5s".
 
-* `retention_interval` - (Optional) How long to keep generated audit files. A duration in seconds with up to nine fractional digits, terminated by 's'. Example: "3.5s". 
+* `retention_interval` - (Optional) How long to keep generated audit files. A duration in seconds with up to nine fractional digits, terminated by 's'. Example: "3.5s".
+
+* `time_zone` - (Optional) The time_zone to be used by the database engine (supported only for SQL Server), in SQL Server timezone format.
 
 The optional `settings.backup_configuration` subblock supports:
 
@@ -276,7 +294,7 @@ The optional `settings.backup_configuration` subblock supports:
 
 * `start_time` - (Optional) `HH:MM` format time indicating when backup
     configuration starts.
-* `point_in_time_recovery_enabled` - (Optional) True if Point-in-time recovery is enabled. Will restart database if enabled after instance creation. Valid only for PostgreSQL instances.
+* `point_in_time_recovery_enabled` - (Optional) True if Point-in-time recovery is enabled. Will restart database if enabled after instance creation. Valid only for PostgreSQL and SQL Server instances.
 
 * `location` - (Optional) The region where the backup will be stored
 
@@ -306,6 +324,8 @@ This setting can be updated, but it cannot be removed after it is set.
 * `require_ssl` - (Optional) Whether SSL connections over IP are enforced or not.
 
 * `allocated_ip_range` - (Optional) The name of the allocated ip range for the private ip CloudSQL instance. For example: "google-managed-services-default". If set, the instance ip will be created in the allocated range. The range name must comply with [RFC 1035](https://datatracker.ietf.org/doc/html/rfc1035). Specifically, the name must be 1-63 characters long and match the regular expression [a-z]([-a-z0-9]*[a-z0-9])?.
+
+* `enable_private_path_for_google_cloud_services` - (Optional) Whether Google Cloud services such as BigQuery are allowed to access data in this Cloud SQL instance over a private IP connection. SQLSERVER database type is not supported.
 
 The optional `settings.ip_configuration.authorized_networks[]` sublist supports:
 
@@ -339,7 +359,7 @@ when an Instance can automatically restart to apply updates. The maintenance win
 * `update_track` - (Optional) Receive updates earlier (`canary`) or later
 (`stable`)
 
-The optional `settings.insights_config` subblock for instances declares [Query Insights](https://cloud.google.com/sql/docs/postgres/insights-overview) configuration. It contains:
+The optional `settings.insights_config` subblock for instances declares Query Insights([MySQL](https://cloud.google.com/sql/docs/mysql/using-query-insights), [PostgreSQL](https://cloud.google.com/sql/docs/postgres/using-query-insights)) configuration. It contains:
 
 * `query_insights_enabled` - True if Query Insights feature is enabled.
 
@@ -349,7 +369,9 @@ The optional `settings.insights_config` subblock for instances declares [Query I
 
 * `record_client_address` - True if Query Insights will record client address when enabled.
 
-The optional `settings.passward_validation_policy` subblock for instances declares [Password Validation Policy](https://cloud.google.com/sql/docs/postgres/built-in-authentication) configuration. It contains:
+* `query_plans_per_minute` - Number of query execution plans captured by Insights per minute for all queries combined. Between 0 and 20. Default to 5.
+
+The optional `settings.password_validation_policy` subblock for instances declares [Password Validation Policy](https://cloud.google.com/sql/docs/postgres/built-in-authentication) configuration. It contains:
 
 * `min_length` - Specifies the minimum number of characters that the password must have.
 
@@ -375,8 +397,8 @@ to work, cannot be updated, and supports:
 * `client_key` - (Optional) PEM representation of the replica's private key. The
     corresponding public key in encoded in the `client_certificate`.
 
-* `connect_retry_interval` - (Optional, Default: 60) The number of seconds
-    between connect retries.
+* `connect_retry_interval` - (Optional) The number of seconds
+    between connect retries. MySQL's default is 60 seconds.
 
 * `dump_file_path` - (Optional) Path to a SQL file in GCS from which replica
     instances are created. Format is `gs://bucket/filename`.
@@ -405,6 +427,8 @@ The optional `clone` block supports:
 * `point_in_time` -  (Optional) The timestamp of the point in time that should be restored.
 
     A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and up to nine fractional digits. Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".
+
+* `database_names` - (Optional) (SQL Server only, use with `point_in_time`) Clone only the specified databases from the source instance. Clone all databases if empty.
 
 * `allocated_ip_range` -  (Optional) The name of the allocated ip range for the private ip CloudSQL instance. For example: "google-managed-services-default". If set, the cloned instance ip will be created in the allocated range. The range name must comply with [RFC 1035](https://tools.ietf.org/html/rfc1035). Specifically, the name must be 1-63 characters long and match the regular expression [a-z]([-a-z0-9]*[a-z0-9])?.
 
@@ -449,6 +473,8 @@ instance.
 support accessing the [first address in the list in a terraform output](https://github.com/hashicorp/terraform-provider-google/issues/912)
 when the resource is configured with a `count`.
 
+* `available_maintenance_versions`  - The list of all maintenance versions applicable on the instance.
+
 * `public_ip_address` - The first public (`PRIMARY`) IPv4 address assigned. This is
 a workaround for an [issue fixed in Terraform 0.12](https://github.com/hashicorp/terraform/issues/17048)
 but also provides a convenient way to access an IP of a specific type without
@@ -458,6 +484,10 @@ performing filtering in a Terraform config.
 a workaround for an [issue fixed in Terraform 0.12](https://github.com/hashicorp/terraform/issues/17048)
 but also provides a convenient way to access an IP of a specific type without
 performing filtering in a Terraform config.
+
+* `instance_type` - The type of the instance. The supported values are `SQL_INSTANCE_TYPE_UNSPECIFIED`, `CLOUD_SQL_INSTANCE`, `ON_PREMISES_INSTANCE` and `READ_REPLICA_INSTANCE`.
+
+~> **NOTE:** Users can upgrade a read replica instance to a stand-alone Cloud SQL instance with the help of `instance_type`. To promote, users have to set the `instance_type` property as `CLOUD_SQL_INSTANCE` and remove/unset `master_instance_name` and `replica_configuration` from instance configuration. This operation might cause your instance to restart.
 
 * `settings.version` - Used to make sure changes to the `settings` block are
     atomic.
@@ -475,9 +505,9 @@ performing filtering in a Terraform config.
 ## Timeouts
 
 `google_sql_database_instance` provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
-- `create` - Default is 30 minutes.
+- `create` - Default is 40 minutes.
 - `update` - Default is 30 minutes.
 - `delete` - Default is 30 minutes.
 

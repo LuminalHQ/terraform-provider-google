@@ -2,11 +2,13 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccActiveDirectoryDomainTrust_activeDirectoryDomainTrustBasicExample(t *testing.T) {
@@ -15,17 +17,17 @@ func TestAccActiveDirectoryDomainTrust_activeDirectoryDomainTrustBasicExample(t 
 
 	// This test continues to fail due to AD setup required
 	// Skipping in VCR to allow for fully successful test runs
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckActiveDirectoryDomainTrustDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckActiveDirectoryDomainTrustDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccActiveDirectoryDomainTrust_activeDirectoryDomainTrustBasicExample(context),
@@ -85,14 +87,14 @@ func testAccCheckActiveDirectoryDomainTrustDestroyProducer(t *testing.T) func(s 
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}")
 			if err != nil {
 				return err
 			}
 
-			res, _ := sendRequest(config, "GET", "", url, config.userAgent, nil)
+			res, _ := transport_tpg.SendRequest(config, "GET", "", url, config.UserAgent, nil)
 
 			var v interface{}
 			var ok bool

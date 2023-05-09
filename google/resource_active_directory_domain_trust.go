@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceActiveDirectoryDomainTrust() *schema.Resource {
+func ResourceActiveDirectoryDomainTrust() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceActiveDirectoryDomainTrustCreate,
 		Read:   resourceActiveDirectoryDomainTrustRead,
@@ -45,7 +48,7 @@ func resourceActiveDirectoryDomainTrust() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
-				Description: `The fully qualified domain name. e.g. mydomain.myorganization.com, with the restrictions, 
+				Description: `The fully qualified domain name. e.g. mydomain.myorganization.com, with the restrictions,
 https://cloud.google.com/managed-microsoft-ad/reference/rest/v1/projects.locations.global.domains.`,
 			},
 			"target_dns_ip_addresses": {
@@ -66,7 +69,7 @@ https://cloud.google.com/managed-microsoft-ad/reference/rest/v1/projects.locatio
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"INBOUND", "OUTBOUND", "BIDIRECTIONAL"}),
+				ValidateFunc: verify.ValidateEnum([]string{"INBOUND", "OUTBOUND", "BIDIRECTIONAL"}),
 				Description:  `The trust direction, which decides if the current domain is trusted, trusting, or both. Possible values: ["INBOUND", "OUTBOUND", "BIDIRECTIONAL"]`,
 			},
 			"trust_handshake_secret": {
@@ -80,7 +83,7 @@ https://cloud.google.com/managed-microsoft-ad/reference/rest/v1/projects.locatio
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"FOREST", "EXTERNAL"}),
+				ValidateFunc: verify.ValidateEnum([]string{"FOREST", "EXTERNAL"}),
 				Description:  `The type of trust represented by the trust resource. Possible values: ["FOREST", "EXTERNAL"]`,
 			},
 			"selective_authentication": {
@@ -101,8 +104,8 @@ https://cloud.google.com/managed-microsoft-ad/reference/rest/v1/projects.locatio
 }
 
 func resourceActiveDirectoryDomainTrustCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -150,7 +153,7 @@ func resourceActiveDirectoryDomainTrustCreate(d *schema.ResourceData, meta inter
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}:attachTrust")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}:attachTrust")
 	if err != nil {
 		return err
 	}
@@ -169,13 +172,13 @@ func resourceActiveDirectoryDomainTrustCreate(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating DomainTrust: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/domains/{{domain}}/{{target_domain_name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/domains/{{domain}}/{{target_domain_name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -184,12 +187,13 @@ func resourceActiveDirectoryDomainTrustCreate(d *schema.ResourceData, meta inter
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = activeDirectoryOperationWaitTimeWithResponse(
+	err = ActiveDirectoryOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating DomainTrust", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create DomainTrust: %s", err)
 	}
 
@@ -216,7 +220,7 @@ func resourceActiveDirectoryDomainTrustCreate(d *schema.ResourceData, meta inter
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/global/domains/{{domain}}/{{target_domain_name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/global/domains/{{domain}}/{{target_domain_name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -228,13 +232,13 @@ func resourceActiveDirectoryDomainTrustCreate(d *schema.ResourceData, meta inter
 }
 
 func resourceActiveDirectoryDomainTrustRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}")
 	if err != nil {
 		return err
 	}
@@ -252,9 +256,9 @@ func resourceActiveDirectoryDomainTrustRead(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ActiveDirectoryDomainTrust %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ActiveDirectoryDomainTrust %q", d.Id()))
 	}
 
 	res, err = flattenNestedActiveDirectoryDomainTrust(d, meta, res)
@@ -305,8 +309,8 @@ func resourceActiveDirectoryDomainTrustRead(d *schema.ResourceData, meta interfa
 }
 
 func resourceActiveDirectoryDomainTrustUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -362,7 +366,7 @@ func resourceActiveDirectoryDomainTrustUpdate(d *schema.ResourceData, meta inter
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}:reconfigureTrust")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}:reconfigureTrust")
 	if err != nil {
 		return err
 	}
@@ -374,7 +378,7 @@ func resourceActiveDirectoryDomainTrustUpdate(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating DomainTrust %q: %s", d.Id(), err)
@@ -382,7 +386,7 @@ func resourceActiveDirectoryDomainTrustUpdate(d *schema.ResourceData, meta inter
 		log.Printf("[DEBUG] Finished updating DomainTrust %q: %#v", d.Id(), res)
 	}
 
-	err = activeDirectoryOperationWaitTime(
+	err = ActiveDirectoryOperationWaitTime(
 		config, res, project, "Updating DomainTrust", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -394,8 +398,8 @@ func resourceActiveDirectoryDomainTrustUpdate(d *schema.ResourceData, meta inter
 }
 
 func resourceActiveDirectoryDomainTrustDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -405,7 +409,7 @@ func resourceActiveDirectoryDomainTrustDelete(d *schema.ResourceData, meta inter
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}:detachTrust")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain}}:detachTrust")
 	if err != nil {
 		return err
 	}
@@ -455,12 +459,12 @@ func resourceActiveDirectoryDomainTrustDelete(d *schema.ResourceData, meta inter
 
 	log.Printf("[DEBUG] Deleting DomainTrust %q", d.Id())
 
-	res, err := sendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "DomainTrust")
+		return transport_tpg.HandleNotFoundError(err, d, "DomainTrust")
 	}
 
-	err = activeDirectoryOperationWaitTime(
+	err = ActiveDirectoryOperationWaitTime(
 		config, res, project, "Deleting DomainTrust", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -473,8 +477,8 @@ func resourceActiveDirectoryDomainTrustDelete(d *schema.ResourceData, meta inter
 }
 
 func resourceActiveDirectoryDomainTrustImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/domains/(?P<domain>[^/]+)/(?P<target_domain_name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<domain>[^/]+)/(?P<target_domain_name>[^/]+)",
 		"(?P<domain>[^/]+)/(?P<target_domain_name>[^/]+)",
@@ -483,7 +487,7 @@ func resourceActiveDirectoryDomainTrustImport(d *schema.ResourceData, meta inter
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/domains/{{domain}}/{{target_domain_name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/domains/{{domain}}/{{target_domain_name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -492,51 +496,51 @@ func resourceActiveDirectoryDomainTrustImport(d *schema.ResourceData, meta inter
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNestedActiveDirectoryDomainTrustTargetDomainName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedActiveDirectoryDomainTrustTargetDomainName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedActiveDirectoryDomainTrustTrustType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedActiveDirectoryDomainTrustTrustType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedActiveDirectoryDomainTrustTrustDirection(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedActiveDirectoryDomainTrustTrustDirection(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedActiveDirectoryDomainTrustSelectiveAuthentication(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedActiveDirectoryDomainTrustSelectiveAuthentication(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedActiveDirectoryDomainTrustTargetDnsIpAddresses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedActiveDirectoryDomainTrustTargetDnsIpAddresses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func expandNestedActiveDirectoryDomainTrustTargetDomainName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedActiveDirectoryDomainTrustTargetDomainName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedActiveDirectoryDomainTrustTrustType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedActiveDirectoryDomainTrustTrustType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedActiveDirectoryDomainTrustTrustDirection(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedActiveDirectoryDomainTrustTrustDirection(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedActiveDirectoryDomainTrustSelectiveAuthentication(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedActiveDirectoryDomainTrustSelectiveAuthentication(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedActiveDirectoryDomainTrustTargetDnsIpAddresses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedActiveDirectoryDomainTrustTargetDnsIpAddresses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandNestedActiveDirectoryDomainTrustTrustHandshakeSecret(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedActiveDirectoryDomainTrustTrustHandshakeSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
@@ -583,11 +587,11 @@ func flattenNestedActiveDirectoryDomainTrust(d *schema.ResourceData, meta interf
 }
 
 func resourceActiveDirectoryDomainTrustFindNestedObjectInList(d *schema.ResourceData, meta interface{}, items []interface{}) (index int, item map[string]interface{}, err error) {
-	expectedTargetDomainName, err := expandNestedActiveDirectoryDomainTrustTargetDomainName(d.Get("target_domain_name"), d, meta.(*Config))
+	expectedTargetDomainName, err := expandNestedActiveDirectoryDomainTrustTargetDomainName(d.Get("target_domain_name"), d, meta.(*transport_tpg.Config))
 	if err != nil {
 		return -1, nil, err
 	}
-	expectedFlattenedTargetDomainName := flattenNestedActiveDirectoryDomainTrustTargetDomainName(expectedTargetDomainName, d, meta.(*Config))
+	expectedFlattenedTargetDomainName := flattenNestedActiveDirectoryDomainTrustTargetDomainName(expectedTargetDomainName, d, meta.(*transport_tpg.Config))
 
 	// Search list for this resource.
 	for idx, itemRaw := range items {
@@ -602,7 +606,7 @@ func resourceActiveDirectoryDomainTrustFindNestedObjectInList(d *schema.Resource
 			return -1, nil, err
 		}
 
-		itemTargetDomainName := flattenNestedActiveDirectoryDomainTrustTargetDomainName(item["targetDomainName"], d, meta.(*Config))
+		itemTargetDomainName := flattenNestedActiveDirectoryDomainTrustTargetDomainName(item["targetDomainName"], d, meta.(*transport_tpg.Config))
 		// isEmptyValue check so that if one is nil and the other is "", that's considered a match
 		if !(isEmptyValue(reflect.ValueOf(itemTargetDomainName)) && isEmptyValue(reflect.ValueOf(expectedFlattenedTargetDomainName))) && !reflect.DeepEqual(itemTargetDomainName, expectedFlattenedTargetDomainName) {
 			log.Printf("[DEBUG] Skipping item with targetDomainName= %#v, looking for %#v)", itemTargetDomainName, expectedFlattenedTargetDomainName)

@@ -21,20 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccAppEngineStandardAppVersion_appEngineStandardAppVersionExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"org_id":        getTestOrgFromEnv(t),
-		"random_suffix": randString(t, 10),
+		"org_id":        acctest.GetTestOrgFromEnv(t),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckAppEngineStandardAppVersionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckAppEngineStandardAppVersionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAppEngineStandardAppVersion_appEngineStandardAppVersionExample(context),
@@ -51,6 +53,23 @@ func TestAccAppEngineStandardAppVersion_appEngineStandardAppVersionExample(t *te
 
 func testAccAppEngineStandardAppVersion_appEngineStandardAppVersionExample(context map[string]interface{}) string {
 	return Nprintf(`
+resource "google_service_account" "custom_service_account" {
+  account_id   = "tf-test-my-account%{random_suffix}"
+  display_name = "Custom Service Account"
+}
+
+resource "google_project_iam_member" "gae_api" {
+  project = google_service_account.custom_service_account.project
+  role    = "roles/compute.networkUser"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
+}
+
+resource "google_project_iam_member" "storage_viewer" {
+  project = google_service_account.custom_service_account.project
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.custom_service_account.email}"
+}
+
 resource "google_app_engine_standard_app_version" "myapp_v1" {
   version_id = "v1"
   service    = "myapp"
@@ -85,6 +104,7 @@ resource "google_app_engine_standard_app_version" "myapp_v1" {
   }
 
   delete_service_on_destroy = true
+  service_account = google_service_account.custom_service_account.email
 }
 
 resource "google_app_engine_standard_app_version" "myapp_v2" {
@@ -112,6 +132,7 @@ resource "google_app_engine_standard_app_version" "myapp_v2" {
   }
 
   noop_on_destroy = true
+  service_account = google_service_account.custom_service_account.email
 }
 
 resource "google_storage_bucket" "bucket" {

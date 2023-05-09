@@ -1,6 +1,5 @@
 ---
 subcategory: "Cloud Bigtable"
-page_title: "Google: google_bigtable_instance"
 description: |-
   Creates a Google Bigtable instance.
 ---
@@ -79,10 +78,11 @@ resource "google_bigtable_instance" "production-instance" {
 
 The following arguments are supported:
 
-* `name` - (Required) The name (also called Instance Id in the Cloud Console) of the Cloud Bigtable instance.
+* `name` - (Required) The name (also called Instance Id in the Cloud Console) of the Cloud Bigtable instance. Must be 6-33 characters and must only contain hyphens, lowercase letters and numbers.
 
-* `cluster` - (Required) A block of cluster configuration options. This can be specified at least once, and up to 4 times.
-See [structure below](#nested_cluster).
+* `cluster` - (Required) A block of cluster configuration options. This can be specified at least once, and up 
+to as many as possible within 8 cloud regions. Removing the field entirely from the config will cause the provider
+to default to the backend value. See [structure below](#nested_cluster).
 
 -----
 
@@ -107,21 +107,21 @@ in Terraform state, a `terraform destroy` or `terraform apply` that would delete
 
 <a name="nested_cluster"></a>The `cluster` block supports the following arguments:
 
-* `cluster_id` - (Required) The ID of the Cloud Bigtable cluster.
+* `cluster_id` - (Required) The ID of the Cloud Bigtable cluster. Must be 6-30 characters and must only contain hyphens, lowercase letters and numbers.
 
 * `zone` - (Optional) The zone to create the Cloud Bigtable cluster in. If it not
 specified, the provider zone is used. Each cluster must have a different zone in the same region. Zones that support
 Bigtable instances are noted on the [Cloud Bigtable locations page](https://cloud.google.com/bigtable/docs/locations).
 
 * `num_nodes` - (Optional) The number of nodes in your Cloud Bigtable cluster.
-Required, with a minimum of `1` for a `PRODUCTION` instance. Must be left unset
-for a `DEVELOPMENT` instance.
+Required, with a minimum of `1` for each cluster in an instance.
 
-* `autoscaling_config` - (Optional) Autoscaling config for the cluster, contains the following arguments:
+* `autoscaling_config` - (Optional) [Autoscaling](https://cloud.google.com/bigtable/docs/autoscaling#parameters) config for the cluster, contains the following arguments:
 
   * `min_nodes` - (Required) The minimum number of nodes for autoscaling.
   * `max_nodes` - (Required) The maximum number of nodes for autoscaling.
-  * `cpu_target` - (Required) The CPU utilization target in percentage. Must be between 10 and 80.
+  * `cpu_target` - (Required) The target CPU utilization for autoscaling, in percentage. Must be between 10 and 80.
+  * `storage_target` - The target storage utilization for autoscaling, in GB, for each node in a cluster. This number is limited between 2560 (2.5TiB) and 5120 (5TiB) for a SSD cluster and between 8192 (8TiB) and 16384 (16 TiB) for an HDD cluster. If not set, whatever is already set for the cluster will not change, or if the cluster is just being created, it will use the default value of 2560 for SSD clusters and 8192 for HDD clusters.
 
 !> **Warning**: Only one of `autoscaling_config` or `num_nodes` should be set for a cluster. If both are set, `num_nodes` is ignored. If none is set, autoscaling will be disabled and sized to the current node count.
 
@@ -130,11 +130,9 @@ for a `DEVELOPMENT` instance.
 
 * `kms_key_name` - (Optional) Describes the Cloud KMS encryption key that will be used to protect the destination Bigtable cluster. The requirements for this key are: 1) The Cloud Bigtable service account associated with the project that contains this cluster must be granted the `cloudkms.cryptoKeyEncrypterDecrypter` role on the CMEK key. 2) Only regional keys can be used and the region of the CMEK key must match the region of the cluster.
 
-!> **Warning**: Modifying this field will cause Terraform to delete/recreate the entire resource. 
+-> **Note**: Removing the field entirely from the config will cause the provider to default to the backend value.
 
--> **Note**: To remove this field once it is set, set the value to an empty string. Removing the field entirely from the config will cause the provider to default to the backend value.
-
-!> **Warning:** Modifying the `storage_type` or `zone` of an existing cluster (by
+!> **Warning:** Modifying the `storage_type`, `zone` or `kms_key_name` of an existing cluster (by
 `cluster_id`) will cause Terraform to delete/recreate the entire
 `google_bigtable_instance` resource. If these values are changing, use a new
 `cluster_id`.

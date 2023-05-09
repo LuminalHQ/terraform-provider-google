@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud AI Notebooks"
-page_title: "Google: google_notebooks_runtime_iam"
 description: |-
   Collection of resources to manage IAM policy for Cloud AI Notebooks Runtime
 ---
@@ -147,4 +146,4 @@ $ terraform import google_notebooks_runtime_iam_policy.editor projects/{{project
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

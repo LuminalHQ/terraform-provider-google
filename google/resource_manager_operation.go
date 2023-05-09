@@ -18,10 +18,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 type ResourceManagerOperationWaiter struct {
-	Config    *Config
+	Config    *transport_tpg.Config
 	UserAgent string
 	CommonOperationWaiter
 }
@@ -33,10 +35,10 @@ func (w *ResourceManagerOperationWaiter) QueryOp() (interface{}, error) {
 	// Returns the proper get.
 	url := fmt.Sprintf("%s%s", w.Config.ResourceManagerBasePath, w.CommonOperationWaiter.Op.Name)
 
-	return sendRequest(w.Config, "GET", "", url, w.UserAgent, nil)
+	return transport_tpg.SendRequest(w.Config, "GET", "", url, w.UserAgent, nil)
 }
 
-func createResourceManagerWaiter(config *Config, op map[string]interface{}, activity, userAgent string) (*ResourceManagerOperationWaiter, error) {
+func createResourceManagerWaiter(config *transport_tpg.Config, op map[string]interface{}, activity, userAgent string) (*ResourceManagerOperationWaiter, error) {
 	w := &ResourceManagerOperationWaiter{
 		Config:    config,
 		UserAgent: userAgent,
@@ -48,7 +50,7 @@ func createResourceManagerWaiter(config *Config, op map[string]interface{}, acti
 }
 
 // nolint: deadcode,unused
-func resourceManagerOperationWaitTimeWithResponse(config *Config, op map[string]interface{}, response *map[string]interface{}, activity, userAgent string, timeout time.Duration) error {
+func ResourceManagerOperationWaitTimeWithResponse(config *transport_tpg.Config, op map[string]interface{}, response *map[string]interface{}, activity, userAgent string, timeout time.Duration) error {
 	w, err := createResourceManagerWaiter(config, op, activity, userAgent)
 	if err != nil {
 		return err
@@ -59,7 +61,7 @@ func resourceManagerOperationWaitTimeWithResponse(config *Config, op map[string]
 	return json.Unmarshal([]byte(w.CommonOperationWaiter.Op.Response), response)
 }
 
-func resourceManagerOperationWaitTime(config *Config, op map[string]interface{}, activity, userAgent string, timeout time.Duration) error {
+func ResourceManagerOperationWaitTime(config *transport_tpg.Config, op map[string]interface{}, activity, userAgent string, timeout time.Duration) error {
 	if val, ok := op["name"]; !ok || val == "" {
 		// This was a synchronous call - there is no operation to wait for.
 		return nil

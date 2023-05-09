@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceIapBrand() *schema.Resource {
+func ResourceIapBrand() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceIapBrandCreate,
 		Read:   resourceIapBrandRead,
@@ -59,10 +61,10 @@ is an owner of the specified group in Cloud Identity.`,
 			"name": {
 				Type:     schema.TypeString,
 				Computed: true,
-				Description: `Output only. Identifier of the brand, in the format
-'projects/{project_number}/brands/{brand_id}'. NOTE: The brand
-identification corresponds to the project number as only one
-brand per project can be created.`,
+				Description: `Output only. Identifier of the brand, in the format 'projects/{project_number}/brands/{brand_id}'
+NOTE: The name can also be expressed as 'projects/{project_id}/brands/{brand_id}', e.g. when importing.
+NOTE: The brand identification corresponds to the project number as only one
+brand can be created per project.`,
 			},
 			"org_internal_only": {
 				Type:        schema.TypeBool,
@@ -81,8 +83,8 @@ brand per project can be created.`,
 }
 
 func resourceIapBrandCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -101,7 +103,7 @@ func resourceIapBrandCreate(d *schema.ResourceData, meta interface{}) error {
 		obj["applicationTitle"] = applicationTitleProp
 	}
 
-	url, err := replaceVars(d, config, "{{IapBasePath}}projects/{{project}}/brands")
+	url, err := ReplaceVars(d, config, "{{IapBasePath}}projects/{{project}}/brands")
 	if err != nil {
 		return err
 	}
@@ -120,7 +122,7 @@ func resourceIapBrandCreate(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Brand: %s", err)
 	}
@@ -129,7 +131,7 @@ func resourceIapBrandCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -165,9 +167,9 @@ func resourceIapBrandCreate(d *schema.ResourceData, meta interface{}) error {
 
 func resourceIapBrandPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{IapBasePath}}{{name}}")
+		url, err := ReplaceVars(d, config, "{{IapBasePath}}{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -185,12 +187,12 @@ func resourceIapBrandPollRead(d *schema.ResourceData, meta interface{}) PollRead
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 		if err != nil {
 			return res, err
 		}
@@ -199,13 +201,13 @@ func resourceIapBrandPollRead(d *schema.ResourceData, meta interface{}) PollRead
 }
 
 func resourceIapBrandRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{IapBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{IapBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -223,9 +225,9 @@ func resourceIapBrandRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("IapBrand %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("IapBrand %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -258,48 +260,65 @@ func resourceIapBrandDelete(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceIapBrandImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	nameParts := strings.Split(d.Get("name").(string), "/")
-	if len(nameParts) != 4 {
+	if len(nameParts) != 4 && len(nameParts) != 2 {
 		return nil, fmt.Errorf(
-			"Saw %s when the name is expected to have shape %s",
+			"Saw %s when the name is expected to have either shape %s or %s",
 			d.Get("name"),
 			"projects/{{project}}/brands/{{name}}",
+			"{{project}}/{{name}}",
 		)
 	}
 
-	if err := d.Set("project", nameParts[1]); err != nil {
+	var project string
+	if len(nameParts) == 4 {
+		project = nameParts[1]
+	}
+	if len(nameParts) == 2 {
+		project = nameParts[0] // Different index
+
+		// Set `name` (and `id`) as a 4-part format so Read func produces valid URL
+		brand := nameParts[1]
+		name := fmt.Sprintf("projects/%s/brands/%s", project, brand)
+		if err := d.Set("name", name); err != nil {
+			return nil, fmt.Errorf("Error setting name: %s", err)
+		}
+		d.SetId(name)
+	}
+
+	if err := d.Set("project", project); err != nil {
 		return nil, fmt.Errorf("Error setting project: %s", err)
 	}
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenIapBrandSupportEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIapBrandSupportEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIapBrandApplicationTitle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIapBrandApplicationTitle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIapBrandOrgInternalOnly(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIapBrandOrgInternalOnly(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIapBrandName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIapBrandName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandIapBrandSupportEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIapBrandSupportEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIapBrandApplicationTitle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIapBrandApplicationTitle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

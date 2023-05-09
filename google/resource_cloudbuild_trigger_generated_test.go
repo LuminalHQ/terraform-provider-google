@@ -21,27 +21,31 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccCloudBuildTrigger_cloudbuildTriggerFilenameExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudBuildTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudBuildTrigger_cloudbuildTriggerFilenameExample(context),
 			},
 			{
-				ResourceName:      "google_cloudbuild_trigger.filename-trigger",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "google_cloudbuild_trigger.filename-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
 			},
 		},
 	})
@@ -50,6 +54,8 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerFilenameExample(t *testing.T) {
 func testAccCloudBuildTrigger_cloudbuildTriggerFilenameExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_cloudbuild_trigger" "filename-trigger" {
+  location = "us-central1"
+
   trigger_template {
     branch_name = "main"
     repo_name   = "my-repo"
@@ -69,21 +75,22 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerBuildExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudBuildTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudBuildTrigger_cloudbuildTriggerBuildExample(context),
 			},
 			{
-				ResourceName:      "google_cloudbuild_trigger.build-trigger",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "google_cloudbuild_trigger.build-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
 			},
 		},
 	})
@@ -92,6 +99,8 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerBuildExample(t *testing.T) {
 func testAccCloudBuildTrigger_cloudbuildTriggerBuildExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_cloudbuild_trigger" "build-trigger" {
+  location = "global"
+
   trigger_template {
     branch_name = "main"
     repo_name   = "my-repo"
@@ -105,6 +114,11 @@ resource "google_cloudbuild_trigger" "build-trigger" {
       secret_env = ["MY_SECRET"]
     }
 
+    step {
+      name   = "ubuntu"
+      script = "echo hello" # using script field
+    }
+    
     source {
       storage_source {
         bucket = "mybucket"
@@ -163,21 +177,22 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerServiceAccountExample(t *testing.
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudBuildTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudBuildTrigger_cloudbuildTriggerServiceAccountExample(context),
 			},
 			{
-				ResourceName:      "google_cloudbuild_trigger.service-account-trigger",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "google_cloudbuild_trigger.service-account-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
 			},
 		},
 	})
@@ -202,7 +217,7 @@ resource "google_cloudbuild_trigger" "service-account-trigger" {
 }
 
 resource "google_service_account" "cloudbuild_service_account" {
-  account_id = "my-service-account"
+  account_id = "tf-test-cloud-sa%{random_suffix}"
 }
 
 resource "google_project_iam_member" "act_as" {
@@ -223,21 +238,22 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerPubsubConfigExample(t *testing.T)
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudBuildTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudBuildTrigger_cloudbuildTriggerPubsubConfigExample(context),
 			},
 			{
-				ResourceName:      "google_cloudbuild_trigger.pubsub-config-trigger",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "google_cloudbuild_trigger.pubsub-config-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
 			},
 		},
 	})
@@ -251,6 +267,7 @@ resource "google_pubsub_topic" "mytopic" {
 }
 
 resource "google_cloudbuild_trigger" "pubsub-config-trigger" {
+  location    = "us-central1"
   name        = "pubsub-trigger"
   description = "acceptance test example pubsub build trigger"
 
@@ -284,21 +301,22 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerWebhookConfigExample(t *testing.T
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudBuildTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudBuildTrigger_cloudbuildTriggerWebhookConfigExample(context),
 			},
 			{
-				ResourceName:      "google_cloudbuild_trigger.webhook-config-trigger",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "google_cloudbuild_trigger.webhook-config-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
 			},
 		},
 	})
@@ -371,21 +389,22 @@ func TestAccCloudBuildTrigger_cloudbuildTriggerManualExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudBuildTriggerDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudBuildTrigger_cloudbuildTriggerManualExample(context),
 			},
 			{
-				ResourceName:      "google_cloudbuild_trigger.manual-trigger",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "google_cloudbuild_trigger.manual-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
 			},
 		},
 	})
@@ -422,6 +441,291 @@ resource "google_cloudbuild_trigger" "manual-trigger" {
 `, context)
 }
 
+func TestAccCloudBuildTrigger_cloudbuildTriggerBitbucketServerPushExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudBuildTrigger_cloudbuildTriggerBitbucketServerPushExample(context),
+			},
+			{
+				ResourceName:            "google_cloudbuild_trigger.bbs-push-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
+			},
+		},
+	})
+}
+
+func testAccCloudBuildTrigger_cloudbuildTriggerBitbucketServerPushExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_cloudbuild_trigger" "bbs-push-trigger" {
+  name        = "terraform-bbs-push-trigger"
+  location    = "us-central1"
+
+  bitbucket_server_trigger_config {
+    repo_slug = "terraform-provider-google"
+    project_key = "STAG"
+    bitbucket_server_config_resource = "projects/123456789/locations/us-central1/bitbucketServerConfigs/myBitbucketConfig"
+    push {
+        tag = "^0.1.*"
+        invert_regex = true
+    }
+  }
+
+  filename = "cloudbuild.yaml"
+}
+`, context)
+}
+
+func TestAccCloudBuildTrigger_cloudbuildTriggerBitbucketServerPullRequestExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudBuildTrigger_cloudbuildTriggerBitbucketServerPullRequestExample(context),
+			},
+			{
+				ResourceName:            "google_cloudbuild_trigger.bbs-pull-request-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
+			},
+		},
+	})
+}
+
+func testAccCloudBuildTrigger_cloudbuildTriggerBitbucketServerPullRequestExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_cloudbuild_trigger" "bbs-pull-request-trigger" {
+  name        = "terraform-bbs-pull-request-trigger"
+  location    = "us-central1"
+
+  bitbucket_server_trigger_config {
+    repo_slug = "terraform-provider-google"
+    project_key = "STAG"
+    bitbucket_server_config_resource = "projects/123456789/locations/us-central1/bitbucketServerConfigs/myBitbucketConfig"
+    pull_request {
+        branch = "^master$"
+        invert_regex = false
+        comment_control = "COMMENTS_ENABLED"
+    }
+  }
+
+  filename = "cloudbuild.yaml"
+}
+`, context)
+}
+
+func TestAccCloudBuildTrigger_cloudbuildTriggerAllowFailureExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudBuildTrigger_cloudbuildTriggerAllowFailureExample(context),
+			},
+			{
+				ResourceName:            "google_cloudbuild_trigger.allow-failure-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
+			},
+		},
+	})
+}
+
+func testAccCloudBuildTrigger_cloudbuildTriggerAllowFailureExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_cloudbuild_trigger" "allow-failure-trigger" {
+  location = "global"
+
+  trigger_template {
+    branch_name = "main"
+    repo_name   = "my-repo"
+  }
+
+  build {
+    step {
+      name = "ubuntu"
+      args = ["-c", "exit 1"]
+      allow_failure = true
+    }
+
+    source {
+      storage_source {
+        bucket = "mybucket"
+        object = "source_code.tar.gz"
+      }
+    }
+    tags = ["build", "newFeature"]
+    substitutions = {
+      _FOO = "bar"
+      _BAZ = "qux"
+    }
+    queue_ttl = "20s"
+    logs_bucket = "gs://mybucket/logs"
+    secret {
+      kms_key_name = "projects/myProject/locations/global/keyRings/keyring-name/cryptoKeys/key-name"
+      secret_env = {
+        PASSWORD = "ZW5jcnlwdGVkLXBhc3N3b3JkCg=="
+      }
+    }
+    available_secrets {
+      secret_manager {
+        env          = "MY_SECRET"
+        version_name = "projects/myProject/secrets/mySecret/versions/latest"
+      }
+    }
+    artifacts {
+      images = ["gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"]
+      objects {
+        location = "gs://bucket/path/to/somewhere/"
+        paths = ["path"]
+      }
+    }
+    options {
+      source_provenance_hash = ["MD5"]
+      requested_verify_option = "VERIFIED"
+      machine_type = "N1_HIGHCPU_8"
+      disk_size_gb = 100
+      substitution_option = "ALLOW_LOOSE"
+      dynamic_substitutions = true
+      log_streaming_option = "STREAM_OFF"
+      worker_pool = "pool"
+      logging = "LEGACY"
+      env = ["ekey = evalue"]
+      secret_env = ["secretenv = svalue"]
+      volumes {
+        name = "v1"
+        path = "v1"
+      }
+    }
+  }
+}
+`, context)
+}
+
+func TestAccCloudBuildTrigger_cloudbuildTriggerAllowExitCodesExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudBuildTriggerDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudBuildTrigger_cloudbuildTriggerAllowExitCodesExample(context),
+			},
+			{
+				ResourceName:            "google_cloudbuild_trigger.allow-exit-codes-trigger",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"location"},
+			},
+		},
+	})
+}
+
+func testAccCloudBuildTrigger_cloudbuildTriggerAllowExitCodesExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_cloudbuild_trigger" "allow-exit-codes-trigger" {
+  location = "global"
+
+  trigger_template {
+    branch_name = "main"
+    repo_name   = "my-repo"
+  }
+
+  build {
+    step {
+      name = "ubuntu"
+      args = ["-c", "exit 1"]
+      allow_exit_codes = [1,3]
+    }
+
+    source {
+      storage_source {
+        bucket = "mybucket"
+        object = "source_code.tar.gz"
+      }
+    }
+    tags = ["build", "newFeature"]
+    substitutions = {
+      _FOO = "bar"
+      _BAZ = "qux"
+    }
+    queue_ttl = "20s"
+    logs_bucket = "gs://mybucket/logs"
+    secret {
+      kms_key_name = "projects/myProject/locations/global/keyRings/keyring-name/cryptoKeys/key-name"
+      secret_env = {
+        PASSWORD = "ZW5jcnlwdGVkLXBhc3N3b3JkCg=="
+      }
+    }
+    available_secrets {
+      secret_manager {
+        env          = "MY_SECRET"
+        version_name = "projects/myProject/secrets/mySecret/versions/latest"
+      }
+    }
+    artifacts {
+      images = ["gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA"]
+      objects {
+        location = "gs://bucket/path/to/somewhere/"
+        paths = ["path"]
+      }
+    }
+    options {
+      source_provenance_hash = ["MD5"]
+      requested_verify_option = "VERIFIED"
+      machine_type = "N1_HIGHCPU_8"
+      disk_size_gb = 100
+      substitution_option = "ALLOW_LOOSE"
+      dynamic_substitutions = true
+      log_streaming_option = "STREAM_OFF"
+      worker_pool = "pool"
+      logging = "LEGACY"
+      env = ["ekey = evalue"]
+      secret_env = ["secretenv = svalue"]
+      volumes {
+        name = "v1"
+        path = "v1"
+      }
+    }
+  }
+}
+`, context)
+}
+
 func testAccCheckCloudBuildTriggerDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -432,9 +736,9 @@ func testAccCheckCloudBuildTriggerDestroyProducer(t *testing.T) func(s *terrafor
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{CloudBuildBasePath}}projects/{{project}}/triggers/{{trigger_id}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{CloudBuildBasePath}}projects/{{project}}/locations/{{location}}/triggers/{{trigger_id}}")
 			if err != nil {
 				return err
 			}
@@ -445,7 +749,7 @@ func testAccCheckCloudBuildTriggerDestroyProducer(t *testing.T) func(s *terrafor
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("CloudBuildTrigger still exists at %s", url)
 			}

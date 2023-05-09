@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_backend_bucket"
 description: |-
   Backend buckets allow you to use Google Cloud Storage buckets with HTTP(S)
   load balancing.
@@ -166,6 +165,11 @@ The following arguments are supported:
   Cloud CDN configuration for this Backend Bucket.
   Structure is [documented below](#nested_cdn_policy).
 
+* `compression_mode` -
+  (Optional)
+  Compress text responses using Brotli or gzip compression, based on the client's Accept-Encoding header.
+  Possible values are: `AUTOMATIC`, `DISABLED`.
+
 * `edge_security_policy` -
   (Optional)
   The security policy associated with this backend bucket.
@@ -232,7 +236,7 @@ The following arguments are supported:
   (Optional)
   Specifies the cache setting for all responses from this backend.
   The possible values are: USE_ORIGIN_HEADERS, FORCE_CACHE_ALL and CACHE_ALL_STATIC
-  Possible values are `USE_ORIGIN_HEADERS`, `FORCE_CACHE_ALL`, and `CACHE_ALL_STATIC`.
+  Possible values are: `USE_ORIGIN_HEADERS`, `FORCE_CACHE_ALL`, `CACHE_ALL_STATIC`.
 
 * `serve_while_stale` -
   (Optional)
@@ -293,7 +297,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -312,4 +316,4 @@ $ terraform import google_compute_backend_bucket.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

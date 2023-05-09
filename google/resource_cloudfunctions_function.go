@@ -5,6 +5,9 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 	"google.golang.org/api/cloudfunctions/v1"
 
 	"fmt"
@@ -57,8 +60,8 @@ func (s *cloudFunctionId) locationId() string {
 	return fmt.Sprintf("projects/%s/locations/%s", s.Project, s.Region)
 }
 
-func parseCloudFunctionId(d *schema.ResourceData, config *Config) (*cloudFunctionId, error) {
-	if err := parseImportId([]string{
+func parseCloudFunctionId(d *schema.ResourceData, config *transport_tpg.Config) (*cloudFunctionId, error) {
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<region>[^/]+)/functions/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -76,16 +79,49 @@ func parseCloudFunctionId(d *schema.ResourceData, config *Config) (*cloudFunctio
 // at start/end
 func validateResourceCloudFunctionsFunctionName(v interface{}, k string) (ws []string, errors []error) {
 	re := `^(?:[a-zA-Z](?:[-_a-zA-Z0-9]{0,61}[a-zA-Z0-9])?)$`
-	return validateRegexp(re)(v, k)
+	return verify.ValidateRegexp(re)(v, k)
 }
 
-// based on compareSelfLinkOrResourceName, but less reusable and allows multi-/
+func partsCompare(a, b, reg string) bool {
+
+	regex := regexp.MustCompile(reg)
+	if regex.MatchString(a) && regex.MatchString(b) {
+		aParts := regex.FindStringSubmatch(a)
+		bParts := regex.FindStringSubmatch(b)
+		for i := 0; i < len(aParts); i++ {
+			if aParts[i] != bParts[i] {
+				return false
+			}
+		}
+	} else if regex.MatchString(a) {
+		aParts := regex.FindStringSubmatch(a)
+		if aParts[len(aParts)-1] != b {
+			return false
+		}
+	} else if regex.MatchString(b) {
+		bParts := regex.FindStringSubmatch(b)
+		if bParts[len(bParts)-1] != a {
+			return false
+		}
+	} else {
+		if a != b {
+			return false
+		}
+	}
+
+	return true
+}
+
+// based on CompareSelfLinkOrResourceName, but less reusable and allows multi-/
 // strings in the new state (config) part
 func compareSelfLinkOrResourceNameWithMultipleParts(_, old, new string, _ *schema.ResourceData) bool {
-	return strings.HasSuffix(old, new)
+	// two formats based on expandEventTrigger()
+	regex1 := "projects/(.+)/databases/\\(default\\)/documents/(.+)"
+	regex2 := "projects/(.+)/(.+)/(.+)"
+	return partsCompare(old, new, regex1) || partsCompare(old, new, regex2)
 }
 
-func resourceCloudFunctionsFunction() *schema.Resource {
+func ResourceCloudFunctionsFunction() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudFunctionsCreate,
 		Read:   resourceCloudFunctionsRead,
@@ -110,6 +146,12 @@ func resourceCloudFunctionsFunction() *schema.Resource {
 				ForceNew:     true,
 				Description:  `A user-defined name of the function. Function names must be unique globally.`,
 				ValidateFunc: validateResourceCloudFunctionsFunctionName,
+			},
+
+			"build_worker_pool": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: `Name of the Cloud Build Custom Worker Pool that should be used to build the function.`,
 			},
 
 			"source_archive_bucket": {
@@ -233,7 +275,7 @@ func resourceCloudFunctionsFunction() *schema.Resource {
 			"vpc_connector": {
 				Type:             schema.TypeString,
 				Optional:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `The VPC Network Connector that this cloud function can connect to. It can be either the fully-qualified URI, or the short name of the network connector resource. The format of this field is projects/*/locations/*/connectors/*.`,
 			},
 
@@ -314,7 +356,7 @@ func resourceCloudFunctionsFunction() *schema.Resource {
 			"max_instances": {
 				Type:         schema.TypeInt,
 				Optional:     true,
-				Default:      0,
+				Computed:     true,
 				ValidateFunc: validation.IntAtLeast(0),
 				Description:  `The limit on the maximum number of function instances that may coexist at a given time.`,
 			},
@@ -423,8 +465,8 @@ func resourceCloudFunctionsFunction() *schema.Resource {
 }
 
 func resourceCloudFunctionsCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -481,6 +523,10 @@ func resourceCloudFunctionsCreate(d *schema.ResourceData, meta interface{}) erro
 
 	if v, ok := d.GetOk("description"); ok {
 		function.Description = v.(string)
+	}
+
+	if v, ok := d.GetOk("build_worker_pool"); ok {
+		function.BuildWorkerPool = v.(string)
 	}
 
 	if v, ok := d.GetOk("entry_point"); ok {
@@ -550,7 +596,7 @@ func resourceCloudFunctionsCreate(d *schema.ResourceData, meta interface{}) erro
 	// We retry the whole create-and-wait because Cloud Functions
 	// will sometimes fail a creation operation entirely if it fails to pull
 	// source code and we need to try the whole creation again.
-	rerr := retryTimeDuration(func() error {
+	rerr := transport_tpg.RetryTimeDuration(func() error {
 		op, err := config.NewCloudFunctionsClient(userAgent).Projects.Locations.Functions.Create(
 			cloudFuncId.locationId(), function).Do()
 		if err != nil {
@@ -562,7 +608,7 @@ func resourceCloudFunctionsCreate(d *schema.ResourceData, meta interface{}) erro
 
 		return cloudFunctionsOperationWait(config, op, "Creating CloudFunctions Function", userAgent,
 			d.Timeout(schema.TimeoutCreate))
-	}, d.Timeout(schema.TimeoutCreate), isCloudFunctionsSourceCodeError)
+	}, d.Timeout(schema.TimeoutCreate), IsCloudFunctionsSourceCodeError)
 	if rerr != nil {
 		return rerr
 	}
@@ -571,8 +617,8 @@ func resourceCloudFunctionsCreate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceCloudFunctionsRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -584,7 +630,7 @@ func resourceCloudFunctionsRead(d *schema.ResourceData, meta interface{}) error 
 
 	function, err := config.NewCloudFunctionsClient(userAgent).Projects.Locations.Functions.Get(cloudFuncId.cloudFunctionId()).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Target CloudFunctions Function %q", cloudFuncId.Name))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Target CloudFunctions Function %q", cloudFuncId.Name))
 	}
 
 	if err := d.Set("name", cloudFuncId.Name); err != nil {
@@ -592,6 +638,9 @@ func resourceCloudFunctionsRead(d *schema.ResourceData, meta interface{}) error 
 	}
 	if err := d.Set("description", function.Description); err != nil {
 		return fmt.Errorf("Error setting description: %s", err)
+	}
+	if err := d.Set("build_worker_pool", function.BuildWorkerPool); err != nil {
+		return fmt.Errorf("Error setting build_worker_pool: %s", err)
 	}
 	if err := d.Set("entry_point", function.EntryPoint); err != nil {
 		return fmt.Errorf("Error setting entry_point: %s", err)
@@ -698,8 +747,8 @@ func resourceCloudFunctionsRead(d *schema.ResourceData, meta interface{}) error 
 
 func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) error {
 	log.Printf("[DEBUG]: Updating google_cloudfunctions_function")
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -717,7 +766,7 @@ func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) erro
 	// The full function needs to supplied in the PATCH call to evaluate some Organization Policies. https://github.com/hashicorp/terraform-provider-google/issues/6603
 	function, err := config.NewCloudFunctionsClient(userAgent).Projects.Locations.Functions.Get(cloudFuncId.cloudFunctionId()).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Target CloudFunctions Function %q", cloudFuncId.Name))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Target CloudFunctions Function %q", cloudFuncId.Name))
 	}
 
 	// The full function may contain a reference to manually uploaded code if the function was imported from gcloud
@@ -758,6 +807,11 @@ func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) erro
 	if d.HasChange("description") {
 		function.Description = d.Get("description").(string)
 		updateMaskArr = append(updateMaskArr, "description")
+	}
+
+	if d.HasChange("build_worker_pool") {
+		function.BuildWorkerPool = d.Get("build_worker_pool").(string)
+		updateMaskArr = append(updateMaskArr, "build_worker_pool")
 	}
 
 	if d.HasChange("timeout") {
@@ -806,6 +860,9 @@ func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	if d.HasChange("https_trigger_security_level") {
+		if function.HttpsTrigger == nil {
+			function.HttpsTrigger = &cloudfunctions.HttpsTrigger{}
+		}
 		function.HttpsTrigger.SecurityLevel = d.Get("https_trigger_security_level").(string)
 		updateMaskArr = append(updateMaskArr, "httpsTrigger", "httpsTrigger.securityLevel")
 	}
@@ -816,12 +873,12 @@ func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	if d.HasChange("docker_repository") {
-		function.Runtime = d.Get("docker_repository").(string)
+		function.DockerRepository = d.Get("docker_repository").(string)
 		updateMaskArr = append(updateMaskArr, "dockerRepository")
 	}
 
 	if d.HasChange("kms_key_name") {
-		function.Runtime = d.Get("docker_repository").(string)
+		function.KmsKeyName = d.Get("kms_key_name").(string)
 		updateMaskArr = append(updateMaskArr, "kmsKeyName")
 	}
 
@@ -838,7 +895,7 @@ func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) erro
 	if len(updateMaskArr) > 0 {
 		log.Printf("[DEBUG] Send Patch CloudFunction Configuration request: %#v", function)
 		updateMask := strings.Join(updateMaskArr, ",")
-		rerr := retryTimeDuration(func() error {
+		rerr := transport_tpg.RetryTimeDuration(func() error {
 			op, err := config.NewCloudFunctionsClient(userAgent).Projects.Locations.Functions.Patch(function.Name, function).
 				UpdateMask(updateMask).Do()
 			if err != nil {
@@ -858,8 +915,8 @@ func resourceCloudFunctionsUpdate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceCloudFunctionsDestroy(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}

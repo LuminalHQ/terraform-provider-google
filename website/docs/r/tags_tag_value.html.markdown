@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Tags"
-page_title: "Google: google_tags_tag_value"
 description: |-
   A TagValue is a child of a particular TagKey.
 ---
@@ -79,7 +78,7 @@ In addition to the arguments listed above, the following computed attributes are
   The generated numeric id for the TagValue.
 
 * `namespaced_name` -
-  Output only. Namespaced name of the TagValue. Will be in the format {organizationId}/{tag_key_short_name}/{shortName}.
+  Output only. Namespaced name of the TagValue. Will be in the format {parentNamespace}/{tagKeyShortName}/{shortName}.
 
 * `create_time` -
   Output only. Creation time.
@@ -93,7 +92,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

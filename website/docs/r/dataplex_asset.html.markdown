@@ -14,7 +14,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Dataplex"
-page_title: "Google: google_dataplex_asset"
 description: |-
   The Dataplex Asset resource
 ---
@@ -26,7 +25,7 @@ The Dataplex Asset resource
 ## Example Usage - basic_asset
 ```hcl
 resource "google_storage_bucket" "basic_bucket" {
-  name          = "dataplex-bucket-%{random_suffix}"
+  name          = "bucket"
   location      = "us-west1"
   uniform_bucket_level_access = true
   lifecycle {
@@ -76,7 +75,7 @@ resource "google_dataplex_asset" "primary" {
   }
  
   resource_spec {
-    name = "projects/my-project-name/buckets/dataplex-bucket-%{random_suffix}"
+    name = "projects/my-project-name/buckets/bucket"
     type = "STORAGE_BUCKET"
   }
  
@@ -231,7 +230,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

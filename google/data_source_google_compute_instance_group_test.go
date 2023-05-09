@@ -10,17 +10,19 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
 )
 
 func TestAccDataSourceGoogleComputeInstanceGroup_basic(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckDataSourceGoogleComputeInstanceGroupConfig(randString(t, 10), randString(t, 10)),
+				Config: testAccCheckDataSourceGoogleComputeInstanceGroupConfig(RandString(t, 10), RandString(t, 10)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckDataSourceGoogleComputeInstanceGroup("data.google_compute_instance_group.test"),
 				),
@@ -32,12 +34,12 @@ func TestAccDataSourceGoogleComputeInstanceGroup_basic(t *testing.T) {
 func TestAccDataSourceGoogleComputeInstanceGroup_withNamedPort(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckDataSourceGoogleComputeInstanceGroupConfigWithNamedPort(randString(t, 10), randString(t, 10)),
+				Config: testAccCheckDataSourceGoogleComputeInstanceGroupConfigWithNamedPort(RandString(t, 10), RandString(t, 10)),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckDataSourceGoogleComputeInstanceGroup("data.google_compute_instance_group.test"),
 				),
@@ -49,12 +51,12 @@ func TestAccDataSourceGoogleComputeInstanceGroup_withNamedPort(t *testing.T) {
 func TestAccDataSourceGoogleComputeInstanceGroup_fromIGM(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCheckDataSourceGoogleComputeInstanceGroup_fromIGM(fmt.Sprintf("tf-test-igm-%d", randInt(t)), fmt.Sprintf("tf-test-igm-%d", randInt(t))),
+				Config: testAccCheckDataSourceGoogleComputeInstanceGroup_fromIGM(fmt.Sprintf("tf-test-igm-%d", RandInt(t)), fmt.Sprintf("tf-test-igm-%d", RandInt(t))),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr("data.google_compute_instance_group.test", "instances.#", "10"),
 				),
@@ -96,7 +98,7 @@ func testAccCheckDataSourceGoogleComputeInstanceGroup(dataSourceName string) res
 			}
 		}
 
-		if !compareSelfLinkOrResourceName("", dsAttrs["self_link"], rsAttrs["self_link"], nil) && dsAttrs["self_link"] != rsAttrs["self_link"] {
+		if !tpgresource.CompareSelfLinkOrResourceName("", dsAttrs["self_link"], rsAttrs["self_link"], nil) && dsAttrs["self_link"] != rsAttrs["self_link"] {
 			return fmt.Errorf("self link does not match: %s vs %s", dsAttrs["self_link"], rsAttrs["self_link"])
 		}
 
@@ -186,7 +188,7 @@ func testAccCheckDataSourceGoogleComputeInstanceGroup(dataSourceName string) res
 
 		for k, dsAttr := range dsInstancesValues {
 			rsAttr := rsInstancesValues[k]
-			if !compareSelfLinkOrResourceName("", dsAttr, rsAttr, nil) && dsAttr != rsAttr {
+			if !tpgresource.CompareSelfLinkOrResourceName("", dsAttr, rsAttr, nil) && dsAttr != rsAttr {
 				return fmt.Errorf("instance expected value %s did not match real value %s. expected list of instances %v, received %v", rsAttr, dsAttr, rsInstancesValues, dsInstancesValues)
 			}
 		}

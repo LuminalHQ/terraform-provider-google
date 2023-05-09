@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_router_nat"
 description: |-
   A NAT service created in a router.
 ---
@@ -109,6 +108,69 @@ resource "google_compute_router_nat" "nat_manual" {
   }
 }
 ```
+## Example Usage - Router Nat Rules
+
+
+```hcl
+resource "google_compute_network" "net" {
+  name                    = "my-network"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "subnet" {
+  name          = "my-subnetwork"
+  network       = google_compute_network.net.id
+  ip_cidr_range = "10.0.0.0/16"
+  region        = "us-central1"
+}
+
+resource "google_compute_router" "router" {
+  name    = "my-router"
+  region  = google_compute_subnetwork.subnet.region
+  network = google_compute_network.net.id
+}
+
+resource "google_compute_address" "addr1" {
+  name   = "nat-address1"
+  region = google_compute_subnetwork.subnet.region
+}
+
+resource "google_compute_address" "addr2" {
+  name   = "nat-address2"
+  region = google_compute_subnetwork.subnet.region
+}
+
+resource "google_compute_address" "addr3" {
+  name   = "nat-address3"
+  region = google_compute_subnetwork.subnet.region
+}
+
+resource "google_compute_router_nat" "nat_rules" {
+  name   = "my-router-nat"
+  router = google_compute_router.router.name
+  region = google_compute_router.router.region
+
+  nat_ip_allocate_option = "MANUAL_ONLY"
+  nat_ips                = [google_compute_address.addr1.self_link]
+
+  source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+  subnetwork {
+    name                    = google_compute_subnetwork.subnet.id
+    source_ip_ranges_to_nat = ["ALL_IP_RANGES"]
+  }
+
+  rules {
+    rule_number = 100
+    description = "nat rules example"
+    match       = "inIpRange(destination.ip, '1.1.0.0/16') || inIpRange(destination.ip, '2.2.0.0/16')"
+    action {
+      source_nat_active_ips = [google_compute_address.addr2.self_link, google_compute_address.addr3.self_link]
+    }
+  }
+
+  enable_endpoint_independent_mapping = false
+}
+```
 
 ## Argument Reference
 
@@ -125,7 +187,7 @@ The following arguments are supported:
   How external IPs should be allocated for this NAT. Valid values are
   `AUTO_ONLY` for only allowing NAT IPs allocated by Google Cloud
   Platform, or `MANUAL_ONLY` for only user-allocated NAT IP addresses.
-  Possible values are `MANUAL_ONLY` and `AUTO_ONLY`.
+  Possible values are: `MANUAL_ONLY`, `AUTO_ONLY`.
 
 * `source_subnetwork_ip_ranges_to_nat` -
   (Required)
@@ -139,7 +201,7 @@ The following arguments are supported:
   contains ALL_SUBNETWORKS_ALL_IP_RANGES or
   ALL_SUBNETWORKS_ALL_PRIMARY_IP_RANGES, then there should not be any
   other RouterNat section in any Router for this network in this region.
-  Possible values are `ALL_SUBNETWORKS_ALL_IP_RANGES`, `ALL_SUBNETWORKS_ALL_PRIMARY_IP_RANGES`, and `LIST_OF_SUBNETWORKS`.
+  Possible values are: `ALL_SUBNETWORKS_ALL_IP_RANGES`, `ALL_SUBNETWORKS_ALL_PRIMARY_IP_RANGES`, `LIST_OF_SUBNETWORKS`.
 
 * `router` -
   (Required)
@@ -201,10 +263,20 @@ The following arguments are supported:
   Timeout (in seconds) for TCP transitory connections.
   Defaults to 30s if not set.
 
+* `tcp_time_wait_timeout_sec` -
+  (Optional)
+  Timeout (in seconds) for TCP connections that are in TIME_WAIT state.
+  Defaults to 120s if not set.
+
 * `log_config` -
   (Optional)
   Configuration for logging on NAT
   Structure is [documented below](#nested_log_config).
+
+* `rules` -
+  (Optional)
+  A list of rules associated with this NAT.
+  Structure is [documented below](#nested_rules).
 
 * `enable_endpoint_independent_mapping` -
   (Optional)
@@ -248,7 +320,49 @@ The following arguments are supported:
 * `filter` -
   (Required)
   Specifies the desired filtering of logs on this NAT.
-  Possible values are `ERRORS_ONLY`, `TRANSLATIONS_ONLY`, and `ALL`.
+  Possible values are: `ERRORS_ONLY`, `TRANSLATIONS_ONLY`, `ALL`.
+
+<a name="nested_rules"></a>The `rules` block supports:
+
+* `rule_number` -
+  (Required)
+  An integer uniquely identifying a rule in the list.
+  The rule number must be a positive value between 0 and 65000, and must be unique among rules within a NAT.
+
+* `description` -
+  (Optional)
+  An optional description of this rule.
+
+* `match` -
+  (Required)
+  CEL expression that specifies the match condition that egress traffic from a VM is evaluated against.
+  If it evaluates to true, the corresponding action is enforced.
+  The following examples are valid match expressions for public NAT:
+  "inIpRange(destination.ip, '1.1.0.0/16') || inIpRange(destination.ip, '2.2.0.0/16')"
+  "destination.ip == '1.1.0.1' || destination.ip == '8.8.8.8'"
+  The following example is a valid match expression for private NAT:
+  "nexthop.hub == 'https://networkconnectivity.googleapis.com/v1alpha1/projects/my-project/global/hub/hub-1'"
+
+* `action` -
+  (Optional)
+  The action to be enforced for traffic that matches this rule.
+  Structure is [documented below](#nested_action).
+
+
+<a name="nested_action"></a>The `action` block supports:
+
+* `source_nat_active_ips` -
+  (Optional)
+  A list of URLs of the IP resources used for this NAT rule.
+  These IP addresses must be valid static external IP addresses assigned to the project.
+  This field is used for public NAT.
+
+* `source_nat_drain_ips` -
+  (Optional)
+  A list of URLs of the IP resources to be drained.
+  These IPs must be valid static external IPs that have been assigned to the NAT.
+  These IPs should be used for updating/patching a NAT rule only.
+  This field is used for public NAT.
 
 ## Attributes Reference
 
@@ -260,7 +374,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -280,4 +394,4 @@ $ terraform import google_compute_router_nat.default {{router}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

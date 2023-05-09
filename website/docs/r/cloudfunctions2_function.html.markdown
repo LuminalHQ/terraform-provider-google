@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Functions (2nd gen)"
-page_title: "Google: google_cloudfunctions2_function"
 description: |-
   A Cloud Function that contains user computation executed in response to an event.
 ---
@@ -86,7 +85,7 @@ locals {
 }
 
 resource "google_service_account" "account" {
-  account_id = "sa"
+  account_id = "gcf-sa"
   display_name = "Test Service Account"
 }
 
@@ -107,7 +106,7 @@ resource "google_storage_bucket_object" "object" {
 }
  
 resource "google_cloudfunctions2_function" "function" {
-  name = "function"
+  name = "gcf-function"
   location = "us-central1"
   description = "a new function"
  
@@ -128,8 +127,10 @@ resource "google_cloudfunctions2_function" "function" {
   service_config {
     max_instance_count  = 3
     min_instance_count = 1
-    available_memory    = "256M"
+    available_memory    = "4Gi"
     timeout_seconds     = 60
+    max_instance_request_concurrency = 80
+    available_cpu = "4"
     environment_variables = {
         SERVICE_CONFIG_TEST = "config_test"
     }
@@ -183,7 +184,7 @@ resource "google_project_iam_member" "gcs-pubsub-publishing" {
 }
 
 resource "google_service_account" "account" {
-  account_id   = "sa"
+  account_id   = "gcf-sa"
   display_name = "Test Service Account - used for both the cloud function and eventarc trigger in the test"
 }
 
@@ -192,18 +193,21 @@ resource "google_project_iam_member" "invoking" {
   project = "my-project-name"
   role    = "roles/run.invoker"
   member  = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.gcs-pubsub-publishing]
 }
 
 resource "google_project_iam_member" "event-receiving" {
   project = "my-project-name"
   role    = "roles/eventarc.eventReceiver"
   member  = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.invoking]
 }
 
 resource "google_project_iam_member" "artifactregistry-reader" {
   project = "my-project-name"
   role     = "roles/artifactregistry.reader"
   member   = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.event-receiving]
 }
 
 resource "google_cloudfunctions2_function" "function" {
@@ -211,7 +215,7 @@ resource "google_cloudfunctions2_function" "function" {
     google_project_iam_member.event-receiving,
     google_project_iam_member.artifactregistry-reader,
   ]
-  name = "function"
+  name = "gcf-function"
   location = "us-central1"
   description = "a new function"
  
@@ -302,12 +306,14 @@ resource "google_project_iam_member" "event-receiving" {
   project = "my-project-name"
   role    = "roles/eventarc.eventReceiver"
   member  = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.invoking]
 }
 
 resource "google_project_iam_member" "artifactregistry-reader" {
   project = "my-project-name"
   role     = "roles/artifactregistry.reader"
   member   = "serviceAccount:${google_service_account.account.email}"
+  depends_on = [google_project_iam_member.event-receiving]
 }
 
 resource "google_cloudfunctions2_function" "function" {
@@ -368,6 +374,199 @@ resource "google_cloudfunctions2_function" "function" {
 }
 # [END functions_v2_basic_auditlogs]
 ```
+## Example Usage - Cloudfunctions2 Secret Env
+
+
+```hcl
+locals {
+  project = "my-project-name" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-gcf-source"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+ 
+resource "google_storage_bucket_object" "object" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "function-source.zip"  # Add path to the zipped function source code
+}
+ 
+resource "google_cloudfunctions2_function" "function" {
+  name = "function-secret"
+  location = "us-central1"
+  description = "a new function"
+ 
+  build_config {
+    runtime = "nodejs16"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+  }
+ 
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+
+    secret_environment_variables {
+      key        = "TEST"
+      project_id = local.project
+      secret     = google_secret_manager_secret.secret.secret_id
+      version    = "latest"
+    }
+  }
+  depends_on = [google_secret_manager_secret_version.secret]
+}
+
+resource "google_secret_manager_secret" "secret" {
+  secret_id = "secret"
+
+  replication {
+    user_managed {
+      replicas {
+        location = "us-central1"
+      }
+    }
+  }  
+}
+
+resource "google_secret_manager_secret_version" "secret" {
+  secret = google_secret_manager_secret.secret.name
+
+  secret_data = "secret"
+  enabled = true
+}
+```
+## Example Usage - Cloudfunctions2 Secret Volume
+
+
+```hcl
+locals {
+  project = "my-project-name" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-gcf-source"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+ 
+resource "google_storage_bucket_object" "object" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "function-source.zip"  # Add path to the zipped function source code
+}
+ 
+resource "google_cloudfunctions2_function" "function" {
+  name = "function-secret"
+  location = "us-central1"
+  description = "a new function"
+ 
+  build_config {
+    runtime = "nodejs16"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+  }
+ 
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+
+    secret_volumes {
+      mount_path = "/etc/secrets"
+      project_id = local.project
+      secret     = google_secret_manager_secret.secret.secret_id
+    }
+  }
+  depends_on = [google_secret_manager_secret_version.secret]
+}
+
+resource "google_secret_manager_secret" "secret" {
+  secret_id = "secret"
+
+  replication {
+    user_managed {
+      replicas {
+        location = "us-central1"
+      }
+    }
+  }  
+}
+
+resource "google_secret_manager_secret_version" "secret" {
+  secret = google_secret_manager_secret.secret.name
+
+  secret_data = "secret"
+  enabled = true
+}
+```
+## Example Usage - Cloudfunctions2 Private Workerpool
+
+
+```hcl
+locals {
+  project = "my-project-name" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-gcf-source"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+ 
+resource "google_storage_bucket_object" "object" {
+  name   = "function-source.zip"
+  bucket = google_storage_bucket.bucket.name
+  source = "function-source.zip"  # Add path to the zipped function source code
+}
+
+resource "google_cloudbuild_worker_pool" "pool" {
+  name = "workerpool"
+  location = "us-central1"
+  worker_config {
+    disk_size_gb = 100
+    machine_type = "e2-standard-8"
+    no_external_ip = false
+  }
+}
+ 
+resource "google_cloudfunctions2_function" "function" {
+  name = "function-workerpool"
+  location = "us-central1"
+  description = "a new function"
+ 
+  build_config {
+    runtime = "nodejs16"
+    entry_point = "helloHttp"  # Set the entry point 
+    source {
+      storage_source {
+        bucket = google_storage_bucket.bucket.name
+        object = google_storage_bucket_object.object.name
+      }
+    }
+    worker_pool = google_cloudbuild_worker_pool.pool.id
+  }
+ 
+  service_config {
+    max_instance_count  = 1
+    available_memory    = "256M"
+    timeout_seconds     = 60
+  }
+}
+```
 
 ## Argument Reference
 
@@ -419,6 +618,7 @@ The following arguments are supported:
 <a name="nested_build_config"></a>The `build_config` block supports:
 
 * `build` -
+  (Output)
   The Cloud Build name of the latest successful
   deployment of the function.
 
@@ -478,14 +678,14 @@ The following arguments are supported:
 
 * `generation` -
   (Optional)
-  Google Cloud Storage generation for the object. If the generation 
+  Google Cloud Storage generation for the object. If the generation
   is omitted, the latest generation will be used.
 
 <a name="nested_repo_source"></a>The `repo_source` block supports:
 
 * `project_id` -
   (Optional)
-  ID of the project that owns the Cloud Source Repository. If omitted, the 
+  ID of the project that owns the Cloud Source Repository. If omitted, the
   project ID requesting the build is assumed.
 
 * `repo_name` -
@@ -510,7 +710,7 @@ The following arguments are supported:
 
 * `invert_regex` -
   (Optional)
-  Only trigger a build if the revision regex does 
+  Only trigger a build if the revision regex does
   NOT match the revision regex.
 
 <a name="nested_service_config"></a>The `service_config` block supports:
@@ -530,6 +730,14 @@ The following arguments are supported:
   The amount of memory available for a function.
   Defaults to 256M. Supported units are k, M, G, Mi, Gi. If no unit is
   supplied the value is interpreted as bytes.
+
+* `max_instance_request_concurrency` -
+  (Optional)
+  Sets the maximum number of concurrent requests that each instance can receive. Defaults to 1.
+
+* `available_cpu` -
+  (Optional)
+  The number of CPUs used in a single container instance. Default value is calculated from available memory.
 
 * `environment_variables` -
   (Optional)
@@ -552,18 +760,20 @@ The following arguments are supported:
 * `vpc_connector_egress_settings` -
   (Optional)
   Available egress settings.
-  Possible values are `VPC_CONNECTOR_EGRESS_SETTINGS_UNSPECIFIED`, `PRIVATE_RANGES_ONLY`, and `ALL_TRAFFIC`.
+  Possible values are: `VPC_CONNECTOR_EGRESS_SETTINGS_UNSPECIFIED`, `PRIVATE_RANGES_ONLY`, `ALL_TRAFFIC`.
 
 * `ingress_settings` -
   (Optional)
   Available ingress settings. Defaults to "ALLOW_ALL" if unspecified.
   Default value is `ALLOW_ALL`.
-  Possible values are `ALLOW_ALL`, `ALLOW_INTERNAL_ONLY`, and `ALLOW_INTERNAL_AND_GCLB`.
+  Possible values are: `ALLOW_ALL`, `ALLOW_INTERNAL_ONLY`, `ALLOW_INTERNAL_AND_GCLB`.
 
 * `uri` -
+  (Output)
   URI of the Service deployed.
 
 * `gcf_uri` -
+  (Output)
   URIs of the Service deployed
 
 * `service_account_email` -
@@ -574,10 +784,70 @@ The following arguments are supported:
   (Optional)
   Whether 100% of traffic is routed to the latest revision. Defaults to true.
 
+* `secret_environment_variables` -
+  (Optional)
+  Secret environment variables configuration.
+  Structure is [documented below](#nested_secret_environment_variables).
+
+* `secret_volumes` -
+  (Optional)
+  Secret volumes configuration.
+  Structure is [documented below](#nested_secret_volumes).
+
+
+<a name="nested_secret_environment_variables"></a>The `secret_environment_variables` block supports:
+
+* `key` -
+  (Required)
+  Name of the environment variable.
+
+* `project_id` -
+  (Required)
+  Project identifier (preferrably project number but can also be the project ID) of the project that contains the secret. If not set, it will be populated with the function's project assuming that the secret exists in the same project as of the function.
+
+* `secret` -
+  (Required)
+  Name of the secret in secret manager (not the full resource name).
+
+* `version` -
+  (Required)
+  Version of the secret (version number or the string 'latest'). It is recommended to use a numeric version for secret environment variables as any updates to the secret value is not reflected until new instances start.
+
+<a name="nested_secret_volumes"></a>The `secret_volumes` block supports:
+
+* `mount_path` -
+  (Required)
+  The path within the container to mount the secret volume. For example, setting the mountPath as /etc/secrets would mount the secret value files under the /etc/secrets directory. This directory will also be completely shadowed and unavailable to mount any other secrets. Recommended mount path: /etc/secrets
+
+* `project_id` -
+  (Required)
+  Project identifier (preferrably project number but can also be the project ID) of the project that contains the secret. If not set, it will be populated with the function's project assuming that the secret exists in the same project as of the function.
+
+* `secret` -
+  (Required)
+  Name of the secret in secret manager (not the full resource name).
+
+* `versions` -
+  (Optional)
+  List of secret versions to mount for this secret. If empty, the latest version of the secret will be made available in a file named after the secret under the mount point.'
+  Structure is [documented below](#nested_versions).
+
+
+<a name="nested_versions"></a>The `versions` block supports:
+
+* `version` -
+  (Required)
+  Version of the secret (version number or the string 'latest'). It is preferable to use latest version with secret volumes as secret value changes are reflected immediately.
+
+* `path` -
+  (Required)
+  Relative path of the file under the mount path where the secret value for this version will be fetched and made available. For example, setting the mountPath as '/etc/secrets' and path as secret_foo would mount the secret value file at /etc/secrets/secret_foo.
+
 <a name="nested_event_trigger"></a>The `event_trigger` block supports:
 
 * `trigger` -
-  The resource name of the Eventarc trigger.
+  (Output)
+  Output only. The resource name of the Eventarc trigger.
 
 * `trigger_region` -
   (Optional)
@@ -608,7 +878,7 @@ The following arguments are supported:
   (Optional)
   Describes the retry policy in case of function's execution failure.
   Retried execution is charged as any other execution.
-  Possible values are `RETRY_POLICY_UNSPECIFIED`, `RETRY_POLICY_DO_NOT_RETRY`, and `RETRY_POLICY_RETRY`.
+  Possible values are: `RETRY_POLICY_UNSPECIFIED`, `RETRY_POLICY_DO_NOT_RETRY`, `RETRY_POLICY_RETRY`.
 
 
 <a name="nested_event_filters"></a>The `event_filters` block supports:
@@ -651,7 +921,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 60 minutes.
 - `update` - Default is 60 minutes.
@@ -670,4 +940,4 @@ $ terraform import google_cloudfunctions2_function.default {{location}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

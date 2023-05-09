@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Identity"
-page_title: "Google: google_cloud_identity_group"
 description: |-
   A Cloud Identity resource representing a Group.
 ---
@@ -30,9 +29,9 @@ To get more information about Group, see:
     * [Official Documentation](https://cloud.google.com/identity/docs/how-to/setup)
 
 ~> **Warning:** If you are using User ADCs (Application Default Credentials) with this resource,
-you must specify a `billing_project` and set `user_project_override` to true 
-in the provider configuration. Otherwise the Cloud Identity API will return a 403 error. 
-Your account must have the `serviceusage.services.use` permission on the 
+you must specify a `billing_project` and set `user_project_override` to true
+in the provider configuration. Otherwise the Cloud Identity API will return a 403 error.
+Your account must have the `serviceusage.services.use` permission on the
 `billing_project` you defined.
 
 ## Example Usage - Cloud Identity Groups Basic
@@ -74,10 +73,11 @@ The following arguments are supported:
 
 * `labels` -
   (Required)
-  The labels that apply to the Group.
-  Must not contain more than one entry. Must contain the entry
-  'cloudidentity.googleapis.com/groups.discussion_forum': '' if the Group is a Google Group or
-  'system/groups/external': '' if the Group is an external-identity-mapped group.
+  One or more label entries that apply to the Group. Currently supported labels contain a key with an empty value.
+  Google Groups are the default type of group and have a label with a key of cloudidentity.googleapis.com/groups.discussion_forum and an empty value.
+  Existing Google Groups can have an additional label with a key of cloudidentity.googleapis.com/groups.security and an empty value added to them. This is an immutable change and the security label cannot be removed once added.
+  Dynamic groups have a label with a key of cloudidentity.googleapis.com/groups.dynamic.
+  Identity-mapped groups for Cloud Search have a label with a key of system/groups/external and an empty value.
 
 
 <a name="nested_group_key"></a>The `group_key` block supports:
@@ -119,7 +119,7 @@ The following arguments are supported:
   [API reference](https://cloud.google.com/identity/docs/reference/rest/v1beta1/groups/create#initialgroupconfig)
   for possible values.
   Default value is `EMPTY`.
-  Possible values are `INITIAL_GROUP_CONFIG_UNSPECIFIED`, `WITH_INITIAL_OWNER`, and `EMPTY`.
+  Possible values are: `INITIAL_GROUP_CONFIG_UNSPECIFIED`, `WITH_INITIAL_OWNER`, `EMPTY`.
 
 
 ## Attributes Reference
@@ -142,7 +142,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -10,14 +11,14 @@ import (
 func TestAccComputeBackendService_basic(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	extraCheckName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	extraCheckName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_basic(serviceName, checkName),
@@ -43,14 +44,14 @@ func TestAccComputeBackendService_basic(t *testing.T) {
 func TestAccComputeBackendService_withBackend(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	igName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	itName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	igName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	itName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withBackend(
@@ -75,14 +76,14 @@ func TestAccComputeBackendService_withBackend(t *testing.T) {
 }
 
 func TestAccComputeBackendService_withBackendAndMaxUtilization(t *testing.T) {
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	igName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	itName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	igName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	itName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withBackend(
@@ -113,14 +114,14 @@ func TestAccComputeBackendService_withBackendAndMaxUtilization(t *testing.T) {
 }
 
 func TestAccComputeBackendService_withBackendAndIAP(t *testing.T) {
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	igName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	itName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	igName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	itName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withBackendAndIAP(
@@ -148,13 +149,13 @@ func TestAccComputeBackendService_withBackendAndIAP(t *testing.T) {
 func TestAccComputeBackendService_updatePreservesOptionalParameters(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withSessionAffinity(
@@ -181,13 +182,13 @@ func TestAccComputeBackendService_updatePreservesOptionalParameters(t *testing.T
 func TestAccComputeBackendService_withConnectionDraining(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withConnectionDraining(serviceName, checkName, 10),
@@ -204,13 +205,13 @@ func TestAccComputeBackendService_withConnectionDraining(t *testing.T) {
 func TestAccComputeBackendService_withConnectionDrainingAndUpdate(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withConnectionDraining(serviceName, checkName, 10),
@@ -235,13 +236,13 @@ func TestAccComputeBackendService_withConnectionDrainingAndUpdate(t *testing.T) 
 func TestAccComputeBackendService_withHttpsHealthCheck(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withHttpsHealthCheck(serviceName, checkName),
@@ -258,17 +259,18 @@ func TestAccComputeBackendService_withHttpsHealthCheck(t *testing.T) {
 func TestAccComputeBackendService_withSecurityPolicy(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	polName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	polName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	edgePolName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccComputeBackendService_withSecurityPolicy(serviceName, checkName, polName, "google_compute_security_policy.policy.self_link"),
+				Config: testAccComputeBackendService_withSecurityPolicy(serviceName, checkName, polName, edgePolName, "google_compute_security_policy.policy.self_link", "google_compute_security_policy.edgePolicy.self_link"),
 			},
 			{
 				ResourceName:      "google_compute_backend_service.foobar",
@@ -276,7 +278,7 @@ func TestAccComputeBackendService_withSecurityPolicy(t *testing.T) {
 				ImportStateVerify: true,
 			},
 			{
-				Config: testAccComputeBackendService_withSecurityPolicy(serviceName, checkName, polName, "\"\""),
+				Config: testAccComputeBackendService_withSecurityPolicy(serviceName, checkName, polName, edgePolName, "\"\"", "\"\""),
 			},
 			{
 				ResourceName:      "google_compute_backend_service.foobar",
@@ -290,13 +292,13 @@ func TestAccComputeBackendService_withSecurityPolicy(t *testing.T) {
 func TestAccComputeBackendService_withCDNEnabled(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withCDNEnabled(
@@ -314,13 +316,13 @@ func TestAccComputeBackendService_withCDNEnabled(t *testing.T) {
 func TestAccComputeBackendService_withSessionAffinity(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withSessionAffinity(
@@ -347,13 +349,13 @@ func TestAccComputeBackendService_withSessionAffinity(t *testing.T) {
 func TestAccComputeBackendService_withAffinityCookieTtlSec(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withAffinityCookieTtlSec(
@@ -371,15 +373,15 @@ func TestAccComputeBackendService_withAffinityCookieTtlSec(t *testing.T) {
 func TestAccComputeBackendService_withMaxConnections(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	igName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	itName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	igName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	itName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withMaxConnections(
@@ -406,15 +408,15 @@ func TestAccComputeBackendService_withMaxConnections(t *testing.T) {
 func TestAccComputeBackendService_withMaxConnectionsPerInstance(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	igName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	itName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	igName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	itName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withMaxConnectionsPerInstance(
@@ -441,17 +443,17 @@ func TestAccComputeBackendService_withMaxConnectionsPerInstance(t *testing.T) {
 func TestAccComputeBackendService_withMaxRatePerEndpoint(t *testing.T) {
 	t.Parallel()
 
-	randSuffix := randString(t, 10)
+	randSuffix := RandString(t, 10)
 	service := fmt.Sprintf("tf-test-%s", randSuffix)
 	instance := fmt.Sprintf("tf-test-%s", randSuffix)
 	neg := fmt.Sprintf("tf-test-%s", randSuffix)
 	network := fmt.Sprintf("tf-test-%s", randSuffix)
 	check := fmt.Sprintf("tf-test-%s", randSuffix)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withMaxRatePerEndpoint(
@@ -478,17 +480,17 @@ func TestAccComputeBackendService_withMaxRatePerEndpoint(t *testing.T) {
 func TestAccComputeBackendService_withMaxConnectionsPerEndpoint(t *testing.T) {
 	t.Parallel()
 
-	randSuffix := randString(t, 10)
+	randSuffix := RandString(t, 10)
 	service := fmt.Sprintf("tf-test-%s", randSuffix)
 	instance := fmt.Sprintf("tf-test-%s", randSuffix)
 	neg := fmt.Sprintf("tf-test-%s", randSuffix)
 	network := fmt.Sprintf("tf-test-%s", randSuffix)
 	check := fmt.Sprintf("tf-test-%s", randSuffix)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withMaxConnectionsPerEndpoint(
@@ -515,13 +517,13 @@ func TestAccComputeBackendService_withMaxConnectionsPerEndpoint(t *testing.T) {
 func TestAccComputeBackendService_withCustomHeaders(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withCustomHeaders(serviceName, checkName),
@@ -545,19 +547,19 @@ func TestAccComputeBackendService_withCustomHeaders(t *testing.T) {
 
 func TestAccComputeBackendService_internalLoadBalancing(t *testing.T) {
 	// Instance template uses UniqueId in some cases
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	fr := fmt.Sprintf("forwardrule-test-%s", randString(t, 10))
-	proxy := fmt.Sprintf("forwardrule-test-%s", randString(t, 10))
-	backend := fmt.Sprintf("forwardrule-test-%s", randString(t, 10))
-	hc := fmt.Sprintf("forwardrule-test-%s", randString(t, 10))
-	urlmap := fmt.Sprintf("forwardrule-test-%s", randString(t, 10))
+	fr := fmt.Sprintf("forwardrule-test-%s", RandString(t, 10))
+	proxy := fmt.Sprintf("forwardrule-test-%s", RandString(t, 10))
+	backend := fmt.Sprintf("forwardrule-test-%s", RandString(t, 10))
+	hc := fmt.Sprintf("forwardrule-test-%s", RandString(t, 10))
+	urlmap := fmt.Sprintf("forwardrule-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_internalLoadBalancing(fr, proxy, backend, hc, urlmap),
@@ -574,13 +576,13 @@ func TestAccComputeBackendService_internalLoadBalancing(t *testing.T) {
 func TestAccComputeBackendService_withLogConfig(t *testing.T) {
 	t.Parallel()
 
-	serviceName := fmt.Sprintf("tf-test-%s", randString(t, 10))
-	checkName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	serviceName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_withLogConfig(serviceName, checkName, 0.7, true),
@@ -629,13 +631,13 @@ func TestAccComputeBackendService_withLogConfig(t *testing.T) {
 func TestAccComputeBackendService_trafficDirectorUpdateBasic(t *testing.T) {
 	t.Parallel()
 
-	backendName := fmt.Sprintf("foo-%s", randString(t, 10))
-	checkName := fmt.Sprintf("bar-%s", randString(t, 10))
+	backendName := fmt.Sprintf("foo-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("bar-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeBackendServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeBackendService_trafficDirectorBasic(backendName, checkName),
@@ -647,6 +649,76 @@ func TestAccComputeBackendService_trafficDirectorUpdateBasic(t *testing.T) {
 			},
 			{
 				Config: testAccComputeBackendService_trafficDirectorUpdateBasic(backendName, checkName),
+			},
+			{
+				ResourceName:      "google_compute_backend_service.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccComputeBackendService_withCompressionMode(t *testing.T) {
+	t.Parallel()
+
+	backendName := fmt.Sprintf("foo-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("bar-%s", RandString(t, 10))
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeBackendService_withCompressionMode(backendName, checkName, "DISABLED"),
+			},
+			{
+				ResourceName:      "google_compute_backend_service.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeBackendService_withCompressionMode(backendName, checkName, "AUTOMATIC"),
+			},
+			{
+				ResourceName:      "google_compute_backend_service.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeBackendService_basic(backendName, checkName),
+			},
+			{
+				ResourceName:      "google_compute_backend_service.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccComputeBackendService_trafficDirectorUpdateLbPolicies(t *testing.T) {
+	t.Parallel()
+
+	backendName := fmt.Sprintf("foo-%s", RandString(t, 10))
+	checkName := fmt.Sprintf("bar-%s", RandString(t, 10))
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeBackendServiceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeBackendService_trafficDirectorLbPolicies(backendName, checkName),
+			},
+			{
+				ResourceName:      "google_compute_backend_service.foobar",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccComputeBackendService_trafficDirectorUpdateLbPolicies(backendName, checkName),
 			},
 			{
 				ResourceName:      "google_compute_backend_service.foobar",
@@ -697,6 +769,80 @@ resource "google_compute_backend_service" "foobar" {
   health_checks         = [google_compute_health_check.health_check.self_link]
   load_balancing_scheme = "INTERNAL_SELF_MANAGED"
   locality_lb_policy    = "RANDOM"
+  circuit_breakers {
+    max_connections = 10
+  }
+  outlier_detection {
+    consecutive_errors = 2
+  }
+}
+
+resource "google_compute_health_check" "health_check" {
+  name = "%s"
+  http_health_check {
+    port = 80
+  }
+}
+`, serviceName, checkName)
+}
+
+func testAccComputeBackendService_trafficDirectorLbPolicies(serviceName, checkName string) string {
+	return fmt.Sprintf(`
+resource "google_compute_backend_service" "foobar" {
+  name                   = "%s"
+  health_checks          = [google_compute_health_check.health_check.self_link]
+  load_balancing_scheme  = "INTERNAL_SELF_MANAGED"
+  locality_lb_policies {
+    custom_policy {
+      name = "myorg.CustomPolicy"
+      data = "{\"foo\": \"bar\"}"
+    }
+  }
+  locality_lb_policies {
+    policy {
+      name = "ROUND_ROBIN"
+    }
+  }
+  circuit_breakers {
+    max_connections = 10
+  }
+  outlier_detection {
+    consecutive_errors = 2
+  }
+}
+
+resource "google_compute_health_check" "health_check" {
+  name = "%s"
+  http_health_check {
+    port = 80
+  }
+}
+`, serviceName, checkName)
+}
+
+func testAccComputeBackendService_trafficDirectorUpdateLbPolicies(serviceName, checkName string) string {
+	return fmt.Sprintf(`
+resource "google_compute_backend_service" "foobar" {
+  name                   = "%s"
+  health_checks          = [google_compute_health_check.health_check.self_link]
+  load_balancing_scheme  = "INTERNAL_SELF_MANAGED"
+  locality_lb_policies {
+    custom_policy {
+      name = "myorg.AnotherCustomPolicy"
+      data = "{\"foo\": \"bar\"}"
+    }
+  }
+  locality_lb_policies {
+    custom_policy {
+      name = "myorg.CustomPolicy"
+      data = "{\"foo\": \"bar\"}"
+    }
+  }
+  locality_lb_policies {
+    policy {
+      name = "ROUND_ROBIN"
+    }
+  }
   circuit_breakers {
     max_connections = 10
   }
@@ -1018,12 +1164,13 @@ resource "google_compute_https_health_check" "zero" {
 `, serviceName, checkName)
 }
 
-func testAccComputeBackendService_withSecurityPolicy(serviceName, checkName, polName, polLink string) string {
+func testAccComputeBackendService_withSecurityPolicy(serviceName, checkName, polName, edgePolName, polLink string, edgePolLink string) string {
 	return fmt.Sprintf(`
 resource "google_compute_backend_service" "foobar" {
   name            = "%s"
   health_checks   = [google_compute_http_health_check.zero.self_link]
   security_policy = %s
+  edge_security_policy = %s
 }
 
 resource "google_compute_http_health_check" "zero" {
@@ -1037,7 +1184,13 @@ resource "google_compute_security_policy" "policy" {
   name        = "%s"
   description = "basic security policy"
 }
-`, serviceName, polLink, checkName, polName)
+
+resource "google_compute_security_policy" "edgePolicy" {
+  name        = "%s"
+  description = "edge security policy"
+  type = "CLOUD_ARMOR_EDGE"
+}
+`, serviceName, polLink, edgePolLink, checkName, polName, edgePolName)
 }
 
 func testAccComputeBackendService_withMaxConnections(
@@ -1470,4 +1623,22 @@ resource "google_compute_http_health_check" "zero" {
   timeout_sec        = 1
 }
 `, serviceName, enabled, checkName)
+}
+
+func testAccComputeBackendService_withCompressionMode(serviceName, checkName, compressionMode string) string {
+	return fmt.Sprintf(`
+resource "google_compute_backend_service" "foobar" {
+  name             = "%s"
+  health_checks    = [google_compute_http_health_check.zero.self_link]
+  enable_cdn       = true
+  compression_mode = "%s"
+}
+
+resource "google_compute_http_health_check" "zero" {
+  name               = "%s"
+  request_path       = "/"
+  check_interval_sec = 1
+  timeout_sec        = 1
+}
+`, serviceName, compressionMode, checkName)
 }

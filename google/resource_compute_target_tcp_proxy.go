@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeTargetTcpProxy() *schema.Resource {
+func ResourceComputeTargetTcpProxy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeTargetTcpProxyCreate,
 		Read:   resourceComputeTargetTcpProxyRead,
@@ -76,7 +80,7 @@ this target proxy has a loadBalancingScheme set to INTERNAL_SELF_MANAGED.`,
 			"proxy_header": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"NONE", "PROXY_V1", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NONE", "PROXY_V1", ""}),
 				Description: `Specifies the type of proxy header to append before sending data to
 the backend. Default value: "NONE" Possible values: ["NONE", "PROXY_V1"]`,
 				Default: "NONE",
@@ -107,8 +111,8 @@ the backend. Default value: "NONE" Possible values: ["NONE", "PROXY_V1"]`,
 }
 
 func resourceComputeTargetTcpProxyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -145,7 +149,7 @@ func resourceComputeTargetTcpProxyCreate(d *schema.ResourceData, meta interface{
 		obj["proxyBind"] = proxyBindProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies")
 	if err != nil {
 		return err
 	}
@@ -164,19 +168,19 @@ func resourceComputeTargetTcpProxyCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating TargetTcpProxy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/targetTcpProxies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/targetTcpProxies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating TargetTcpProxy", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -192,13 +196,13 @@ func resourceComputeTargetTcpProxyCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetTcpProxyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -216,9 +220,9 @@ func resourceComputeTargetTcpProxyRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeTargetTcpProxy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeTargetTcpProxy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -246,7 +250,7 @@ func resourceComputeTargetTcpProxyRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("proxy_bind", flattenComputeTargetTcpProxyProxyBind(res["proxyBind"], d, config)); err != nil {
 		return fmt.Errorf("Error reading TargetTcpProxy: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading TargetTcpProxy: %s", err)
 	}
 
@@ -254,8 +258,8 @@ func resourceComputeTargetTcpProxyRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeTargetTcpProxyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -280,7 +284,7 @@ func resourceComputeTargetTcpProxyUpdate(d *schema.ResourceData, meta interface{
 			obj["proxyHeader"] = proxyHeaderProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}/setProxyHeader")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}/setProxyHeader")
 		if err != nil {
 			return err
 		}
@@ -290,14 +294,14 @@ func resourceComputeTargetTcpProxyUpdate(d *schema.ResourceData, meta interface{
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating TargetTcpProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating TargetTcpProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating TargetTcpProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -314,7 +318,7 @@ func resourceComputeTargetTcpProxyUpdate(d *schema.ResourceData, meta interface{
 			obj["service"] = serviceProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}/setBackendService")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}/setBackendService")
 		if err != nil {
 			return err
 		}
@@ -324,14 +328,14 @@ func resourceComputeTargetTcpProxyUpdate(d *schema.ResourceData, meta interface{
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating TargetTcpProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating TargetTcpProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating TargetTcpProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -345,8 +349,8 @@ func resourceComputeTargetTcpProxyUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetTcpProxyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -359,7 +363,7 @@ func resourceComputeTargetTcpProxyDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetTcpProxies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -372,12 +376,12 @@ func resourceComputeTargetTcpProxyDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "TargetTcpProxy")
+		return transport_tpg.HandleNotFoundError(err, d, "TargetTcpProxy")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting TargetTcpProxy", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -390,8 +394,8 @@ func resourceComputeTargetTcpProxyDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetTcpProxyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/targetTcpProxies/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -400,7 +404,7 @@ func resourceComputeTargetTcpProxyImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/targetTcpProxies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/targetTcpProxies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -409,18 +413,18 @@ func resourceComputeTargetTcpProxyImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeTargetTcpProxyCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetTcpProxyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetTcpProxyProxyId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyProxyId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -434,38 +438,38 @@ func flattenComputeTargetTcpProxyProxyId(v interface{}, d *schema.ResourceData, 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeTargetTcpProxyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetTcpProxyProxyHeader(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyProxyHeader(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetTcpProxyBackendService(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyBackendService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeTargetTcpProxyProxyBind(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetTcpProxyProxyBind(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeTargetTcpProxyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetTcpProxyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetTcpProxyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetTcpProxyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetTcpProxyProxyHeader(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetTcpProxyProxyHeader(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetTcpProxyBackendService(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetTcpProxyBackendService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("backendServices", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for backend_service: %s", err)
@@ -473,6 +477,6 @@ func expandComputeTargetTcpProxyBackendService(v interface{}, d TerraformResourc
 	return f.RelativeLink(), nil
 }
 
-func expandComputeTargetTcpProxyProxyBind(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetTcpProxyProxyBind(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

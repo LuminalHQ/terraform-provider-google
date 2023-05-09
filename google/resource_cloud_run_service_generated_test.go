@@ -21,20 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccCloudRunService_cloudRunServiceBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudRunService_cloudRunServiceBasicExample(context),
@@ -76,13 +79,13 @@ func TestAccCloudRunService_cloudRunServiceSqlExample(t *testing.T) {
 
 	context := map[string]interface{}{
 		"deletion_protection": false,
-		"random_suffix":       randString(t, 10),
+		"random_suffix":       RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudRunService_cloudRunServiceSqlExample(context),
@@ -134,141 +137,18 @@ resource "google_sql_database_instance" "instance" {
 `, context)
 }
 
-func TestAccCloudRunService_cloudRunServiceConfigurationExample(t *testing.T) {
-	t.Parallel()
-
-	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
-	}
-
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccCloudRunService_cloudRunServiceConfigurationExample(context),
-			},
-			{
-				ResourceName:            "google_cloud_run_service.default",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name", "location"},
-			},
-		},
-	})
-}
-
-func testAccCloudRunService_cloudRunServiceConfigurationExample(context map[string]interface{}) string {
-	return Nprintf(`
-# Example configuration of a Cloud Run service
-
-resource "google_cloud_run_service" "default" {
-  name     = "config%{random_suffix}"
-  location = "us-central1"
-
-    template {
-    spec {
-      containers {
-        image = "us-docker.pkg.dev/cloudrun/container/hello"
-
-        # Container "entry-point" command
-        # https://cloud.google.com/run/docs/configuring/containers#configure-entrypoint
-        command = ["/server"]
-
-        # Container "entry-point" args
-        # https://cloud.google.com/run/docs/configuring/containers#configure-entrypoint
-        args = []
-        
-        # [START cloudrun_service_configuration_http2]
-        # Enable HTTP/2
-        # https://cloud.google.com/run/docs/configuring/http2
-        ports {
-          name           = "h2c"
-          container_port = 8080
-        }
-        # [END cloudrun_service_configuration_http2]
-
-                # Environment variables
-        # https://cloud.google.com/run/docs/configuring/environment-variables
-        env {
-          name  = "foo"
-          value = "bar"
-        }
-        env {
-          name  = "baz"
-          value = "quux"
-        }
-        
-                        resources {
-          limits = {
-            # CPU usage limit
-            # https://cloud.google.com/run/docs/configuring/cpu
-            cpu = "1000m" # 1 vCPU
-
-            # Memory usage limit (per container)
-            # https://cloud.google.com/run/docs/configuring/memory-limits
-            memory = "512Mi"
-          }
-        }
-                
-              }
-      
-            # Timeout
-      # https://cloud.google.com/run/docs/configuring/request-timeout
-      timeout_seconds = 300
-      
-            # Maximum concurrent requests
-      # https://cloud.google.com/run/docs/configuring/concurrency
-      container_concurrency = 80
-      
-          }
-    
-                metadata {
-            annotations = {
-
-        # Max instances
-        # https://cloud.google.com/run/docs/configuring/max-instances
-        "autoscaling.knative.dev/maxScale" = 10
-
-        # Min instances
-        # https://cloud.google.com/run/docs/configuring/min-instances
-        "autoscaling.knative.dev/minScale" = 1
-
-        # If true, garbage-collect CPU when once a request finishes
-        # https://cloud.google.com/run/docs/configuring/cpu-allocation
-        "run.googleapis.com/cpu-throttling" = false
-      }
-            
-            # Labels
-      # https://cloud.google.com/run/docs/configuring/labels
-      labels = {
-        foo : "bar"
-        baz : "quux"
-      }
-                }
-              }
-
-  traffic {
-    percent         = 100
-    latest_revision = true
-  }
-}
-`, context)
-}
-
 func TestAccCloudRunService_cloudRunServiceNoauthExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudRunService_cloudRunServiceNoauthExample(context),
@@ -285,7 +165,6 @@ func TestAccCloudRunService_cloudRunServiceNoauthExample(t *testing.T) {
 
 func testAccCloudRunService_cloudRunServiceNoauthExample(context map[string]interface{}) string {
 	return Nprintf(`
-# Example of how to deploy a publicly-accessible Cloud Run application
 
 resource "google_cloud_run_service" "default" {
   name     = "tf-test-cloudrun-srv%{random_suffix}"
@@ -323,14 +202,14 @@ func TestAccCloudRunService_cloudRunServiceMultipleEnvironmentVariablesExample(t
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudRunService_cloudRunServiceMultipleEnvironmentVariablesExample(context),
@@ -392,14 +271,14 @@ func TestAccCloudRunService_cloudRunServiceSecretEnvironmentVariablesExample(t *
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudRunService_cloudRunServiceSecretEnvironmentVariablesExample(context),
@@ -486,14 +365,14 @@ func TestAccCloudRunService_cloudRunServiceSecretVolumesExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccCloudRunService_cloudRunServiceSecretVolumesExample(context),
@@ -583,20 +462,21 @@ resource "google_cloud_run_service" "default" {
 `, context)
 }
 
-func TestAccCloudRunService_cloudRunServiceInterserviceExample(t *testing.T) {
+func TestAccCloudRunService_cloudRunServiceProbesExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCloudRunServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCloudRunService_cloudRunServiceInterserviceExample(context),
+				Config: testAccCloudRunService_cloudRunServiceProbesExample(context),
 			},
 			{
 				ResourceName:            "google_cloud_run_service.default",
@@ -608,255 +488,43 @@ func TestAccCloudRunService_cloudRunServiceInterserviceExample(t *testing.T) {
 	})
 }
 
-func testAccCloudRunService_cloudRunServiceInterserviceExample(context map[string]interface{}) string {
+func testAccCloudRunService_cloudRunServiceProbesExample(context map[string]interface{}) string {
 	return Nprintf(`
-# Example of using a public Cloud Run service to call a private one
-
 resource "google_cloud_run_service" "default" {
-  name     = "tf-test-public-service%{random_suffix}"
+  name     = "tf-test-cloudrun-srv%{random_suffix}"
   location = "us-central1"
 
   template {
     spec {
       containers {
-        # TODO<developer>: replace this with a public service container
-        # (This service can be invoked by anyone on the internet)
         image = "us-docker.pkg.dev/cloudrun/container/hello"
-
-        # Include a reference to the private Cloud Run
-        # service's URL as an environment variable.
-        env {
-          name = "URL"
-          value = google_cloud_run_service.default_private.status[0].url
+        startup_probe {
+          initial_delay_seconds = 0
+          timeout_seconds = 1
+          period_seconds = 3
+          failure_threshold = 1
+          tcp_socket {
+            port = 8080
+          }
+        }
+        liveness_probe {
+          http_get {
+            path = "/"
+          }
         }
       }
-
-      # Give the "public" Cloud Run service
-      # a service account's identity
-      service_account_name = google_service_account.default.email
     }
   }
-}
 
-data "google_iam_policy" "public" {
-  binding {
-    role = "roles/run.invoker"
-    members = [
-      "allUsers",
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+
+  lifecycle {
+    ignore_changes = [
+      metadata.0.annotations,
     ]
-  }
-}
-
-resource "google_cloud_run_service_iam_policy" "public" {
-  location    = google_cloud_run_service.default.location
-  project     = google_cloud_run_service.default.project
-  service     = google_cloud_run_service.default.name
-
-  policy_data = data.google_iam_policy.public.policy_data
-}
-
-resource "google_service_account" "default" {
-  account_id   = "cloud-run-interservice-id"
-  description  = "Identity used by a public Cloud Run service to call private Cloud Run services."
-  display_name = "cloud-run-interservice-id"
-}
-
-resource "google_cloud_run_service" "default_private" {
-  name     = "tf-test-private-service%{random_suffix}"
-  location = "us-central1"
-
-  template {
-    spec {
-      containers {
-        // TODO<developer>: replace this with a private service container
-        // (This service should only be invocable by the public service)
-        image = "us-docker.pkg.dev/cloudrun/container/hello"
-      }
-    }
-  }
-}
-
-data "google_iam_policy" "private" {
-  binding {
-    role = "roles/run.invoker"
-    members = [
-      "serviceAccount:${google_service_account.default.email}",
-    ]
-  }
-}
-
-resource "google_cloud_run_service_iam_policy" "private" {
-  location    = google_cloud_run_service.default_private.location
-  project     = google_cloud_run_service.default_private.project
-  service     = google_cloud_run_service.default_private.name
-
-  policy_data = data.google_iam_policy.private.policy_data
-}
-`, context)
-}
-
-func TestAccCloudRunService_cloudrunServiceAccessControlExample(t *testing.T) {
-	t.Parallel()
-
-	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
-	}
-
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccCloudRunService_cloudrunServiceAccessControlExample(context),
-			},
-			{
-				ResourceName:            "google_cloud_run_service.default",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name", "location"},
-			},
-		},
-	})
-}
-
-func testAccCloudRunService_cloudrunServiceAccessControlExample(context map[string]interface{}) string {
-	return Nprintf(`
-resource "google_cloud_run_service" "default" {
-  name     = "tf-test-cloud-run-srv%{random_suffix}"
-  location = "us-central1"
-
-  template {
-    spec {
-      containers {
-        image = "gcr.io/cloudrun/hello"
-      }
-    }
-  }
-
-  traffic {
-    percent         = 100
-    latest_revision = true
-  }
-}
-
-resource "google_cloud_run_service_iam_binding" "default" {
-  location = google_cloud_run_service.default.location
-  service  = google_cloud_run_service.default.name
-  role     = "roles/run.invoker"
-  members = [
-    "allUsers"
-  ]
-}
-`, context)
-}
-
-func TestAccCloudRunService_cloudRunSystemPackagesExample(t *testing.T) {
-	t.Parallel()
-
-	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
-	}
-
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccCloudRunService_cloudRunSystemPackagesExample(context),
-			},
-			{
-				ResourceName:            "google_cloud_run_service.default",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name", "location"},
-			},
-		},
-	})
-}
-
-func testAccCloudRunService_cloudRunSystemPackagesExample(context map[string]interface{}) string {
-	return Nprintf(`
-# Example of how to deploy a Cloud Run application with system packages
-
-resource "google_cloud_run_service" "default" {
-  name     = "tf-test-graphviz-example%{random_suffix}"
-  location = "us-central1"
-
-  template {
-    spec {
-      containers {
-        # Replace with the URL of your graphviz image
-        #   gcr.io/<YOUR_GCP_PROJECT_ID>/graphviz
-        image = "gcr.io/cloudrun/hello"
-      }
-    }
-  }
-
-  traffic {
-    percent         = 100
-    latest_revision = true
-  }
-}
-
-# Make Cloud Run service publicly accessible
-resource "google_cloud_run_service_iam_member" "allow_unauthenticated" {
-  service  = google_cloud_run_service.default.name
-  location = google_cloud_run_service.default.location
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
-`, context)
-}
-
-func TestAccCloudRunService_cloudrunServiceIdentityExample(t *testing.T) {
-	t.Parallel()
-
-	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
-	}
-
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCloudRunServiceDestroyProducer(t),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccCloudRunService_cloudrunServiceIdentityExample(context),
-			},
-			{
-				ResourceName:            "google_cloud_run_service.default",
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name", "location"},
-			},
-		},
-	})
-}
-
-func testAccCloudRunService_cloudrunServiceIdentityExample(context map[string]interface{}) string {
-	return Nprintf(`
-resource "google_service_account" "cloudrun_service_identity" {
-  account_id   = "my-service-account"
-}
-
-resource "google_cloud_run_service" "default" {
-  name     = "tf-test-cloud-run-srv%{random_suffix}"
-  location = "us-central1"
-
-  template {
-    spec {
-      containers {
-        image = "gcr.io/cloudrun/hello"
-      }
-      service_account_name = google_service_account.cloudrun_service_identity.email  
-    }
-  }
-
-  traffic {
-    percent         = 100
-    latest_revision = true
   }
 }
 `, context)
@@ -872,9 +540,9 @@ func testAccCheckCloudRunServiceDestroyProducer(t *testing.T) func(s *terraform.
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -885,7 +553,7 @@ func testAccCheckCloudRunServiceDestroyProducer(t *testing.T) func(s *terraform.
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil, isCloudRunCreationConflict)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil, transport_tpg.IsCloudRunCreationConflict)
 			if err == nil {
 				return fmt.Errorf("CloudRunService still exists at %s", url)
 			}

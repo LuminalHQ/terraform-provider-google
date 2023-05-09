@@ -18,10 +18,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 type Cloudfunctions2OperationWaiter struct {
-	Config    *Config
+	Config    *transport_tpg.Config
 	UserAgent string
 	Project   string
 	CommonOperationWaiter
@@ -34,10 +36,10 @@ func (w *Cloudfunctions2OperationWaiter) QueryOp() (interface{}, error) {
 	// Returns the proper get.
 	url := fmt.Sprintf("%s%s", w.Config.Cloudfunctions2BasePath, w.CommonOperationWaiter.Op.Name)
 
-	return sendRequest(w.Config, "GET", w.Project, url, w.UserAgent, nil)
+	return transport_tpg.SendRequest(w.Config, "GET", w.Project, url, w.UserAgent, nil)
 }
 
-func createCloudfunctions2Waiter(config *Config, op map[string]interface{}, project, activity, userAgent string) (*Cloudfunctions2OperationWaiter, error) {
+func createCloudfunctions2Waiter(config *transport_tpg.Config, op map[string]interface{}, project, activity, userAgent string) (*Cloudfunctions2OperationWaiter, error) {
 	w := &Cloudfunctions2OperationWaiter{
 		Config:    config,
 		UserAgent: userAgent,
@@ -50,7 +52,7 @@ func createCloudfunctions2Waiter(config *Config, op map[string]interface{}, proj
 }
 
 // nolint: deadcode,unused
-func cloudfunctions2OperationWaitTimeWithResponse(config *Config, op map[string]interface{}, response *map[string]interface{}, project, activity, userAgent string, timeout time.Duration) error {
+func Cloudfunctions2OperationWaitTimeWithResponse(config *transport_tpg.Config, op map[string]interface{}, response *map[string]interface{}, project, activity, userAgent string, timeout time.Duration) error {
 	w, err := createCloudfunctions2Waiter(config, op, project, activity, userAgent)
 	if err != nil {
 		return err
@@ -61,7 +63,7 @@ func cloudfunctions2OperationWaitTimeWithResponse(config *Config, op map[string]
 	return json.Unmarshal([]byte(w.CommonOperationWaiter.Op.Response), response)
 }
 
-func cloudfunctions2OperationWaitTime(config *Config, op map[string]interface{}, project, activity, userAgent string, timeout time.Duration) error {
+func Cloudfunctions2OperationWaitTime(config *transport_tpg.Config, op map[string]interface{}, project, activity, userAgent string, timeout time.Duration) error {
 	if val, ok := op["name"]; !ok || val == "" {
 		// This was a synchronous call - there is no operation to wait for.
 		return nil

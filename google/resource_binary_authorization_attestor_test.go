@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -45,7 +46,7 @@ func TestSignatureAlgorithmDiffSuppress(t *testing.T) {
 	}
 
 	for tn, tc := range cases {
-		if compareSignatureAlgorithm("signature_algorithm", tc.Old, tc.New, nil) != tc.ExpectDiffSuppress {
+		if CompareSignatureAlgorithm("signature_algorithm", tc.Old, tc.New, nil) != tc.ExpectDiffSuppress {
 			t.Errorf("bad: %s, %q => %q expect DiffSuppress to return %t", tn, tc.Old, tc.New, tc.ExpectDiffSuppress)
 		}
 	}
@@ -54,11 +55,11 @@ func TestSignatureAlgorithmDiffSuppress(t *testing.T) {
 func TestAccBinaryAuthorizationAttestor_basic(t *testing.T) {
 	t.Parallel()
 
-	name := randString(t, 10)
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
+	name := RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBinaryAuthorizationAttestorBasic(name),
@@ -75,11 +76,11 @@ func TestAccBinaryAuthorizationAttestor_basic(t *testing.T) {
 func TestAccBinaryAuthorizationAttestor_full(t *testing.T) {
 	t.Parallel()
 
-	name := randString(t, 10)
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
+	name := RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBinaryAuthorizationAttestorFull(name),
@@ -97,12 +98,12 @@ func TestAccBinaryAuthorizationAttestor_kms(t *testing.T) {
 	t.Parallel()
 
 	kms := BootstrapKMSKeyWithPurpose(t, "ASYMMETRIC_SIGN")
-	attestorName := fmt.Sprintf("tf-test-%s", randString(t, 10))
+	attestorName := fmt.Sprintf("tf-test-%s", RandString(t, 10))
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBinaryAuthorizationAttestorKms(attestorName, kms.CryptoKey.Name),
@@ -119,11 +120,11 @@ func TestAccBinaryAuthorizationAttestor_kms(t *testing.T) {
 func TestAccBinaryAuthorizationAttestor_update(t *testing.T) {
 	t.Parallel()
 
-	name := randString(t, 10)
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
+	name := RandString(t, 10)
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckBinaryAuthorizationAttestorDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBinaryAuthorizationAttestorBasic(name),

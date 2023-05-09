@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Memorystore (Redis)"
-page_title: "Google: google_redis_instance"
 description: |-
   A Google Cloud Redis instance.
 ---
@@ -94,6 +93,28 @@ resource "google_redis_instance" "cache" {
 // this from "data"to "resource"
 data "google_compute_network" "redis-network" {
   name = "redis-test-network"
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=redis_instance_full_with_persistence_config&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Redis Instance Full With Persistence Config
+
+
+```hcl
+resource "google_redis_instance" "cache-persis" {
+  name           = "ha-memory-cache-persis"
+  tier           = "STANDARD_HA"
+  memory_size_gb = 1
+  location_id             = "us-central1-a"
+  alternative_location_id = "us-central1-f"
+
+  persistence_config {
+    persistence_mode = "RDB"
+    rdb_snapshot_period = "TWELVE_HOURS"
+  }
 }
 ```
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
@@ -280,7 +301,7 @@ The following arguments are supported:
   (Optional)
   The connection mode of the Redis instance.
   Default value is `DIRECT_PEERING`.
-  Possible values are `DIRECT_PEERING` and `PRIVATE_SERVICE_ACCESS`.
+  Possible values are: `DIRECT_PEERING`, `PRIVATE_SERVICE_ACCESS`.
 
 * `display_name` -
   (Optional)
@@ -304,6 +325,11 @@ The following arguments are supported:
   zonal failures. If [alternativeLocationId] is also provided, it must
   be different from [locationId].
 
+* `persistence_config` -
+  (Optional)
+  Persistence configuration for an instance.
+  Structure is [documented below](#nested_persistence_config).
+
 * `maintenance_policy` -
   (Optional)
   Maintenance policy for an instance.
@@ -317,7 +343,7 @@ The following arguments are supported:
 * `redis_version` -
   (Optional)
   The version of Redis software. If not provided, latest supported
-  version will be used. Please check the API documentation linked 
+  version will be used. Please check the API documentation linked
   at the top for the latest valid values.
 
 * `reserved_ip_range` -
@@ -334,37 +360,37 @@ The following arguments are supported:
   - BASIC: standalone instance
   - STANDARD_HA: highly available primary/replica instances
   Default value is `BASIC`.
-  Possible values are `BASIC` and `STANDARD_HA`.
+  Possible values are: `BASIC`, `STANDARD_HA`.
 
 * `transit_encryption_mode` -
   (Optional)
   The TLS mode of the Redis instance, If not provided, TLS is disabled for the instance.
   - SERVER_AUTHENTICATION: Client to Server traffic encryption enabled with server authentication
   Default value is `DISABLED`.
-  Possible values are `SERVER_AUTHENTICATION` and `DISABLED`.
+  Possible values are: `SERVER_AUTHENTICATION`, `DISABLED`.
 
 * `replica_count` -
   (Optional)
-  Optional. The number of replica nodes. The valid range for the Standard Tier with 
+  Optional. The number of replica nodes. The valid range for the Standard Tier with
   read replicas enabled is [1-5] and defaults to 2. If read replicas are not enabled
-  for a Standard Tier instance, the only valid value is 1 and the default is 1. 
+  for a Standard Tier instance, the only valid value is 1 and the default is 1.
   The valid value for basic tier is 0 and the default is also 0.
 
 * `read_replicas_mode` -
   (Optional)
   Optional. Read replica mode. Can only be specified when trying to create the instance.
   If not set, Memorystore Redis backend will default to READ_REPLICAS_DISABLED.
-  - READ_REPLICAS_DISABLED: If disabled, read endpoint will not be provided and the 
+  - READ_REPLICAS_DISABLED: If disabled, read endpoint will not be provided and the
   instance cannot scale up or down the number of replicas.
-  - READ_REPLICAS_ENABLED: If enabled, read endpoint will be provided and the instance 
+  - READ_REPLICAS_ENABLED: If enabled, read endpoint will be provided and the instance
   can scale up and down the number of replicas.
-  Possible values are `READ_REPLICAS_DISABLED` and `READ_REPLICAS_ENABLED`.
+  Possible values are: `READ_REPLICAS_DISABLED`, `READ_REPLICAS_ENABLED`.
 
 * `secondary_ip_range` -
   (Optional)
   Optional. Additional IP range for node placement. Required when enabling read replicas on
   an existing instance. For DIRECT_PEERING mode value must be a CIDR range of size /28, or
-  "auto". For PRIVATE_SERVICE_ACCESS mode value must be the name of an allocated address 
+  "auto". For PRIVATE_SERVICE_ACCESS mode value must be the name of an allocated address
   range associated with the private service access connection, or "auto".
 
 * `customer_managed_key` -
@@ -379,16 +405,51 @@ The following arguments are supported:
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
-* `auth_string` - (Optional) AUTH String set on the instance. This field will only be populated if auth_enabled is true.
+
+<a name="nested_persistence_config"></a>The `persistence_config` block supports:
+
+* `persistence_mode` -
+  (Required)
+  Optional. Controls whether Persistence features are enabled. If not provided, the existing value will be used.
+  - DISABLED: 	Persistence is disabled for the instance, and any existing snapshots are deleted.
+  - RDB: RDB based Persistence is enabled.
+  Possible values are: `DISABLED`, `RDB`.
+
+* `rdb_snapshot_period` -
+  (Optional)
+  Optional. Available snapshot periods for scheduling.
+  - ONE_HOUR:	Snapshot every 1 hour.
+  - SIX_HOURS:	Snapshot every 6 hours.
+  - TWELVE_HOURS:	Snapshot every 12 hours.
+  - TWENTY_FOUR_HOURS:	Snapshot every 24 hours.
+  Possible values are: `ONE_HOUR`, `SIX_HOURS`, `TWELVE_HOURS`, `TWENTY_FOUR_HOURS`.
+
+* `rdb_next_snapshot_time` -
+  (Output)
+  Output only. The next time that a snapshot attempt is scheduled to occur.
+  A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and up
+  to nine fractional digits.
+  Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".
+
+* `rdb_snapshot_start_time` -
+  (Optional)
+  Optional. Date and time that the first snapshot was/will be attempted,
+  and to which future snapshots will be aligned. If not provided,
+  the current time will be used.
+  A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution
+  and up to nine fractional digits.
+  Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".
 
 <a name="nested_maintenance_policy"></a>The `maintenance_policy` block supports:
 
 * `create_time` -
+  (Output)
   Output only. The time when the policy was created.
   A timestamp in RFC3339 UTC "Zulu" format, with nanosecond
   resolution and up to nine fractional digits.
 
 * `update_time` -
+  (Output)
   Output only. The time when the policy was last updated.
   A timestamp in RFC3339 UTC "Zulu" format, with nanosecond
   resolution and up to nine fractional digits.
@@ -420,9 +481,10 @@ The following arguments are supported:
   - FRIDAY: Friday
   - SATURDAY: Saturday
   - SUNDAY: Sunday
-  Possible values are `DAY_OF_WEEK_UNSPECIFIED`, `MONDAY`, `TUESDAY`, `WEDNESDAY`, `THURSDAY`, `FRIDAY`, `SATURDAY`, and `SUNDAY`.
+  Possible values are: `DAY_OF_WEEK_UNSPECIFIED`, `MONDAY`, `TUESDAY`, `WEDNESDAY`, `THURSDAY`, `FRIDAY`, `SATURDAY`, `SUNDAY`.
 
 * `duration` -
+  (Output)
   Output only. Duration of the maintenance window.
   The current window is fixed at 1 hour.
   A duration in seconds with up to nine fractional digits,
@@ -457,16 +519,19 @@ The following arguments are supported:
 <a name="nested_maintenance_schedule"></a>The `maintenance_schedule` block supports:
 
 * `start_time` -
+  (Output)
   Output only. The start time of any upcoming scheduled maintenance for this instance.
   A timestamp in RFC3339 UTC "Zulu" format, with nanosecond
   resolution and up to nine fractional digits.
 
 * `end_time` -
+  (Output)
   Output only. The end time of any upcoming scheduled maintenance for this instance.
   A timestamp in RFC3339 UTC "Zulu" format, with nanosecond
   resolution and up to nine fractional digits.
 
 * `schedule_deadline_time` -
+  (Output)
   Output only. The deadline that the maintenance schedule start time
   can not go beyond, including reschedule.
   A timestamp in RFC3339 UTC "Zulu" format, with nanosecond
@@ -516,39 +581,46 @@ In addition to the arguments listed above, the following computed attributes are
   will exhibit some lag behind the primary. Write requests must target 'host'.
 
 * `read_endpoint_port` -
-  Output only. The port number of the exposed readonly redis endpoint. Standard tier only. 
+  Output only. The port number of the exposed readonly redis endpoint. Standard tier only.
   Write requests should target 'port'.
 
 
 <a name="nested_server_ca_certs"></a>The `server_ca_certs` block contains:
 
 * `serial_number` -
+  (Output)
   Serial number, as extracted from the certificate.
 
 * `cert` -
+  (Output)
   The certificate data in PEM format.
 
 * `create_time` -
+  (Output)
   The time when the certificate was created.
 
 * `expire_time` -
+  (Output)
   The time when the certificate expires.
 
 * `sha1_fingerprint` -
+  (Output)
   Sha1 Fingerprint of the certificate.
 
 <a name="nested_nodes"></a>The `nodes` block contains:
 
 * `id` -
+  (Output)
   Node identifying string. e.g. 'node-0', 'node-1'
 
 * `zone` -
+  (Output)
   Location of the node.
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -568,4 +640,4 @@ $ terraform import google_redis_instance.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

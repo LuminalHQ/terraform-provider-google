@@ -11,6 +11,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
+
 	"google.golang.org/api/composer/v1"
 )
 
@@ -50,6 +54,7 @@ var (
 		"config.0.node_count",
 		"config.0.node_config",
 		"config.0.software_config",
+		"config.0.recovery_config",
 		"config.0.private_environment_config",
 		"config.0.web_server_network_access_control",
 		"config.0.database_config",
@@ -59,6 +64,16 @@ var (
 		"config.0.workloads_config",
 		"config.0.environment_size",
 		"config.0.master_authorized_networks_config",
+	}
+
+	recoveryConfigKeys = []string{
+		"config.0.recovery_config.0.scheduled_snapshots_config",
+	}
+
+	workloadsConfigKeys = []string{
+		"config.0.workloads_config.0.scheduler",
+		"config.0.workloads_config.0.web_server",
+		"config.0.workloads_config.0.worker",
 	}
 
 	composerPrivateEnvironmentConfig = []string{
@@ -110,7 +125,7 @@ var (
 	}
 )
 
-func resourceComposerEnvironment() *schema.Resource {
+func ResourceComposerEnvironment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComposerEnvironmentCreate,
 		Read:   resourceComposerEnvironmentRead,
@@ -133,7 +148,7 @@ func resourceComposerEnvironment() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateGCEName,
+				ValidateFunc: verify.ValidateGCEName,
 				Description:  `Name of the environment.`,
 			},
 			"region": {
@@ -180,7 +195,7 @@ func resourceComposerEnvironment() *schema.Resource {
 										Optional:         true,
 										Computed:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: compareSelfLinkOrResourceName,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 										Description:      `The Compute Engine zone in which to deploy the VMs running the Apache Airflow software, specified as the zone name or relative resource name (e.g. "projects/{project}/zones/{zone}"). Must belong to the enclosing environment's project and region. This field is supported for Cloud Composer environments in versions composer-1.*.*-airflow-*.*.*.`,
 									},
 									"machine_type": {
@@ -188,7 +203,7 @@ func resourceComposerEnvironment() *schema.Resource {
 										Computed:         true,
 										Optional:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: compareSelfLinkOrResourceName,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 										Description:      `The Compute Engine machine type used for cluster instances, specified as a name or relative resource name. For example: "projects/{project}/zones/{zone}/machineTypes/{machineType}". Must belong to the enclosing environment's project and region/zone. This field is supported for Cloud Composer environments in versions composer-1.*.*-airflow-*.*.*.`,
 									},
 									"network": {
@@ -196,14 +211,14 @@ func resourceComposerEnvironment() *schema.Resource {
 										Computed:         true,
 										Optional:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: compareSelfLinkOrResourceName,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 										Description:      `The Compute Engine machine type used for cluster instances, specified as a name or relative resource name. For example: "projects/{project}/zones/{zone}/machineTypes/{machineType}". Must belong to the enclosing environment's project and region/zone. The network must belong to the environment's project. If unspecified, the "default" network ID in the environment's project is used. If a Custom Subnet Network is provided, subnetwork must also be provided.`,
 									},
 									"subnetwork": {
 										Type:             schema.TypeString,
 										Optional:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: compareSelfLinkOrResourceName,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 										Description:      `The Compute Engine subnetwork to be used for machine communications, , specified as a self-link, relative resource name (e.g. "projects/{project}/regions/{region}/subnetworks/{subnetwork}"), or by name. If subnetwork is provided, network must also be provided and the subnetwork must belong to the enclosing environment's project and region.`,
 									},
 									"disk_size_gb": {
@@ -249,7 +264,7 @@ func resourceComposerEnvironment() *schema.Resource {
 											Type: schema.TypeString,
 										},
 										Set:         schema.HashString,
-										Description: `The list of instance tags applied to all node VMs. Tags are used to identify valid sources or targets for network firewalls. Each tag within the list must comply with RFC1035. Cannot be updated. This field is supported for Cloud Composer environments in versions composer-1.*.*-airflow-*.*.*.`,
+										Description: `The list of instance tags applied to all node VMs. Tags are used to identify valid sources or targets for network firewalls. Each tag within the list must comply with RFC1035. Cannot be updated.`,
 									},
 									"ip_allocation_policy": {
 										Type:        schema.TypeList,
@@ -308,6 +323,48 @@ func resourceComposerEnvironment() *schema.Resource {
 								},
 							},
 						},
+						"recovery_config": {
+							Type:         schema.TypeList,
+							Optional:     true,
+							AtLeastOneOf: composerConfigKeys,
+							MaxItems:     1,
+							Description:  `The recovery configuration settings for the Cloud Composer environment`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"scheduled_snapshots_config": {
+										Type:         schema.TypeList,
+										Optional:     true,
+										AtLeastOneOf: recoveryConfigKeys,
+										Description:  `The configuration settings for scheduled snapshots.`,
+										MaxItems:     1,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"enabled": {
+													Type:        schema.TypeBool,
+													Required:    true,
+													Description: `When enabled, Cloud Composer periodically saves snapshots of your environment to a Cloud Storage bucket.`,
+												},
+												"snapshot_location": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: `the URI of a bucket folder where to save the snapshot.`,
+												},
+												"snapshot_creation_schedule": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: `Snapshot schedule, in the unix-cron format.`,
+												},
+												"time_zone": {
+													Type:        schema.TypeString,
+													Optional:    true,
+													Description: `A time zone for the schedule. This value is a time offset and does not take into account daylight saving time changes. Valid values are from UTC-12 to UTC+12. Examples: UTC, UTC-01, UTC+03.`,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 						"software_config": {
 							Type:         schema.TypeList,
 							Optional:     true,
@@ -346,7 +403,7 @@ func resourceComposerEnvironment() *schema.Resource {
 										Optional:         true,
 										ForceNew:         true,
 										AtLeastOneOf:     composerSoftwareConfigKeys,
-										ValidateFunc:     validateRegexp(composerEnvironmentVersionRegexp),
+										ValidateFunc:     verify.ValidateRegexp(composerEnvironmentVersionRegexp),
 										DiffSuppressFunc: composerImageVersionDiffSuppress,
 										Description:      `The version of the software running in the environment. This encapsulates both the version of Cloud Composer functionality and the version of Apache Airflow. It must match the regular expression composer-([0-9]+(\.[0-9]+\.[0-9]+(-preview\.[0-9]+)?)?|latest)-airflow-([0-9]+(\.[0-9]+(\.[0-9]+)?)?). The Cloud Composer portion of the image version is a full semantic version, or an alias in the form of major version number or 'latest'. The Apache Airflow portion of the image version is a full semantic version that points to one of the supported Apache Airflow versions, or an alias in the form of only major or major.minor versions specified. See documentation for more details and version list.`,
 									},
@@ -432,7 +489,7 @@ func resourceComposerEnvironment() *schema.Resource {
 										Computed:         true,
 										AtLeastOneOf:     composerPrivateEnvironmentConfig,
 										ForceNew:         true,
-										DiffSuppressFunc: compareSelfLinkRelativePaths,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 										Description:      `When specified, the environment will use Private Service Connect instead of VPC peerings to connect to Cloud SQL in the Tenant Project, and the PSC endpoint in the Customer Project will use an IP address from this subnetwork. This field is supported for Cloud Composer environments in versions composer-2.*.*-airflow-*.*.* and newer.`,
 									},
 								},
@@ -549,11 +606,12 @@ func resourceComposerEnvironment() *schema.Resource {
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"scheduler": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										ForceNew:    false,
-										Description: `Configuration for resources used by Airflow schedulers.`,
-										MaxItems:    1,
+										Type:         schema.TypeList,
+										Optional:     true,
+										AtLeastOneOf: workloadsConfigKeys,
+										ForceNew:     false,
+										Description:  `Configuration for resources used by Airflow schedulers.`,
+										MaxItems:     1,
 										Elem: &schema.Resource{
 											Schema: map[string]*schema.Schema{
 												"cpu": {
@@ -588,11 +646,12 @@ func resourceComposerEnvironment() *schema.Resource {
 										},
 									},
 									"web_server": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										ForceNew:    false,
-										Description: `Configuration for resources used by Airflow web server.`,
-										MaxItems:    1,
+										Type:         schema.TypeList,
+										Optional:     true,
+										AtLeastOneOf: workloadsConfigKeys,
+										ForceNew:     false,
+										Description:  `Configuration for resources used by Airflow web server.`,
+										MaxItems:     1,
 										Elem: &schema.Resource{
 											Schema: map[string]*schema.Schema{
 												"cpu": {
@@ -620,11 +679,12 @@ func resourceComposerEnvironment() *schema.Resource {
 										},
 									},
 									"worker": {
-										Type:        schema.TypeList,
-										Optional:    true,
-										ForceNew:    false,
-										Description: `Configuration for resources used by Airflow workers.`,
-										MaxItems:    1,
+										Type:         schema.TypeList,
+										Optional:     true,
+										AtLeastOneOf: workloadsConfigKeys,
+										ForceNew:     false,
+										Description:  `Configuration for resources used by Airflow workers.`,
+										MaxItems:     1,
 										Elem: &schema.Resource{
 											Schema: map[string]*schema.Schema{
 												"cpu": {
@@ -729,8 +789,8 @@ func resourceComposerEnvironment() *schema.Resource {
 }
 
 func resourceComposerEnvironmentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -761,13 +821,13 @@ func resourceComposerEnvironmentCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/environments/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/environments/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	waitErr := composerOperationWaitTime(
+	waitErr := ComposerOperationWaitTime(
 		config, op, envName.Project, "Creating Environment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -795,8 +855,8 @@ func resourceComposerEnvironmentCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComposerEnvironmentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -808,7 +868,7 @@ func resourceComposerEnvironmentRead(d *schema.ResourceData, meta interface{}) e
 
 	res, err := config.NewComposerClient(userAgent).Projects.Locations.Environments.Get(envName.resourceName()).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComposerEnvironment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComposerEnvironment %q", d.Id()))
 	}
 
 	// Set from getProject(d)
@@ -819,7 +879,7 @@ func resourceComposerEnvironmentRead(d *schema.ResourceData, meta interface{}) e
 	if err := d.Set("region", envName.Region); err != nil {
 		return fmt.Errorf("Error setting Environment: %s", err)
 	}
-	if err := d.Set("name", GetResourceNameFromSelfLink(res.Name)); err != nil {
+	if err := d.Set("name", tpgresource.GetResourceNameFromSelfLink(res.Name)); err != nil {
 		return fmt.Errorf("Error setting Environment: %s", err)
 	}
 	if err := d.Set("config", flattenComposerEnvironmentConfig(res.Config)); err != nil {
@@ -832,8 +892,8 @@ func resourceComposerEnvironmentRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceComposerEnvironmentUpdate(d *schema.ResourceData, meta interface{}) error {
-	tfConfig := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, tfConfig.userAgent)
+	tfConfig := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, tfConfig.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -987,6 +1047,18 @@ func resourceComposerEnvironmentUpdate(d *schema.ResourceData, meta interface{})
 				return err
 			}
 		}
+
+		if d.HasChange("config.0.recovery_config.0.scheduled_snapshots_config") {
+			patchObj := &composer.Environment{Config: &composer.EnvironmentConfig{}}
+			if config != nil {
+				patchObj.Config.RecoveryConfig = config.RecoveryConfig
+			}
+			err = resourceComposerEnvironmentPatchField("config.RecoveryConfig.ScheduledSnapshotsConfig", userAgent, patchObj, d, tfConfig)
+			if err != nil {
+				return err
+			}
+		}
+
 		if d.HasChange("config.0.environment_size") {
 			patchObj := &composer.Environment{Config: &composer.EnvironmentConfig{}}
 			if config != nil {
@@ -1021,12 +1093,10 @@ func resourceComposerEnvironmentUpdate(d *schema.ResourceData, meta interface{})
 	return resourceComposerEnvironmentRead(d, tfConfig)
 }
 
-func resourceComposerEnvironmentPostCreateUpdate(updateEnv *composer.Environment, d *schema.ResourceData, cfg *Config, userAgent string) error {
+func resourceComposerEnvironmentPostCreateUpdate(updateEnv *composer.Environment, d *schema.ResourceData, cfg *transport_tpg.Config, userAgent string) error {
 	if updateEnv == nil {
 		return nil
 	}
-
-	d.Partial(true)
 
 	if updateEnv.Config != nil && updateEnv.Config.SoftwareConfig != nil && len(updateEnv.Config.SoftwareConfig.PypiPackages) > 0 {
 		log.Printf("[DEBUG] Running post-create update for Environment %q", d.Id())
@@ -1037,11 +1107,11 @@ func resourceComposerEnvironmentPostCreateUpdate(updateEnv *composer.Environment
 
 		log.Printf("[DEBUG] Finish update to Environment %q post create for update only fields", d.Id())
 	}
-	d.Partial(false)
+
 	return resourceComposerEnvironmentRead(d, cfg)
 }
 
-func resourceComposerEnvironmentPatchField(updateMask, userAgent string, env *composer.Environment, d *schema.ResourceData, config *Config) error {
+func resourceComposerEnvironmentPatchField(updateMask, userAgent string, env *composer.Environment, d *schema.ResourceData, config *transport_tpg.Config) error {
 	envJson, _ := env.MarshalJSON()
 	log.Printf("[DEBUG] Updating Environment %q (updateMask = %q): %s", d.Id(), updateMask, string(envJson))
 	envName, err := resourceComposerEnvironmentName(d, config)
@@ -1056,7 +1126,7 @@ func resourceComposerEnvironmentPatchField(updateMask, userAgent string, env *co
 		return err
 	}
 
-	waitErr := composerOperationWaitTime(
+	waitErr := ComposerOperationWaitTime(
 		config, op, envName.Project, "Updating newly created Environment", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if waitErr != nil {
@@ -1069,8 +1139,8 @@ func resourceComposerEnvironmentPatchField(updateMask, userAgent string, env *co
 }
 
 func resourceComposerEnvironmentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1086,7 +1156,7 @@ func resourceComposerEnvironmentDelete(d *schema.ResourceData, meta interface{})
 		return err
 	}
 
-	err = composerOperationWaitTime(
+	err = ComposerOperationWaitTime(
 		config, op, envName.Project, "Deleting Environment", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 	if err != nil {
@@ -1098,13 +1168,13 @@ func resourceComposerEnvironmentDelete(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComposerEnvironmentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{"projects/(?P<project>[^/]+)/locations/(?P<region>[^/]+)/environments/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{"projects/(?P<project>[^/]+)/locations/(?P<region>[^/]+)/environments/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/environments/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/environments/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -1131,6 +1201,7 @@ func flattenComposerEnvironmentConfig(envCfg *composer.EnvironmentConfig) interf
 	transformed["encryption_config"] = flattenComposerEnvironmentConfigEncryptionConfig(envCfg.EncryptionConfig)
 	transformed["maintenance_window"] = flattenComposerEnvironmentConfigMaintenanceWindow(envCfg.MaintenanceWindow)
 	transformed["workloads_config"] = flattenComposerEnvironmentConfigWorkloadsConfig(envCfg.WorkloadsConfig)
+	transformed["recovery_config"] = flattenComposerEnvironmentConfigRecoveryConfig(envCfg.RecoveryConfig)
 	transformed["environment_size"] = envCfg.EnvironmentSize
 	transformed["master_authorized_networks_config"] = flattenComposerEnvironmentConfigMasterAuthorizedNetworksConfig(envCfg.MasterAuthorizedNetworksConfig)
 	return []interface{}{transformed}
@@ -1186,6 +1257,30 @@ func flattenComposerEnvironmentConfigEncryptionConfig(encryptionCfg *composer.En
 
 	transformed := make(map[string]interface{})
 	transformed["kms_key_name"] = encryptionCfg.KmsKeyName
+
+	return []interface{}{transformed}
+}
+
+func flattenComposerEnvironmentConfigRecoveryConfig(recoveryCfg *composer.RecoveryConfig) interface{} {
+	if recoveryCfg == nil {
+		return nil
+	}
+
+	transformed := make(map[string]interface{})
+	transformedScheduledSnapshotsConfig := make(map[string]interface{})
+
+	scheduledSnapshotsConfig := recoveryCfg.ScheduledSnapshotsConfig
+
+	if scheduledSnapshotsConfig == nil {
+		transformedScheduledSnapshotsConfig = nil
+	} else {
+		transformedScheduledSnapshotsConfig["enabled"] = scheduledSnapshotsConfig.Enabled
+		transformedScheduledSnapshotsConfig["snapshot_location"] = scheduledSnapshotsConfig.SnapshotLocation
+		transformedScheduledSnapshotsConfig["time_zone"] = scheduledSnapshotsConfig.TimeZone
+		transformedScheduledSnapshotsConfig["snapshot_creation_schedule"] = scheduledSnapshotsConfig.SnapshotCreationSchedule
+	}
+
+	transformed["scheduled_snapshots_config"] = []interface{}{transformedScheduledSnapshotsConfig}
 
 	return []interface{}{transformed}
 }
@@ -1349,7 +1444,7 @@ func flattenComposerEnvironmentConfigMasterAuthorizedNetworksConfig(masterAuthNe
 	return []interface{}{masterAuthorizedNetworksConfig}
 }
 
-func expandComposerEnvironmentConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.EnvironmentConfig, error) {
+func expandComposerEnvironmentConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.EnvironmentConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1428,17 +1523,24 @@ func expandComposerEnvironmentConfig(v interface{}, d *schema.ResourceData, conf
 		return nil, err
 	}
 	transformed.MasterAuthorizedNetworksConfig = transformedMasterAuthorizedNetworksConfig
+
+	transformedRecoveryConfig, err := expandComposerEnvironmentConfigRecoveryConfig(original["recovery_config"], d, config)
+	if err != nil {
+		return nil, err
+	}
+	transformed.RecoveryConfig = transformedRecoveryConfig
+
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigNodeCount(v interface{}, d *schema.ResourceData, config *Config) (int64, error) {
+func expandComposerEnvironmentConfigNodeCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (int64, error) {
 	if v == nil {
 		return 0, nil
 	}
 	return int64(v.(int)), nil
 }
 
-func expandComposerEnvironmentConfigWebServerNetworkAccessControl(v interface{}, d *schema.ResourceData, config *Config) (*composer.WebServerNetworkAccessControl, error) {
+func expandComposerEnvironmentConfigWebServerNetworkAccessControl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.WebServerNetworkAccessControl, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1467,7 +1569,7 @@ func expandComposerEnvironmentConfigWebServerNetworkAccessControl(v interface{},
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigMasterAuthorizedNetworksConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.MasterAuthorizedNetworksConfig, error) {
+func expandComposerEnvironmentConfigMasterAuthorizedNetworksConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.MasterAuthorizedNetworksConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1494,7 +1596,7 @@ func expandComposerEnvironmentConfigMasterAuthorizedNetworksConfig(v interface{}
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigDatabaseConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.DatabaseConfig, error) {
+func expandComposerEnvironmentConfigDatabaseConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.DatabaseConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1508,7 +1610,7 @@ func expandComposerEnvironmentConfigDatabaseConfig(v interface{}, d *schema.Reso
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigWebServerConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.WebServerConfig, error) {
+func expandComposerEnvironmentConfigWebServerConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.WebServerConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1522,7 +1624,7 @@ func expandComposerEnvironmentConfigWebServerConfig(v interface{}, d *schema.Res
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigEncryptionConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.EncryptionConfig, error) {
+func expandComposerEnvironmentConfigEncryptionConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.EncryptionConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1536,7 +1638,7 @@ func expandComposerEnvironmentConfigEncryptionConfig(v interface{}, d *schema.Re
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigMaintenanceWindow(v interface{}, d *schema.ResourceData, config *Config) (*composer.MaintenanceWindow, error) {
+func expandComposerEnvironmentConfigMaintenanceWindow(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.MaintenanceWindow, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1560,7 +1662,7 @@ func expandComposerEnvironmentConfigMaintenanceWindow(v interface{}, d *schema.R
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigWorkloadsConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.WorkloadsConfig, error) {
+func expandComposerEnvironmentConfigWorkloadsConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.WorkloadsConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1608,14 +1710,38 @@ func expandComposerEnvironmentConfigWorkloadsConfig(v interface{}, d *schema.Res
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigEnvironmentSize(v interface{}, d *schema.ResourceData, config *Config) (string, error) {
+func expandComposerEnvironmentConfigRecoveryConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.RecoveryConfig, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := &composer.RecoveryConfig{}
+
+	if v, ok := original["scheduled_snapshots_config"]; ok {
+		if len(v.([]interface{})) > 0 && v.([]interface{})[0] != nil {
+			transformedScheduledSnapshotsConfig := &composer.ScheduledSnapshotsConfig{}
+			originalScheduledSnapshotsConfigRaw := v.([]interface{})[0].(map[string]interface{})
+			transformedScheduledSnapshotsConfig.Enabled = originalScheduledSnapshotsConfigRaw["enabled"].(bool)
+			transformedScheduledSnapshotsConfig.SnapshotLocation = originalScheduledSnapshotsConfigRaw["snapshot_location"].(string)
+			transformedScheduledSnapshotsConfig.TimeZone = originalScheduledSnapshotsConfigRaw["time_zone"].(string)
+			transformedScheduledSnapshotsConfig.SnapshotCreationSchedule = originalScheduledSnapshotsConfigRaw["snapshot_creation_schedule"].(string)
+			transformed.ScheduledSnapshotsConfig = transformedScheduledSnapshotsConfig
+		}
+	}
+
+	return transformed, nil
+}
+
+func expandComposerEnvironmentConfigEnvironmentSize(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (string, error) {
 	if v == nil {
 		return "", nil
 	}
 	return v.(string), nil
 }
 
-func expandComposerEnvironmentConfigPrivateEnvironmentConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.PrivateEnvironmentConfig, error) {
+func expandComposerEnvironmentConfigPrivateEnvironmentConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.PrivateEnvironmentConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1659,7 +1785,7 @@ func expandComposerEnvironmentConfigPrivateEnvironmentConfig(v interface{}, d *s
 	return transformed, nil
 }
 
-func expandComposerEnvironmentConfigNodeConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.NodeConfig, error) {
+func expandComposerEnvironmentConfigNodeConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.NodeConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1738,9 +1864,9 @@ func expandComposerEnvironmentConfigNodeConfig(v interface{}, d *schema.Resource
 	return transformed, nil
 }
 
-func expandComposerEnvironmentIPAllocationPolicy(v interface{}, d *schema.ResourceData, config *Config) (*composer.IPAllocationPolicy, error) {
+func expandComposerEnvironmentIPAllocationPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.IPAllocationPolicy, error) {
 	l := v.([]interface{})
-	if len(l) == 0 {
+	if len(l) == 0 || l[0] == nil {
 		return nil, nil
 	}
 	raw := l[0]
@@ -1770,16 +1896,16 @@ func expandComposerEnvironmentIPAllocationPolicy(v interface{}, d *schema.Resour
 
 }
 
-func expandComposerEnvironmentServiceAccount(v interface{}, d *schema.ResourceData, config *Config) (string, error) {
+func expandComposerEnvironmentServiceAccount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (string, error) {
 	serviceAccount := v.(string)
 	if len(serviceAccount) == 0 {
 		return "", nil
 	}
 
-	return GetResourceNameFromSelfLink(serviceAccount), nil
+	return tpgresource.GetResourceNameFromSelfLink(serviceAccount), nil
 }
 
-func expandComposerEnvironmentZone(v interface{}, d *schema.ResourceData, config *Config) (string, error) {
+func expandComposerEnvironmentZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (string, error) {
 	zone := v.(string)
 	if len(zone) == 0 {
 		return zone, nil
@@ -1792,12 +1918,12 @@ func expandComposerEnvironmentZone(v interface{}, d *schema.ResourceData, config
 		return fmt.Sprintf("projects/%s/zones/%s", project, zone), nil
 	}
 
-	return getRelativePath(zone)
+	return tpgresource.GetRelativePath(zone)
 }
 
-func expandComposerEnvironmentMachineType(v interface{}, d *schema.ResourceData, config *Config, nodeCfgZone string) (string, error) {
+func expandComposerEnvironmentMachineType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config, nodeCfgZone string) (string, error) {
 	machineType := v.(string)
-	requiredZone := GetResourceNameFromSelfLink(nodeCfgZone)
+	requiredZone := tpgresource.GetResourceNameFromSelfLink(nodeCfgZone)
 
 	fv, err := ParseMachineTypesFieldValue(v.(string), d, config)
 	if err != nil {
@@ -1811,7 +1937,7 @@ func expandComposerEnvironmentMachineType(v interface{}, d *schema.ResourceData,
 		fv = &ZonalFieldValue{
 			Project:      project,
 			Zone:         requiredZone,
-			Name:         GetResourceNameFromSelfLink(machineType),
+			Name:         tpgresource.GetResourceNameFromSelfLink(machineType),
 			resourceType: "machineTypes",
 		}
 	}
@@ -1824,7 +1950,7 @@ func expandComposerEnvironmentMachineType(v interface{}, d *schema.ResourceData,
 	return fv.RelativeLink(), nil
 }
 
-func expandComposerEnvironmentNetwork(v interface{}, d *schema.ResourceData, config *Config) (string, error) {
+func expandComposerEnvironmentNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (string, error) {
 	fv, err := ParseNetworkFieldValue(v.(string), d, config)
 	if err != nil {
 		return "", err
@@ -1832,7 +1958,7 @@ func expandComposerEnvironmentNetwork(v interface{}, d *schema.ResourceData, con
 	return fv.RelativeLink(), nil
 }
 
-func expandComposerEnvironmentSubnetwork(v interface{}, d *schema.ResourceData, config *Config) (string, error) {
+func expandComposerEnvironmentSubnetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (string, error) {
 	fv, err := ParseSubnetworkFieldValue(v.(string), d, config)
 	if err != nil {
 		return "", err
@@ -1840,14 +1966,14 @@ func expandComposerEnvironmentSubnetwork(v interface{}, d *schema.ResourceData, 
 	return fv.RelativeLink(), nil
 }
 
-func expandComposerEnvironmentSetList(v interface{}, d *schema.ResourceData, config *Config) ([]string, error) {
+func expandComposerEnvironmentSetList(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) ([]string, error) {
 	if v == nil {
 		return nil, nil
 	}
 	return convertStringArr(v.(*schema.Set).List()), nil
 }
 
-func expandComposerEnvironmentConfigSoftwareConfig(v interface{}, d *schema.ResourceData, config *Config) (*composer.SoftwareConfig, error) {
+func expandComposerEnvironmentConfigSoftwareConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) (*composer.SoftwareConfig, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1862,6 +1988,7 @@ func expandComposerEnvironmentConfigSoftwareConfig(v interface{}, d *schema.Reso
 	transformed.PypiPackages = expandComposerEnvironmentConfigSoftwareConfigStringMap(original, "pypi_packages")
 	transformed.EnvVariables = expandComposerEnvironmentConfigSoftwareConfigStringMap(original, "env_variables")
 	transformed.SchedulerCount = int64(original["scheduler_count"].(int))
+
 	return transformed, nil
 }
 
@@ -1912,8 +2039,8 @@ func validateComposerEnvironmentEnvVariables(v interface{}, k string) (ws []stri
 	return ws, errors
 }
 
-func handleComposerEnvironmentCreationOpFailure(id string, envName *composerEnvironmentName, d *schema.ResourceData, config *Config) error {
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+func handleComposerEnvironmentCreationOpFailure(id string, envName *composerEnvironmentName, d *schema.ResourceData, config *transport_tpg.Config) error {
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1924,7 +2051,7 @@ func handleComposerEnvironmentCreationOpFailure(id string, envName *composerEnvi
 	if err != nil {
 		// If error is 401, we don't have to clean up environment, return nil.
 		// Otherwise, we encountered another error.
-		return handleNotFoundError(err, d, fmt.Sprintf("Composer Environment %q", envName.resourceName()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Composer Environment %q", envName.resourceName()))
 	}
 
 	if env.State == "CREATING" {
@@ -1940,7 +2067,7 @@ func handleComposerEnvironmentCreationOpFailure(id string, envName *composerEnvi
 		return fmt.Errorf("Could not delete the invalid created environment with state %q: %s", env.State, err)
 	}
 
-	waitErr := composerOperationWaitTime(
+	waitErr := ComposerOperationWaitTime(
 		config, op, envName.Project,
 		fmt.Sprintf("Deleting invalid created Environment with state %q", env.State), userAgent,
 		d.Timeout(schema.TimeoutCreate))
@@ -1971,7 +2098,7 @@ func getComposerEnvironmentPostCreateUpdateObj(env *composer.Environment) (updat
 	return updateEnv
 }
 
-func resourceComposerEnvironmentName(d *schema.ResourceData, config *Config) (*composerEnvironmentName, error) {
+func resourceComposerEnvironmentName(d *schema.ResourceData, config *transport_tpg.Config) (*composerEnvironmentName, error) {
 	project, err := getProject(d, config)
 	if err != nil {
 		return nil, err
@@ -2008,15 +2135,15 @@ func (n *composerEnvironmentName) parentName() string {
 func compareServiceAccountEmailToLink(_, old, new string, _ *schema.ResourceData) bool {
 	// old is the service account email returned from the server.
 	if !strings.HasPrefix("projects/", old) {
-		return old == GetResourceNameFromSelfLink(new)
+		return old == tpgresource.GetResourceNameFromSelfLink(new)
 	}
-	return compareSelfLinkRelativePaths("", old, new, nil)
+	return tpgresource.CompareSelfLinkRelativePaths("", old, new, nil)
 }
 
 func validateServiceAccountRelativeNameOrEmail(v interface{}, k string) (ws []string, errors []error) {
 	value := v.(string)
 
-	serviceAccountRe := "(" + strings.Join(PossibleServiceAccountNames, "|") + ")"
+	serviceAccountRe := "(" + strings.Join(verify.PossibleServiceAccountNames, "|") + ")"
 	if strings.HasPrefix(value, "projects/") {
 		serviceAccountRe = fmt.Sprintf("projects/(.+)/serviceAccounts/%s", serviceAccountRe)
 	}

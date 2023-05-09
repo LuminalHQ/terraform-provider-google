@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "API Gateway"
-page_title: "Google: google_api_gateway_gateway"
 description: |-
   A consumable API that can be used by multiple Gateways.
 ---
@@ -42,13 +41,13 @@ To get more information about Gateway, see:
 ```hcl
 resource "google_api_gateway_api" "api_gw" {
   provider = google-beta
-  api_id = "api-gw"
+  api_id = "my-api"
 }
 
 resource "google_api_gateway_api_config" "api_gw" {
   provider = google-beta
   api = google_api_gateway_api.api_gw.api_id
-  api_config_id = "config"
+  api_config_id = "my-config"
 
   openapi_documents {
     document {
@@ -64,7 +63,7 @@ resource "google_api_gateway_api_config" "api_gw" {
 resource "google_api_gateway_gateway" "api_gw" {
   provider = google-beta
   api_config = google_api_gateway_api_config.api_gw.id
-  gateway_id = "api-gw"
+  gateway_id = "my-gateway"
 }
 ```
 
@@ -118,7 +117,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -138,4 +137,4 @@ $ terraform import google_api_gateway_gateway.default {{gateway_id}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

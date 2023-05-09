@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Dialogflow CX"
-page_title: "Google: google_dialogflow_cx_agent"
 description: |-
   Agents are best described as Natural Language Understanding (NLU) modules that transform user requests into actionable data.
 ---
@@ -72,7 +71,7 @@ The following arguments are supported:
 
 * `default_language_code` -
   (Required)
-  The default language of the agent as a language tag. [See Language Support](https://cloud.google.com/dialogflow/cx/docs/reference/language) 
+  The default language of the agent as a language tag. [See Language Support](https://cloud.google.com/dialogflow/cx/docs/reference/language)
   for a list of the currently supported language codes. This field cannot be updated after creation.
 
 * `time_zone` -
@@ -139,7 +138,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 40 minutes.
 - `update` - Default is 40 minutes.
@@ -158,4 +157,4 @@ $ terraform import google_dialogflow_cx_agent.default {{location}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

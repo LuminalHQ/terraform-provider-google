@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_url_map"
 description: |-
   UrlMaps are used to route requests to a backend service based on rules
   that you define for the host and path of an incoming URL.
@@ -30,11 +29,11 @@ To get more information about UrlMap, see:
 * [API documentation](https://cloud.google.com/compute/docs/reference/rest/v1/urlMaps)
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
-  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=url_map_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=url_map_bucket_and_service&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
     <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
   </a>
 </div>
-## Example Usage - Url Map Basic
+## Example Usage - Url Map Bucket And Service
 
 
 ```hcl
@@ -81,7 +80,7 @@ resource "google_compute_url_map" "urlmap" {
 
   test {
     service = google_compute_backend_bucket.static.id
-    host    = "hi.com"
+    host    = "example.com"
     path    = "/home"
   }
 }
@@ -334,8 +333,8 @@ resource "google_compute_url_map" "urlmap" {
           nanos = 750000000
         }
         url_rewrite {
-          host_rewrite = "A replacement header"
-          path_prefix_rewrite = "A replacement path"
+          host_rewrite = "dev.example.com"
+          path_prefix_rewrite = "/v1/api/"
         }
         weighted_backend_services {
           backend_service = google_compute_backend_service.home.id
@@ -1552,7 +1551,7 @@ The following arguments are supported:
   provided metadata.
     - MATCH_ALL: All filterLabels must have matching labels in
   the provided metadata.
-  Possible values are `MATCH_ALL` and `MATCH_ANY`.
+  Possible values are: `MATCH_ALL`, `MATCH_ANY`.
 
 
 <a name="nested_filter_labels"></a>The `filter_labels` block supports:
@@ -2682,7 +2681,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -2701,4 +2700,4 @@ $ terraform import google_compute_url_map.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

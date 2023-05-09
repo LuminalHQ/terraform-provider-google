@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "GKEHub"
-page_title: "Google: google_gke_hub_membership_iam"
 description: |-
   Collection of resources to manage IAM policy for GKEHub Membership
 ---
@@ -142,4 +141,4 @@ $ terraform import google_gke_hub_membership_iam_policy.editor projects/{{projec
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

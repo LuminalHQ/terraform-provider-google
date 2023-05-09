@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccDataprocMetastoreService_dataprocMetastoreServiceBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckDataprocMetastoreServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDataprocMetastoreServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDataprocMetastoreService_dataprocMetastoreServiceBasicExample(context),
@@ -72,13 +75,13 @@ func TestAccDataprocMetastoreService_dataprocMetastoreServiceCmekTestExample(t *
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckDataprocMetastoreServiceDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDataprocMetastoreServiceDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDataprocMetastoreService_dataprocMetastoreServiceCmekTestExample(context),
@@ -139,6 +142,50 @@ resource "google_kms_crypto_key_iam_binding" "crypto_key_binding" {
 `, context)
 }
 
+func TestAccDataprocMetastoreService_dataprocMetastoreServiceTelemetryExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDataprocMetastoreServiceDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDataprocMetastoreService_dataprocMetastoreServiceTelemetryExample(context),
+			},
+			{
+				ResourceName:            "google_dataproc_metastore_service.telemetry",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"service_id", "location"},
+			},
+		},
+	})
+}
+
+func testAccDataprocMetastoreService_dataprocMetastoreServiceTelemetryExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_dataproc_metastore_service" "telemetry" {
+  service_id = "telemetry%{random_suffix}"
+  location   = "us-central1"
+  port       = 9080
+  tier       = "DEVELOPER"
+
+  hive_metastore_config {
+    version = "3.1.2"
+  }
+
+  telemetry_config {
+    log_format = "LEGACY"
+  }
+}
+`, context)
+}
+
 func testAccCheckDataprocMetastoreServiceDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -149,9 +196,9 @@ func testAccCheckDataprocMetastoreServiceDestroyProducer(t *testing.T) func(s *t
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{DataprocMetastoreBasePath}}projects/{{project}}/locations/{{location}}/services/{{service_id}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{DataprocMetastoreBasePath}}projects/{{project}}/locations/{{location}}/services/{{service_id}}")
 			if err != nil {
 				return err
 			}
@@ -162,7 +209,7 @@ func testAccCheckDataprocMetastoreServiceDestroyProducer(t *testing.T) func(s *t
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("DataprocMetastoreService still exists at %s", url)
 			}

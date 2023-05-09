@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	dataproc "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/dataproc"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceDataprocWorkflowTemplate() *schema.Resource {
+func ResourceDataprocWorkflowTemplate() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataprocWorkflowTemplateCreate,
 		Read:   resourceDataprocWorkflowTemplateRead,
@@ -383,7 +385,7 @@ func DataprocWorkflowTemplateJobsHiveJobQueryListSchema() *schema.Resource {
 				Type:        schema.TypeList,
 				Required:    true,
 				ForceNew:    true,
-				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\" { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
+				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\": { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 		},
@@ -473,7 +475,7 @@ func DataprocWorkflowTemplateJobsPigJobQueryListSchema() *schema.Resource {
 				Type:        schema.TypeList,
 				Required:    true,
 				ForceNew:    true,
-				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\" { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
+				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\": { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 		},
@@ -562,7 +564,7 @@ func DataprocWorkflowTemplateJobsPrestoJobQueryListSchema() *schema.Resource {
 				Type:        schema.TypeList,
 				Required:    true,
 				ForceNew:    true,
-				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\" { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
+				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\": { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 		},
@@ -900,7 +902,7 @@ func DataprocWorkflowTemplateJobsSparkSqlJobQueryListSchema() *schema.Resource {
 				Type:        schema.TypeList,
 				Required:    true,
 				ForceNew:    true,
-				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\" { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
+				Description: "Required. The queries to execute. You do not need to end a query expression with a semicolon. Multiple queries can be specified in one string by separating each with a semicolon. Here is an example of a Dataproc API snippet that uses a QueryList to specify a HiveJob: \"hiveJob\": { \"queryList\": { \"queries\": [ \"query1\", \"query2\", \"query3;query4\", ] } }",
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 		},
@@ -1222,6 +1224,15 @@ func DataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigSchema
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 
+			"shielded_instance_config": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Optional. Shielded Instance Config for clusters using Compute Engine Shielded VMs.",
+				MaxItems:    1,
+				Elem:        DataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfigSchema(),
+			},
+
 			"subnetwork": {
 				Type:             schema.TypeString,
 				Optional:         true,
@@ -1287,6 +1298,33 @@ func DataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigReserv
 				ForceNew:    true,
 				Description: "Optional. Corresponds to the label values of reservation resource.",
 				Elem:        &schema.Schema{Type: schema.TypeString},
+			},
+		},
+	}
+}
+
+func DataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfigSchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"enable_integrity_monitoring": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Optional. Defines whether instances have integrity monitoring enabled. Integrity monitoring compares the most recent boot measurements to the integrity policy baseline and returns a pair of pass/fail results depending on whether they match or not.",
+			},
+
+			"enable_secure_boot": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Optional. Defines whether the instances have Secure Boot enabled. Secure Boot helps ensure that the system only runs authentic software by verifying the digital signature of all boot components, and halting the boot process if signature verification fails.",
+			},
+
+			"enable_vtpm": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Optional. Defines whether the instance have the vTPM enabled. Virtual Trusted Platform Module protects objects like keys, certificates and enables Measured Boot by performing the measurements needed to create a known good boot baseline, called the integrity policy baseline.",
 			},
 		},
 	}
@@ -2035,7 +2073,7 @@ func DataprocWorkflowTemplateParametersValidationValuesSchema() *schema.Resource
 }
 
 func resourceDataprocWorkflowTemplateCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -2059,7 +2097,7 @@ func resourceDataprocWorkflowTemplateCreate(d *schema.ResourceData, meta interfa
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -2068,8 +2106,8 @@ func resourceDataprocWorkflowTemplateCreate(d *schema.ResourceData, meta interfa
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataprocClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataprocClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -2091,7 +2129,7 @@ func resourceDataprocWorkflowTemplateCreate(d *schema.ResourceData, meta interfa
 }
 
 func resourceDataprocWorkflowTemplateRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -2109,7 +2147,7 @@ func resourceDataprocWorkflowTemplateRead(d *schema.ResourceData, meta interface
 		Version:    dcl.Int64OrNil(int64(d.Get("version").(int))),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -2118,8 +2156,8 @@ func resourceDataprocWorkflowTemplateRead(d *schema.ResourceData, meta interface
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataprocClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataprocClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -2169,7 +2207,7 @@ func resourceDataprocWorkflowTemplateRead(d *schema.ResourceData, meta interface
 }
 
 func resourceDataprocWorkflowTemplateDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -2188,7 +2226,7 @@ func resourceDataprocWorkflowTemplateDelete(d *schema.ResourceData, meta interfa
 	}
 
 	log.Printf("[DEBUG] Deleting WorkflowTemplate %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -2197,8 +2235,8 @@ func resourceDataprocWorkflowTemplateDelete(d *schema.ResourceData, meta interfa
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataprocClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataprocClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -2213,9 +2251,9 @@ func resourceDataprocWorkflowTemplateDelete(d *schema.ResourceData, meta interfa
 }
 
 func resourceDataprocWorkflowTemplateImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/workflowTemplates/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -3162,6 +3200,7 @@ func expandDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfig
 		ReservationAffinity:     expandDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigReservationAffinity(obj["reservation_affinity"]),
 		ServiceAccount:          dcl.String(obj["service_account"].(string)),
 		ServiceAccountScopes:    expandStringArray(obj["service_account_scopes"]),
+		ShieldedInstanceConfig:  expandDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig(obj["shielded_instance_config"]),
 		Subnetwork:              dcl.String(obj["subnetwork"].(string)),
 		Tags:                    expandStringArray(obj["tags"]),
 		Zone:                    dcl.StringOrNil(obj["zone"].(string)),
@@ -3181,6 +3220,7 @@ func flattenDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfi
 		"reservation_affinity":       flattenDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigReservationAffinity(obj.ReservationAffinity),
 		"service_account":            obj.ServiceAccount,
 		"service_account_scopes":     obj.ServiceAccountScopes,
+		"shielded_instance_config":   flattenDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig(obj.ShieldedInstanceConfig),
 		"subnetwork":                 obj.Subnetwork,
 		"tags":                       obj.Tags,
 		"zone":                       obj.Zone,
@@ -3240,6 +3280,36 @@ func flattenDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfi
 		"consume_reservation_type": obj.ConsumeReservationType,
 		"key":                      obj.Key,
 		"values":                   obj.Values,
+	}
+
+	return []interface{}{transformed}
+
+}
+
+func expandDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig(o interface{}) *dataproc.WorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig {
+	if o == nil {
+		return dataproc.EmptyWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig
+	}
+	objArr := o.([]interface{})
+	if len(objArr) == 0 || objArr[0] == nil {
+		return dataproc.EmptyWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig
+	}
+	obj := objArr[0].(map[string]interface{})
+	return &dataproc.WorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig{
+		EnableIntegrityMonitoring: dcl.Bool(obj["enable_integrity_monitoring"].(bool)),
+		EnableSecureBoot:          dcl.Bool(obj["enable_secure_boot"].(bool)),
+		EnableVtpm:                dcl.Bool(obj["enable_vtpm"].(bool)),
+	}
+}
+
+func flattenDataprocWorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig(obj *dataproc.WorkflowTemplatePlacementManagedClusterConfigGceClusterConfigShieldedInstanceConfig) interface{} {
+	if obj == nil || obj.Empty() {
+		return nil
+	}
+	transformed := map[string]interface{}{
+		"enable_integrity_monitoring": obj.EnableIntegrityMonitoring,
+		"enable_secure_boot":          obj.EnableSecureBoot,
+		"enable_vtpm":                 obj.EnableVtpm,
 	}
 
 	return []interface{}{transformed}

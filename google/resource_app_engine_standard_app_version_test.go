@@ -1,23 +1,25 @@
 package google
 
 import (
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccAppEngineStandardAppVersion_update(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"org_id":          getTestOrgFromEnv(t),
-		"billing_account": getTestBillingAccountFromEnv(t),
-		"random_suffix":   randString(t, 10),
+		"org_id":          acctest.GetTestOrgFromEnv(t),
+		"billing_account": acctest.GetTestBillingAccountFromEnv(t),
+		"random_suffix":   RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckAppEngineStandardAppVersionDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckAppEngineStandardAppVersionDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAppEngineStandardAppVersion_python(context),
@@ -166,14 +168,14 @@ resource "google_project_service" "vpcaccess_api" {
 }
 
 resource "google_vpc_access_connector" "bar" {
-	depends_on = [
+  depends_on = [
     google_project_service.vpcaccess_api
   ]
-	project = google_project.my_project.project_id
-	name = "bar"
-	region = "us-central1"
-	ip_cidr_range = "10.8.0.0/28"
-	network = "default"
+  project = google_project.my_project.project_id
+  name = "bar"
+  region = "us-central1"
+  ip_cidr_range = "10.8.0.0/28"
+  network = "default"
 }
 
 resource "google_app_engine_standard_app_version" "foo" {
@@ -182,8 +184,9 @@ resource "google_app_engine_standard_app_version" "foo" {
   service    = "default"
   runtime    = "python38"
 
-	vpc_access_connector {
-		name = "${google_vpc_access_connector.bar.id}"
+  vpc_access_connector {
+    name           = "${google_vpc_access_connector.bar.id}"
+    egress_setting = "ALL_TRAFFIC"
   }
 
   entrypoint {

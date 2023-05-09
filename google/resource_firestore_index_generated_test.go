@@ -21,20 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccFirestoreIndex_firestoreIndexBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_id":    getTestFirestoreProjectFromEnv(t),
-		"random_suffix": randString(t, 10),
+		"project_id":    acctest.GetTestFirestoreProjectFromEnv(t),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckFirestoreIndexDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckFirestoreIndexDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccFirestoreIndex_firestoreIndexBasicExample(context),
@@ -80,9 +83,9 @@ func testAccCheckFirestoreIndexDestroyProducer(t *testing.T) func(s *terraform.S
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{FirestoreBasePath}}{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{FirestoreBasePath}}{{name}}")
 			if err != nil {
 				return err
 			}
@@ -93,7 +96,7 @@ func testAccCheckFirestoreIndexDestroyProducer(t *testing.T) func(s *terraform.S
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("FirestoreIndex still exists at %s", url)
 			}

@@ -24,9 +24,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceKMSCryptoKey() *schema.Resource {
+func ResourceKMSCryptoKey() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceKMSCryptoKeyCreate,
 		Read:   resourceKMSCryptoKeyRead,
@@ -47,7 +50,7 @@ func resourceKMSCryptoKey() *schema.Resource {
 		StateUpgraders: []schema.StateUpgrader{
 			{
 				Type:    resourceKMSCryptoKeyResourceV0().CoreConfigSchema().ImpliedType(),
-				Upgrade: resourceKMSCryptoKeyUpgradeV0,
+				Upgrade: ResourceKMSCryptoKeyUpgradeV0,
 				Version: 0,
 			},
 		},
@@ -92,7 +95,7 @@ If not specified at creation time, the default duration is 24 hours.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"ENCRYPT_DECRYPT", "ASYMMETRIC_SIGN", "ASYMMETRIC_DECRYPT", "MAC", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"ENCRYPT_DECRYPT", "ASYMMETRIC_SIGN", "ASYMMETRIC_DECRYPT", "MAC", ""}),
 				Description: `The immutable purpose of this CryptoKey. See the
 [purpose reference](https://cloud.google.com/kms/docs/reference/rest/v1/projects.locations.keyRings.cryptoKeys#CryptoKeyPurpose)
 for possible inputs. Default value: "ENCRYPT_DECRYPT" Possible values: ["ENCRYPT_DECRYPT", "ASYMMETRIC_SIGN", "ASYMMETRIC_DECRYPT", "MAC"]`,
@@ -101,7 +104,7 @@ for possible inputs. Default value: "ENCRYPT_DECRYPT" Possible values: ["ENCRYPT
 			"rotation_period": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: orEmpty(validateKmsCryptoKeyRotationPeriod),
+				ValidateFunc: verify.OrEmpty(validateKmsCryptoKeyRotationPeriod),
 				Description: `Every time this period passes, generate a new CryptoKeyVersion and set it as the primary.
 The first rotation will take place after the specified period. The rotation period has
 the format of a decimal number with up to 9 fractional digits, followed by the
@@ -111,7 +114,7 @@ letter 's' (seconds). It must be greater than a day (ie, 86400).`,
 				Type:     schema.TypeBool,
 				Optional: true,
 				ForceNew: true,
-				Description: `If set to true, the request will create a CryptoKey without any CryptoKeyVersions. 
+				Description: `If set to true, the request will create a CryptoKey without any CryptoKeyVersions.
 You must use the 'google_kms_key_ring_import_job' resource to import the CryptoKeyVersion.`,
 			},
 			"version_template": {
@@ -144,8 +147,8 @@ See the [algorithm reference](https://cloud.google.com/kms/docs/reference/rest/v
 }
 
 func resourceKMSCryptoKeyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -193,7 +196,7 @@ func resourceKMSCryptoKeyCreate(d *schema.ResourceData, meta interface{}) error 
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/cryptoKeys?cryptoKeyId={{name}}&skipInitialVersionCreation={{skip_initial_version_creation}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/cryptoKeys?cryptoKeyId={{name}}&skipInitialVersionCreation={{skip_initial_version_creation}}")
 	if err != nil {
 		return err
 	}
@@ -210,13 +213,13 @@ func resourceKMSCryptoKeyCreate(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating CryptoKey: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{key_ring}}/cryptoKeys/{{name}}")
+	id, err := ReplaceVars(d, config, "{{key_ring}}/cryptoKeys/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -228,13 +231,13 @@ func resourceKMSCryptoKeyCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceKMSCryptoKeyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/cryptoKeys/{{name}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/cryptoKeys/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -250,9 +253,9 @@ func resourceKMSCryptoKeyRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("KMSCryptoKey %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("KMSCryptoKey %q", d.Id()))
 	}
 
 	res, err = resourceKMSCryptoKeyDecoder(d, meta, res)
@@ -290,8 +293,8 @@ func resourceKMSCryptoKeyRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceKMSCryptoKeyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -323,7 +326,7 @@ func resourceKMSCryptoKeyUpdate(d *schema.ResourceData, meta interface{}) error 
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/cryptoKeys/{{name}}")
+	url, err := ReplaceVars(d, config, "{{KMSBasePath}}{{key_ring}}/cryptoKeys/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -343,9 +346,9 @@ func resourceKMSCryptoKeyUpdate(d *schema.ResourceData, meta interface{}) error 
 	if d.HasChange("version_template") {
 		updateMask = append(updateMask, "versionTemplate.algorithm")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -358,7 +361,7 @@ func resourceKMSCryptoKeyUpdate(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating CryptoKey %q: %s", d.Id(), err)
@@ -370,20 +373,20 @@ func resourceKMSCryptoKeyUpdate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceKMSCryptoKeyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	cryptoKeyId, err := parseKmsCryptoKeyId(d.Id(), config)
+	cryptoKeyId, err := ParseKmsCryptoKeyId(d.Id(), config)
 	if err != nil {
 		return err
 	}
 
 	log.Printf(`
 [WARNING] KMS CryptoKey resources cannot be deleted from GCP. The CryptoKey %s will be removed from Terraform state,
-and all its CryptoKeyVersions will be destroyed, but it will still be present in the project.`, cryptoKeyId.cryptoKeyId())
+and all its CryptoKeyVersions will be destroyed, but it will still be present in the project.`, cryptoKeyId.CryptoKeyId())
 
 	// Delete all versions of the key
 	if err := clearCryptoKeyVersions(cryptoKeyId, userAgent, config); err != nil {
@@ -405,14 +408,14 @@ and all its CryptoKeyVersions will be destroyed, but it will still be present in
 
 func resourceKMSCryptoKeyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	cryptoKeyId, err := parseKmsCryptoKeyId(d.Id(), config)
+	cryptoKeyId, err := ParseKmsCryptoKeyId(d.Id(), config)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := d.Set("key_ring", cryptoKeyId.KeyRingId.keyRingId()); err != nil {
+	if err := d.Set("key_ring", cryptoKeyId.KeyRingId.KeyRingId()); err != nil {
 		return nil, fmt.Errorf("Error setting key_ring: %s", err)
 	}
 	if err := d.Set("name", cryptoKeyId.Name); err != nil {
@@ -423,7 +426,7 @@ func resourceKMSCryptoKeyImport(d *schema.ResourceData, meta interface{}) ([]*sc
 		return nil, fmt.Errorf("Error setting skip_initial_version_creation: %s", err)
 	}
 
-	id, err := replaceVars(d, config, "{{key_ring}}/cryptoKeys/{{name}}")
+	id, err := ReplaceVars(d, config, "{{key_ring}}/cryptoKeys/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -432,19 +435,19 @@ func resourceKMSCryptoKeyImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenKMSCryptoKeyLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSCryptoKeyPurpose(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyPurpose(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSCryptoKeyRotationPeriod(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyRotationPeriod(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSCryptoKeyVersionTemplate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyVersionTemplate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -459,23 +462,23 @@ func flattenKMSCryptoKeyVersionTemplate(v interface{}, d *schema.ResourceData, c
 		flattenKMSCryptoKeyVersionTemplateProtectionLevel(original["protectionLevel"], d, config)
 	return []interface{}{transformed}
 }
-func flattenKMSCryptoKeyVersionTemplateAlgorithm(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyVersionTemplateAlgorithm(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSCryptoKeyVersionTemplateProtectionLevel(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyVersionTemplateProtectionLevel(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSCryptoKeyDestroyScheduledDuration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyDestroyScheduledDuration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenKMSCryptoKeyImportOnly(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenKMSCryptoKeyImportOnly(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandKMSCryptoKeyLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandKMSCryptoKeyLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -486,15 +489,15 @@ func expandKMSCryptoKeyLabels(v interface{}, d TerraformResourceData, config *Co
 	return m, nil
 }
 
-func expandKMSCryptoKeyPurpose(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyPurpose(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandKMSCryptoKeyRotationPeriod(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyRotationPeriod(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandKMSCryptoKeyVersionTemplate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyVersionTemplate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -520,19 +523,19 @@ func expandKMSCryptoKeyVersionTemplate(v interface{}, d TerraformResourceData, c
 	return transformed, nil
 }
 
-func expandKMSCryptoKeyVersionTemplateAlgorithm(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyVersionTemplateAlgorithm(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandKMSCryptoKeyVersionTemplateProtectionLevel(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyVersionTemplateProtectionLevel(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandKMSCryptoKeyDestroyScheduledDuration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyDestroyScheduledDuration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandKMSCryptoKeyImportOnly(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandKMSCryptoKeyImportOnly(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
@@ -610,16 +613,16 @@ func resourceKMSCryptoKeyResourceV0() *schema.Resource {
 	}
 }
 
-func resourceKMSCryptoKeyUpgradeV0(_ context.Context, rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
+func ResourceKMSCryptoKeyUpgradeV0(_ context.Context, rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
 	log.Printf("[DEBUG] Attributes before migration: %#v", rawState)
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	keyRingId := rawState["key_ring"].(string)
 	parsed, err := parseKmsKeyRingId(keyRingId, config)
 	if err != nil {
 		return nil, err
 	}
-	rawState["key_ring"] = parsed.keyRingId()
+	rawState["key_ring"] = parsed.KeyRingId()
 
 	log.Printf("[DEBUG] Attributes after migration: %#v", rawState)
 	return rawState, nil

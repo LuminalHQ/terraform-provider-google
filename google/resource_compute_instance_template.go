@@ -13,6 +13,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
+
 	"google.golang.org/api/compute/v1"
 )
 
@@ -34,9 +38,10 @@ var (
 	}
 )
 
-var REQUIRED_SCRATCH_DISK_SIZE_GB = 375
+var DEFAULT_SCRATCH_DISK_SIZE_GB = 375
+var VALID_SCRATCH_DISK_SIZES_GB [2]int = [2]int{375, 3000}
 
-func resourceComputeInstanceTemplate() *schema.Resource {
+func ResourceComputeInstanceTemplate() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeInstanceTemplateCreate,
 		Read:   resourceComputeInstanceTemplateRead,
@@ -67,7 +72,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 				Computed:      true,
 				ForceNew:      true,
 				ConflictsWith: []string{"name_prefix"},
-				ValidateFunc:  validateGCEName,
+				ValidateFunc:  verify.ValidateGCEName,
 				Description:   `The name of the instance template. If you leave this blank, Terraform will auto-generate a unique name.`,
 			},
 
@@ -132,7 +137,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Optional:    true,
 							ForceNew:    true,
 							Computed:    true,
-							Description: `The size of the image in gigabytes. If not specified, it will inherit the size of its base image. For SCRATCH disks, the size must be exactly 375GB.`,
+							Description: `The size of the image in gigabytes. If not specified, it will inherit the size of its base image. For SCRATCH disks, the size must be one of 375 or 3000 GB, with a default of 375 GB.`,
 						},
 
 						"disk_type": {
@@ -159,6 +164,74 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Computed:    true,
 							ForceNew:    true,
 							Description: `The image from which to initialize this disk. This can be one of: the image's self_link, projects/{project}/global/images/{image}, projects/{project}/global/images/family/{family}, global/images/{image}, global/images/family/{family}, family/{family}, {project}/{family}, {project}/{image}, {family}, or {image}. ~> Note: Either source or source_image is required when creating a new instance except for when creating a local SSD.`,
+						},
+						"source_image_encryption_key": {
+							Type:     schema.TypeList,
+							Optional: true,
+							ForceNew: true,
+							Description: `The customer-supplied encryption key of the source
+image. Required if the source image is protected by a
+customer-supplied encryption key.
+
+Instance templates do not store customer-supplied
+encryption keys, so you cannot create disks for
+instances in a managed instance group if the source
+images are encrypted with your own keys.`,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"kms_key_service_account": {
+										Type:     schema.TypeString,
+										Optional: true,
+										ForceNew: true,
+										Description: `The service account being used for the encryption
+request for the given KMS key. If absent, the Compute
+Engine default service account is used.`,
+									},
+									"kms_key_self_link": {
+										Type:     schema.TypeString,
+										Required: true,
+										ForceNew: true,
+										Description: `The self link of the encryption key that is stored in
+Google Cloud KMS.`,
+									},
+								},
+							},
+						},
+						"source_snapshot": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ForceNew: true,
+							Description: `The source snapshot to create this disk. When creating
+a new instance, one of initializeParams.sourceSnapshot,
+initializeParams.sourceImage, or disks.source is
+required except for local SSD.`,
+						},
+						"source_snapshot_encryption_key": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							ForceNew:    true,
+							Description: `The customer-supplied encryption key of the source snapshot.`,
+							MaxItems:    1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"kms_key_service_account": {
+										Type:     schema.TypeString,
+										Optional: true,
+										ForceNew: true,
+										Description: `The service account being used for the encryption
+request for the given KMS key. If absent, the Compute
+Engine default service account is used.`,
+									},
+									"kms_key_self_link": {
+										Type:     schema.TypeString,
+										Required: true,
+										ForceNew: true,
+										Description: `The self link of the encryption key that is stored in
+Google Cloud KMS.`,
+									},
+								},
+							},
 						},
 
 						"interface": {
@@ -204,7 +277,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 										Type:             schema.TypeString,
 										Required:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: compareSelfLinkRelativePaths,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkRelativePaths,
 										Description:      `The self link of the encryption key that is stored in Google Cloud KMS.`,
 									},
 								},
@@ -219,7 +292,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Description: `A list (short name or id) of resource policies to attach to this disk. Currently a max of 1 resource policy is supported.`,
 							Elem: &schema.Schema{
 								Type:             schema.TypeString,
-								DiffSuppressFunc: compareResourceNames,
+								DiffSuppressFunc: tpgresource.CompareResourceNames,
 							},
 						},
 					},
@@ -286,7 +359,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Optional:         true,
 							ForceNew:         true,
 							Computed:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The name or self_link of the network to attach this interface to. Use network attribute for Legacy or Auto subnetted networks and subnetwork for custom subnetted networks.`,
 						},
 
@@ -295,7 +368,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Optional:         true,
 							ForceNew:         true,
 							Computed:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The name of the subnetwork to attach this interface to. The subnetwork must exist in the same region this instance will be created in. Either network or subnetwork must be provided.`,
 						},
 
@@ -368,7 +441,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 										Type:             schema.TypeString,
 										Required:         true,
 										ForceNew:         true,
-										DiffSuppressFunc: ipCidrRangeDiffSuppress,
+										DiffSuppressFunc: tpgresource.IpCidrRangeDiffSuppress,
 										Description:      `The IP CIDR range represented by this alias IP range. This IP CIDR range must belong to the specified subnetwork and cannot contain IP addresses reserved by system or used by other network interfaces. At the time of writing only a netmask (e.g. /24) may be supplied, with a CIDR format resulting in an API error.`,
 									},
 									"subnetwork_range_name": {
@@ -494,7 +567,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							AtLeastOneOf:     schedulingInstTemplateKeys,
 							ForceNew:         true,
 							Elem:             instanceSchedulingNodeAffinitiesElemSchema(),
-							DiffSuppressFunc: emptyOrDefaultStringSuppress(""),
+							DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress(""),
 							Description:      `Specifies node affinities or anti-affinities to determine which sole-tenant nodes your instances and managed instance groups will use as host systems.`,
 						},
 						"min_node_cpus": {
@@ -528,6 +601,12 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 				Description: `The URI of the created resource.`,
 			},
 
+			"self_link_unique": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: `A special URI of the created resource that uniquely identifies this instance template.`,
+			},
+
 			"service_account": {
 				Type:        schema.TypeList,
 				MaxItems:    1,
@@ -552,10 +631,10 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
 								StateFunc: func(v interface{}) string {
-									return canonicalizeServiceScope(v.(string))
+									return tpgresource.CanonicalizeServiceScope(v.(string))
 								},
 							},
-							Set: stringScopeHashcode,
+							Set: tpgresource.StringScopeHashcode,
 						},
 					},
 				},
@@ -570,7 +649,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 				// Since this block is used by the API based on which
 				// image being used, the field needs to be marked as Computed.
 				Computed:         true,
-				DiffSuppressFunc: emptyOrDefaultStringSuppress(""),
+				DiffSuppressFunc: tpgresource.EmptyOrDefaultStringSuppress(""),
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"enable_secure_boot": {
@@ -642,6 +721,12 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							ForceNew:    true,
 							Description: `The number of threads per physical core. To disable simultaneous multithreading (SMT) set this to 1. If unset, the maximum number of threads supported per core by the underlying processor is assumed.`,
 						},
+						"visible_core_count": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							ForceNew:    true,
+							Description: `The number of physical cores to expose to an instance. Multiply by the number of threads per core to compute the total number of virtual CPUs to expose to the instance. If unset, the number of cores is inferred from the instance\'s nominal CPU count and the underlying platform\'s SMT width.`,
+						},
 					},
 				},
 			},
@@ -662,7 +747,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Type:             schema.TypeString,
 							Required:         true,
 							ForceNew:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description:      `The accelerator type resource to expose to this instance. E.g. nvidia-tesla-k80.`,
 						},
 					},
@@ -698,6 +783,18 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 				Elem:        &schema.Schema{Type: schema.TypeString},
 				Set:         schema.HashString,
 				Description: `A set of key/value label pairs to assign to instances created from this template,`,
+			},
+
+			"resource_policies": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				ForceNew:    true,
+				MaxItems:    1,
+				Description: `A list of self_links of resource policies to attach to the instance. Currently a max of 1 resource policy is supported.`,
+				Elem: &schema.Schema{
+					Type:             schema.TypeString,
+					DiffSuppressFunc: tpgresource.CompareResourceNames,
+				},
 			},
 
 			"reservation_affinity": {
@@ -750,7 +847,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 }
 
 func resourceComputeInstanceTemplateSourceImageCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	numDisks := diff.Get("disk.#").(int)
 	for i := 0; i < numDisks; i++ {
@@ -768,7 +865,7 @@ func resourceComputeInstanceTemplateSourceImageCustomizeDiff(_ context.Context, 
 			if err != nil {
 				return err
 			}
-			oldResolved, err := resolveImage(config, project, old.(string), config.userAgent)
+			oldResolved, err := resolveImage(config, project, old.(string), config.UserAgent)
 			if err != nil {
 				return err
 			}
@@ -776,7 +873,7 @@ func resourceComputeInstanceTemplateSourceImageCustomizeDiff(_ context.Context, 
 			if err != nil {
 				return err
 			}
-			newResolved, err := resolveImage(config, project, new.(string), config.userAgent)
+			newResolved, err := resolveImage(config, project, new.(string), config.UserAgent)
 			if err != nil {
 				return err
 			}
@@ -816,8 +913,13 @@ func resourceComputeInstanceTemplateScratchDiskCustomizeDiffFunc(diff TerraformR
 		}
 
 		diskSize := diff.Get(fmt.Sprintf("disk.%d.disk_size_gb", i)).(int)
-		if typee == "SCRATCH" && diskSize != REQUIRED_SCRATCH_DISK_SIZE_GB {
-			return fmt.Errorf("SCRATCH disks must be exactly %dGB, disk %d is %d", REQUIRED_SCRATCH_DISK_SIZE_GB, i, diskSize)
+		if typee == "SCRATCH" && !(diskSize == 375 || diskSize == 3000) { // see VALID_SCRATCH_DISK_SIZES_GB
+			return fmt.Errorf("SCRATCH disks must be one of %v GB, disk %d is %d", VALID_SCRATCH_DISK_SIZES_GB, i, diskSize)
+		}
+
+		interfacee := diff.Get(fmt.Sprintf("disk.%d.interface", i)).(string)
+		if typee == "SCRATCH" && diskSize == 3000 && interfacee != "NVME" {
+			return fmt.Errorf("SCRATCH disks with a size of 3000 GB must have an interface of NVME. disk %d has interface %s", i, interfacee)
 		}
 	}
 
@@ -838,13 +940,13 @@ func resourceComputeInstanceTemplateBootDiskCustomizeDiff(_ context.Context, dif
 	return nil
 }
 
-func buildDisks(d *schema.ResourceData, config *Config) ([]*compute.AttachedDisk, error) {
+func buildDisks(d *schema.ResourceData, config *transport_tpg.Config) ([]*compute.AttachedDisk, error) {
 	project, err := getProject(d, config)
 	if err != nil {
 		return nil, err
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -880,7 +982,7 @@ func buildDisks(d *schema.ResourceData, config *Config) ([]*compute.AttachedDisk
 
 		if v, ok := d.GetOk(prefix + ".source"); ok {
 			disk.Source = v.(string)
-			conflicts := []string{"disk_size_gb", "disk_name", "disk_type", "source_image", "labels"}
+			conflicts := []string{"disk_size_gb", "disk_name", "disk_type", "source_image", "source_snapshot", "labels"}
 			for _, conflict := range conflicts {
 				if _, ok := d.GetOk(prefix + "." + conflict); ok {
 					return nil, fmt.Errorf("Cannot use `source` with any of the fields in %s", conflicts)
@@ -900,6 +1002,8 @@ func buildDisks(d *schema.ResourceData, config *Config) ([]*compute.AttachedDisk
 				disk.InitializeParams.DiskType = v.(string)
 			}
 
+			disk.InitializeParams.Labels = expandStringMap(d, prefix+".labels")
+
 			if v, ok := d.GetOk(prefix + ".source_image"); ok {
 				imageName := v.(string)
 				imageUrl, err := resolveImage(config, project, imageName, userAgent)
@@ -911,11 +1015,33 @@ func buildDisks(d *schema.ResourceData, config *Config) ([]*compute.AttachedDisk
 				disk.InitializeParams.SourceImage = imageUrl
 			}
 
-			disk.InitializeParams.Labels = expandStringMap(d, prefix+".labels")
+			if _, ok := d.GetOk(prefix + ".source_image_encryption_key"); ok {
+				disk.InitializeParams.SourceImageEncryptionKey = &compute.CustomerEncryptionKey{}
+				if v, ok := d.GetOk(prefix + ".source_image_encryption_key.0.kms_key_self_link"); ok {
+					disk.InitializeParams.SourceImageEncryptionKey.KmsKeyName = v.(string)
+				}
+				if v, ok := d.GetOk(prefix + ".source_image_encryption_key.0.kms_key_service_account"); ok {
+					disk.InitializeParams.SourceImageEncryptionKey.KmsKeyServiceAccount = v.(string)
+				}
+			}
+
+			if v, ok := d.GetOk(prefix + ".source_snapshot"); ok {
+				disk.InitializeParams.SourceSnapshot = v.(string)
+			}
+
+			if _, ok := d.GetOk(prefix + ".source_snapshot_encryption_key"); ok {
+				disk.InitializeParams.SourceSnapshotEncryptionKey = &compute.CustomerEncryptionKey{}
+				if v, ok := d.GetOk(prefix + ".source_snapshot_encryption_key.0.kms_key_self_link"); ok {
+					disk.InitializeParams.SourceSnapshotEncryptionKey.KmsKeyName = v.(string)
+				}
+				if v, ok := d.GetOk(prefix + ".source_snapshot_encryption_key.0.kms_key_service_account"); ok {
+					disk.InitializeParams.SourceSnapshotEncryptionKey.KmsKeyServiceAccount = v.(string)
+				}
+			}
 
 			if _, ok := d.GetOk(prefix + ".resource_policies"); ok {
 				// instance template only supports a resource name here (not uri)
-				disk.InitializeParams.ResourcePolicies = convertAndMapStringArr(d.Get(prefix+".resource_policies").([]interface{}), GetResourceNameFromSelfLink)
+				disk.InitializeParams.ResourcePolicies = expandInstanceTemplateResourcePolicies(d, prefix+".resource_policies")
 			}
 		}
 
@@ -946,7 +1072,7 @@ func buildDisks(d *schema.ResourceData, config *Config) ([]*compute.AttachedDisk
 // 'zones/us-east1-b/acceleratorTypes/nvidia-tesla-k80'.
 // Accelerator type 'zones/us-east1-b/acceleratorTypes/nvidia-tesla-k80'
 // must be a valid resource name (not an url).
-func expandInstanceTemplateGuestAccelerators(d TerraformResourceData, config *Config) []*compute.AcceleratorConfig {
+func expandInstanceTemplateGuestAccelerators(d TerraformResourceData, config *transport_tpg.Config) []*compute.AcceleratorConfig {
 	configs, ok := d.GetOk("guest_accelerator")
 	if !ok {
 		return nil
@@ -969,9 +1095,13 @@ func expandInstanceTemplateGuestAccelerators(d TerraformResourceData, config *Co
 	return guestAccelerators
 }
 
+func expandInstanceTemplateResourcePolicies(d TerraformResourceData, dataKey string) []string {
+	return convertAndMapStringArr(d.Get(dataKey).([]interface{}), tpgresource.GetResourceNameFromSelfLink)
+}
+
 func resourceComputeInstanceTemplateCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1004,6 +1134,7 @@ func resourceComputeInstanceTemplateCreate(d *schema.ResourceData, meta interfac
 	if err != nil {
 		return err
 	}
+	resourcePolicies := expandInstanceTemplateResourcePolicies(d, "resource_policies")
 
 	instanceProperties := &compute.InstanceProperties{
 		CanIpForward:               d.Get("can_ip_forward").(bool),
@@ -1020,6 +1151,7 @@ func resourceComputeInstanceTemplateCreate(d *schema.ResourceData, meta interfac
 		ConfidentialInstanceConfig: expandConfidentialInstanceConfig(d),
 		ShieldedInstanceConfig:     expandShieldedVmConfigs(d),
 		AdvancedMachineFeatures:    expandAdvancedMachineFeatures(d),
+		ResourcePolicies:           resourcePolicies,
 		ReservationAffinity:        reservationAffinity,
 	}
 
@@ -1048,8 +1180,10 @@ func resourceComputeInstanceTemplateCreate(d *schema.ResourceData, meta interfac
 
 	// Store the ID now
 	d.SetId(fmt.Sprintf("projects/%s/global/instanceTemplates/%s", project, instanceTemplate.Name))
+	// And also the unique ID
+	d.Set("self_link_unique", fmt.Sprintf("%v?uniqueId=%v", d.Id(), op.TargetId))
 
-	err = computeOperationWaitTime(config, op, project, "Creating Instance Template", userAgent, d.Timeout(schema.TimeoutCreate))
+	err = ComputeOperationWaitTime(config, op, project, "Creating Instance Template", userAgent, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return err
 	}
@@ -1094,8 +1228,14 @@ func diskCharacteristicsFromMap(m map[string]interface{}) diskCharacteristics {
 	return dc
 }
 
-func flattenDisk(disk *compute.AttachedDisk, defaultProject string) (map[string]interface{}, error) {
+func flattenDisk(disk *compute.AttachedDisk, configDisk map[string]any, defaultProject string) (map[string]interface{}, error) {
 	diskMap := make(map[string]interface{})
+
+	// These values are not returned by the API, so we copy them from the config.
+	diskMap["source_image_encryption_key"] = configDisk["source_image_encryption_key"]
+	diskMap["source_snapshot"] = configDisk["source_snapshot"]
+	diskMap["source_snapshot_encryption_key"] = configDisk["source_snapshot_encryption_key"]
+
 	if disk.InitializeParams != nil {
 		if disk.InitializeParams.SourceImage != "" {
 			path, err := resolveImageRefToRelativeURI(defaultProject, disk.InitializeParams.SourceImage)
@@ -1112,7 +1252,7 @@ func flattenDisk(disk *compute.AttachedDisk, defaultProject string) (map[string]
 		// The API does not return a disk size value for scratch disks. They can only be one size,
 		// so we can assume that size here.
 		if disk.InitializeParams.DiskSizeGb == 0 && disk.Type == "SCRATCH" {
-			diskMap["disk_size_gb"] = REQUIRED_SCRATCH_DISK_SIZE_GB
+			diskMap["disk_size_gb"] = DEFAULT_SCRATCH_DISK_SIZE_GB
 		} else {
 			diskMap["disk_size_gb"] = disk.InitializeParams.DiskSizeGb
 		}
@@ -1131,7 +1271,7 @@ func flattenDisk(disk *compute.AttachedDisk, defaultProject string) (map[string]
 	diskMap["boot"] = disk.Boot
 	diskMap["device_name"] = disk.DeviceName
 	diskMap["interface"] = disk.Interface
-	diskMap["source"] = ConvertSelfLinkToV1(disk.Source)
+	diskMap["source"] = tpgresource.ConvertSelfLinkToV1(disk.Source)
 	diskMap["mode"] = disk.Mode
 	diskMap["type"] = disk.Type
 
@@ -1260,19 +1400,20 @@ func flattenDisks(disks []*compute.AttachedDisk, d *schema.ResourceData, default
 	apiDisks := make([]map[string]interface{}, len(disks))
 
 	for i, disk := range disks {
-		d, err := flattenDisk(disk, defaultProject)
+		configDisk := d.Get(fmt.Sprintf("disk.%d", i)).(map[string]any)
+		apiDisk, err := flattenDisk(disk, configDisk, defaultProject)
 		if err != nil {
 			return nil, err
 		}
-		apiDisks[i] = d
+		apiDisks[i] = apiDisk
 	}
 
 	return reorderDisks(d.Get("disk").([]interface{}), apiDisks), nil
 }
 
 func resourceComputeInstanceTemplateRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1282,12 +1423,16 @@ func resourceComputeInstanceTemplateRead(d *schema.ResourceData, meta interface{
 		return err
 	}
 
-	splits := strings.Split(d.Id(), "/")
-	instanceTemplate, err := config.NewComputeClient(userAgent).InstanceTemplates.Get(project, splits[len(splits)-1]).Do()
-	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Instance Template %q", d.Get("name").(string)))
+	idStr := d.Id()
+	if v, ok := d.GetOk("self_link_unique"); ok && v != "" {
+		idStr = ConvertToUniqueIdWhenPresent(v.(string))
 	}
 
+	splits := strings.Split(idStr, "/")
+	instanceTemplate, err := config.NewComputeClient(userAgent).InstanceTemplates.Get(project, splits[len(splits)-1]).Do()
+	if err != nil {
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Instance Template %q", d.Get("name").(string)))
+	}
 	// Set the metadata fingerprint if there is one.
 	if instanceTemplate.Properties.Metadata != nil {
 		if err = d.Set("metadata_fingerprint", instanceTemplate.Properties.Metadata.Fingerprint); err != nil {
@@ -1328,6 +1473,9 @@ func resourceComputeInstanceTemplateRead(d *schema.ResourceData, meta interface{
 	}
 	if err = d.Set("self_link", instanceTemplate.SelfLink); err != nil {
 		return fmt.Errorf("Error setting self_link: %s", err)
+	}
+	if err = d.Set("self_link_unique", fmt.Sprintf("%v?uniqueId=%v", instanceTemplate.SelfLink, instanceTemplate.Id)); err != nil {
+		return fmt.Errorf("Error setting self_link_unique: %s", err)
 	}
 	if err = d.Set("name", instanceTemplate.Name); err != nil {
 		return fmt.Errorf("Error setting name: %s", err)
@@ -1418,6 +1566,12 @@ func resourceComputeInstanceTemplateRead(d *schema.ResourceData, meta interface{
 		}
 	}
 
+	if instanceTemplate.Properties.ResourcePolicies != nil {
+		if err = d.Set("resource_policies", instanceTemplate.Properties.ResourcePolicies); err != nil {
+			return fmt.Errorf("Error setting resource_policies: %s", err)
+		}
+	}
+
 	if reservationAffinity := instanceTemplate.Properties.ReservationAffinity; reservationAffinity != nil {
 		if err = d.Set("reservation_affinity", flattenReservationAffinity(reservationAffinity)); err != nil {
 			return fmt.Errorf("Error setting reservation_affinity: %s", err)
@@ -1428,8 +1582,8 @@ func resourceComputeInstanceTemplateRead(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeInstanceTemplateDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1446,7 +1600,7 @@ func resourceComputeInstanceTemplateDelete(d *schema.ResourceData, meta interfac
 		return fmt.Errorf("Error deleting instance template: %s", err)
 	}
 
-	err = computeOperationWaitTime(config, op, project, "Deleting Instance Template", userAgent, d.Timeout(schema.TimeoutDelete))
+	err = ComputeOperationWaitTime(config, op, project, "Deleting Instance Template", userAgent, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
 		return err
 	}
@@ -1480,13 +1634,13 @@ func expandResourceComputeInstanceTemplateScheduling(d *schema.ResourceData, met
 }
 
 func resourceComputeInstanceTemplateImportState(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{"projects/(?P<project>[^/]+)/global/instanceTemplates/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{"projects/(?P<project>[^/]+)/global/instanceTemplates/(?P<name>[^/]+)", "(?P<project>[^/]+)/(?P<name>[^/]+)", "(?P<name>[^/]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/instanceTemplates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/instanceTemplates/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}

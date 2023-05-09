@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeNodeGroup() *schema.Resource {
+func ResourceComputeNodeGroup() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeNodeGroupCreate,
 		Read:   resourceComputeNodeGroupRead,
@@ -71,7 +75,7 @@ to 100 and greater than or equal to min-nodes.`,
 							Computed:     true,
 							Optional:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"OFF", "ON", "ONLY_SCALE_OUT"}),
+							ValidateFunc: verify.ValidateEnum([]string{"OFF", "ON", "ONLY_SCALE_OUT"}),
 							Description: `The autoscaling mode. Set to one of the following:
   - OFF: Disables the autoscaler.
   - ON: Enables scaling in and scaling out.
@@ -133,6 +137,46 @@ than or equal to max-nodes. The default value is 0.`,
 				ForceNew:    true,
 				Description: `Name of the resource.`,
 			},
+			"share_settings": {
+				Type:        schema.TypeList,
+				Computed:    true,
+				Optional:    true,
+				ForceNew:    true,
+				Description: `Share settings for the node group.`,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"share_type": {
+							Type:         schema.TypeString,
+							Required:     true,
+							ForceNew:     true,
+							ValidateFunc: verify.ValidateEnum([]string{"ORGANIZATION", "SPECIFIC_PROJECTS", "LOCAL"}),
+							Description:  `Node group sharing type. Possible values: ["ORGANIZATION", "SPECIFIC_PROJECTS", "LOCAL"]`,
+						},
+						"project_map": {
+							Type:        schema.TypeSet,
+							Optional:    true,
+							ForceNew:    true,
+							Description: `A map of project id and project config. This is only valid when shareType's value is SPECIFIC_PROJECTS.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"id": {
+										Type:     schema.TypeString,
+										Required: true,
+										ForceNew: true,
+									},
+									"project_id": {
+										Type:        schema.TypeString,
+										Required:    true,
+										ForceNew:    true,
+										Description: `The project id/number should be the same as the key of this project config in the project map.`,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			"size": {
 				Type:         schema.TypeInt,
 				Computed:     true,
@@ -170,8 +214,8 @@ than or equal to max-nodes. The default value is 0.`,
 }
 
 func resourceComputeNodeGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -219,6 +263,12 @@ func resourceComputeNodeGroupCreate(d *schema.ResourceData, meta interface{}) er
 	} else if v, ok := d.GetOkExists("autoscaling_policy"); !isEmptyValue(reflect.ValueOf(autoscalingPolicyProp)) && (ok || !reflect.DeepEqual(v, autoscalingPolicyProp)) {
 		obj["autoscalingPolicy"] = autoscalingPolicyProp
 	}
+	shareSettingsProp, err := expandComputeNodeGroupShareSettings(d.Get("share_settings"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("share_settings"); !isEmptyValue(reflect.ValueOf(shareSettingsProp)) && (ok || !reflect.DeepEqual(v, shareSettingsProp)) {
+		obj["shareSettings"] = shareSettingsProp
+	}
 	zoneProp, err := expandComputeNodeGroupZone(d.Get("zone"), d, config)
 	if err != nil {
 		return err
@@ -226,7 +276,7 @@ func resourceComputeNodeGroupCreate(d *schema.ResourceData, meta interface{}) er
 		obj["zone"] = zoneProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups?initialNodeCount=PRE_CREATE_REPLACE_ME")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups?initialNodeCount=PRE_CREATE_REPLACE_ME")
 	if err != nil {
 		return err
 	}
@@ -253,19 +303,19 @@ func resourceComputeNodeGroupCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	url = regexp.MustCompile("PRE_CREATE_REPLACE_ME").ReplaceAllLiteralString(url, sizeParam)
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating NodeGroup: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating NodeGroup", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -281,13 +331,13 @@ func resourceComputeNodeGroupCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeNodeGroupRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -305,9 +355,9 @@ func resourceComputeNodeGroupRead(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeNodeGroup %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeNodeGroup %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -338,10 +388,13 @@ func resourceComputeNodeGroupRead(d *schema.ResourceData, meta interface{}) erro
 	if err := d.Set("autoscaling_policy", flattenComputeNodeGroupAutoscalingPolicy(res["autoscalingPolicy"], d, config)); err != nil {
 		return fmt.Errorf("Error reading NodeGroup: %s", err)
 	}
+	if err := d.Set("share_settings", flattenComputeNodeGroupShareSettings(res["shareSettings"], d, config)); err != nil {
+		return fmt.Errorf("Error reading NodeGroup: %s", err)
+	}
 	if err := d.Set("zone", flattenComputeNodeGroupZone(res["zone"], d, config)); err != nil {
 		return fmt.Errorf("Error reading NodeGroup: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading NodeGroup: %s", err)
 	}
 
@@ -349,8 +402,8 @@ func resourceComputeNodeGroupRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceComputeNodeGroupUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -375,7 +428,7 @@ func resourceComputeNodeGroupUpdate(d *schema.ResourceData, meta interface{}) er
 			obj["nodeTemplate"] = nodeTemplateProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}/setNodeTemplate")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}/setNodeTemplate")
 		if err != nil {
 			return err
 		}
@@ -385,14 +438,14 @@ func resourceComputeNodeGroupUpdate(d *schema.ResourceData, meta interface{}) er
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating NodeGroup %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating NodeGroup %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating NodeGroup", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -406,8 +459,8 @@ func resourceComputeNodeGroupUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeNodeGroupDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -420,7 +473,7 @@ func resourceComputeNodeGroupDelete(d *schema.ResourceData, meta interface{}) er
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -433,12 +486,12 @@ func resourceComputeNodeGroupDelete(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "NodeGroup")
+		return transport_tpg.HandleNotFoundError(err, d, "NodeGroup")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting NodeGroup", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -451,8 +504,8 @@ func resourceComputeNodeGroupDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceComputeNodeGroupImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/zones/(?P<zone>[^/]+)/nodeGroups/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<zone>[^/]+)/(?P<name>[^/]+)",
@@ -462,7 +515,7 @@ func resourceComputeNodeGroupImport(d *schema.ResourceData, meta interface{}) ([
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/nodeGroups/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -471,29 +524,29 @@ func resourceComputeNodeGroupImport(d *schema.ResourceData, meta interface{}) ([
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeNodeGroupCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeGroupDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeGroupName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeGroupNodeTemplate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupNodeTemplate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeNodeGroupSize(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupSize(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -507,11 +560,11 @@ func flattenComputeNodeGroupSize(v interface{}, d *schema.ResourceData, config *
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeNodeGroupMaintenancePolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupMaintenancePolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeGroupMaintenanceWindow(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupMaintenanceWindow(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -524,11 +577,11 @@ func flattenComputeNodeGroupMaintenanceWindow(v interface{}, d *schema.ResourceD
 		flattenComputeNodeGroupMaintenanceWindowStartTime(original["startTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeNodeGroupMaintenanceWindowStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupMaintenanceWindowStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeGroupAutoscalingPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupAutoscalingPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -545,14 +598,14 @@ func flattenComputeNodeGroupAutoscalingPolicy(v interface{}, d *schema.ResourceD
 		flattenComputeNodeGroupAutoscalingPolicyMaxNodes(original["maxNodes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeNodeGroupAutoscalingPolicyMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupAutoscalingPolicyMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeNodeGroupAutoscalingPolicyMinNodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupAutoscalingPolicyMinNodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -566,10 +619,10 @@ func flattenComputeNodeGroupAutoscalingPolicyMinNodes(v interface{}, d *schema.R
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeNodeGroupAutoscalingPolicyMaxNodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupAutoscalingPolicyMaxNodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -583,22 +636,60 @@ func flattenComputeNodeGroupAutoscalingPolicyMaxNodes(v interface{}, d *schema.R
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeNodeGroupZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeNodeGroupShareSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["share_type"] =
+		flattenComputeNodeGroupShareSettingsShareType(original["shareType"], d, config)
+	transformed["project_map"] =
+		flattenComputeNodeGroupShareSettingsProjectMap(original["projectMap"], d, config)
+	return []interface{}{transformed}
+}
+func flattenComputeNodeGroupShareSettingsShareType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeNodeGroupShareSettingsProjectMap(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	l := v.(map[string]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for k, raw := range l {
+		original := raw.(map[string]interface{})
+		transformed = append(transformed, map[string]interface{}{
+			"id":         k,
+			"project_id": flattenComputeNodeGroupShareSettingsProjectMapProjectId(original["projectId"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenComputeNodeGroupShareSettingsProjectMapProjectId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
 }
 
-func expandComputeNodeGroupDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func flattenComputeNodeGroupZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	return tpgresource.NameFromSelfLinkStateFunc(v)
+}
+
+func expandComputeNodeGroupDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupNodeTemplate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupNodeTemplate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseRegionalFieldValue("nodeTemplates", v.(string), "project", "region", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for node_template: %s", err)
@@ -606,15 +697,15 @@ func expandComputeNodeGroupNodeTemplate(v interface{}, d TerraformResourceData, 
 	return f.RelativeLink(), nil
 }
 
-func expandComputeNodeGroupSize(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupSize(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupMaintenancePolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupMaintenancePolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupMaintenanceWindow(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupMaintenanceWindow(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -633,11 +724,11 @@ func expandComputeNodeGroupMaintenanceWindow(v interface{}, d TerraformResourceD
 	return transformed, nil
 }
 
-func expandComputeNodeGroupMaintenanceWindowStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupMaintenanceWindowStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupAutoscalingPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupAutoscalingPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -670,19 +761,78 @@ func expandComputeNodeGroupAutoscalingPolicy(v interface{}, d TerraformResourceD
 	return transformed, nil
 }
 
-func expandComputeNodeGroupAutoscalingPolicyMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupAutoscalingPolicyMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupAutoscalingPolicyMinNodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupAutoscalingPolicyMinNodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupAutoscalingPolicyMaxNodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupAutoscalingPolicyMaxNodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeNodeGroupZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeNodeGroupShareSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedShareType, err := expandComputeNodeGroupShareSettingsShareType(original["share_type"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedShareType); val.IsValid() && !isEmptyValue(val) {
+		transformed["shareType"] = transformedShareType
+	}
+
+	transformedProjectMap, err := expandComputeNodeGroupShareSettingsProjectMap(original["project_map"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedProjectMap); val.IsValid() && !isEmptyValue(val) {
+		transformed["projectMap"] = transformedProjectMap
+	}
+
+	return transformed, nil
+}
+
+func expandComputeNodeGroupShareSettingsShareType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeNodeGroupShareSettingsProjectMap(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]interface{}, error) {
+	if v == nil {
+		return map[string]interface{}{}, nil
+	}
+	m := make(map[string]interface{})
+	for _, raw := range v.(*schema.Set).List() {
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedProjectId, err := expandComputeNodeGroupShareSettingsProjectMapProjectId(original["project_id"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedProjectId); val.IsValid() && !isEmptyValue(val) {
+			transformed["projectId"] = transformedProjectId
+		}
+
+		transformedId, err := expandString(original["id"], d, config)
+		if err != nil {
+			return nil, err
+		}
+		m[transformedId] = transformed
+	}
+	return m, nil
+}
+
+func expandComputeNodeGroupShareSettingsProjectMapProjectId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeNodeGroupZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("zones", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for zone: %s", err)

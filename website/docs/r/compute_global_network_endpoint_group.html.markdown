@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_global_network_endpoint_group"
 description: |-
   A global network endpoint group contains endpoints that reside outside of Google Cloud.
 ---
@@ -83,7 +82,7 @@ The following arguments are supported:
 * `network_endpoint_type` -
   (Required)
   Type of network endpoints in this network endpoint group.
-  Possible values are `INTERNET_IP_PORT` and `INTERNET_FQDN_PORT`.
+  Possible values are: `INTERNET_IP_PORT`, `INTERNET_FQDN_PORT`.
 
 
 - - -
@@ -114,7 +113,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `delete` - Default is 20 minutes.
@@ -132,4 +131,4 @@ $ terraform import google_compute_global_network_endpoint_group.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

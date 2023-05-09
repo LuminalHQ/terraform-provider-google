@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud (Stackdriver) Logging"
-page_title: "Google: google_logging_metric"
 description: |-
   Logs-based metric can also be used to extract values from logs and create a a distribution
   of the values.
@@ -118,6 +117,41 @@ resource "google_logging_metric" "logging_metric" {
   }
 }
 ```
+## Example Usage - Logging Metric Logging Bucket
+
+
+```hcl
+resource "google_logging_project_bucket_config" "logging_metric" {
+    location  = "global"
+    project   = "my-project-name"
+    bucket_id = "_Default"
+}
+
+resource "google_logging_metric" "logging_metric" {
+  name        = "my-(custom)/metric"
+  filter      = "resource.type=gae_app AND severity>=ERROR"
+  bucket_name = google_logging_project_bucket_config.logging_metric.id
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=logging_metric_disabled&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Logging Metric Disabled
+
+
+```hcl
+resource "google_logging_metric" "logging_metric" {
+  name   = "my-(custom)/metric"
+  filter = "resource.type=gae_app AND severity>=ERROR"
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+  }
+  disabled = true
+}
+```
 
 ## Argument Reference
 
@@ -137,64 +171,6 @@ The following arguments are supported:
   An advanced logs filter (https://cloud.google.com/logging/docs/view/advanced-filters) which
   is used to match log entries.
 
-* `metric_descriptor` -
-  (Required)
-  The metric descriptor associated with the logs-based metric.
-  Structure is [documented below](#nested_metric_descriptor).
-
-
-<a name="nested_metric_descriptor"></a>The `metric_descriptor` block supports:
-
-* `unit` -
-  (Optional)
-  The unit in which the metric value is reported. It is only applicable if the valueType is
-  `INT64`, `DOUBLE`, or `DISTRIBUTION`. The supported units are a subset of
-  [The Unified Code for Units of Measure](http://unitsofmeasure.org/ucum.html) standard
-
-* `value_type` -
-  (Required)
-  Whether the measurement is an integer, a floating-point number, etc.
-  Some combinations of metricKind and valueType might not be supported.
-  For counter metrics, set this to INT64.
-  Possible values are `BOOL`, `INT64`, `DOUBLE`, `STRING`, `DISTRIBUTION`, and `MONEY`.
-
-* `metric_kind` -
-  (Required)
-  Whether the metric records instantaneous values, changes to a value, etc.
-  Some combinations of metricKind and valueType might not be supported.
-  For counter metrics, set this to DELTA.
-  Possible values are `DELTA`, `GAUGE`, and `CUMULATIVE`.
-
-* `labels` -
-  (Optional)
-  The set of labels that can be used to describe a specific instance of this metric type. For
-  example, the appengine.googleapis.com/http/server/response_latencies metric type has a label
-  for the HTTP response code, response_code, so you can look at latencies for successful responses
-  or just for responses that failed.
-  Structure is [documented below](#nested_labels).
-
-* `display_name` -
-  (Optional)
-  A concise name for the metric, which can be displayed in user interfaces. Use sentence case 
-  without an ending period, for example "Request count". This field is optional but it is 
-  recommended to be set for any metrics associated with user-visible concepts, such as Quota.
-
-
-<a name="nested_labels"></a>The `labels` block supports:
-
-* `key` -
-  (Required)
-  The label key.
-
-* `description` -
-  (Optional)
-  A human-readable description for the label.
-
-* `value_type` -
-  (Optional)
-  The type of data that can be assigned to the label.
-  Default value is `STRING`.
-  Possible values are `BOOL`, `INT64`, and `STRING`.
 
 - - -
 
@@ -203,6 +179,23 @@ The following arguments are supported:
   (Optional)
   A description of this metric, which is used in documentation. The maximum length of the
   description is 8000 characters.
+
+* `bucket_name` -
+  (Optional)
+  The resource name of the Log Bucket that owns the Log Metric. Only Log Buckets in projects
+  are supported. The bucket has to be in the same project as the metric.
+
+* `disabled` -
+  (Optional)
+  If set to True, then this metric is disabled and it does not generate any points.
+
+* `metric_descriptor` -
+  (Optional)
+  The optional metric descriptor associated with the logs-based metric.
+  If unspecified, it uses a default metric descriptor with a DELTA metric kind,
+  INT64 value type, with no labels and a unit of "1". Such a metric counts the
+  number of log entries matching the filter expression.
+  Structure is [documented below](#nested_metric_descriptor).
 
 * `label_extractors` -
   (Optional)
@@ -230,6 +223,59 @@ The following arguments are supported:
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
 
+
+<a name="nested_metric_descriptor"></a>The `metric_descriptor` block supports:
+
+* `unit` -
+  (Optional)
+  The unit in which the metric value is reported. It is only applicable if the valueType is
+  `INT64`, `DOUBLE`, or `DISTRIBUTION`. The supported units are a subset of
+  [The Unified Code for Units of Measure](http://unitsofmeasure.org/ucum.html) standard
+
+* `value_type` -
+  (Required)
+  Whether the measurement is an integer, a floating-point number, etc.
+  Some combinations of metricKind and valueType might not be supported.
+  For counter metrics, set this to INT64.
+  Possible values are: `BOOL`, `INT64`, `DOUBLE`, `STRING`, `DISTRIBUTION`, `MONEY`.
+
+* `metric_kind` -
+  (Required)
+  Whether the metric records instantaneous values, changes to a value, etc.
+  Some combinations of metricKind and valueType might not be supported.
+  For counter metrics, set this to DELTA.
+  Possible values are: `DELTA`, `GAUGE`, `CUMULATIVE`.
+
+* `labels` -
+  (Optional)
+  The set of labels that can be used to describe a specific instance of this metric type. For
+  example, the appengine.googleapis.com/http/server/response_latencies metric type has a label
+  for the HTTP response code, response_code, so you can look at latencies for successful responses
+  or just for responses that failed.
+  Structure is [documented below](#nested_labels).
+
+* `display_name` -
+  (Optional)
+  A concise name for the metric, which can be displayed in user interfaces. Use sentence case
+  without an ending period, for example "Request count". This field is optional but it is
+  recommended to be set for any metrics associated with user-visible concepts, such as Quota.
+
+
+<a name="nested_labels"></a>The `labels` block supports:
+
+* `key` -
+  (Required)
+  The label key.
+
+* `description` -
+  (Optional)
+  A human-readable description for the label.
+
+* `value_type` -
+  (Optional)
+  The type of data that can be assigned to the label.
+  Default value is `STRING`.
+  Possible values are: `BOOL`, `INT64`, `STRING`.
 
 <a name="nested_bucket_options"></a>The `bucket_options` block supports:
 
@@ -295,7 +341,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -313,4 +359,4 @@ $ terraform import google_logging_metric.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -5,31 +5,32 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccComputeVpnTunnel_regionFromGateway(t *testing.T) {
 	t.Parallel()
 	region := "us-central1"
-	if getTestRegionFromEnv() == region {
+	if acctest.GetTestRegionFromEnv() == region {
 		// Make sure we choose a region that isn't the provider default
 		// in order to test getting the region from the gateway and not the
 		// provider.
 		region = "us-west1"
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeVpnTunnelDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeVpnTunnelDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccComputeVpnTunnel_regionFromGateway(randString(t, 10), region),
+				Config: testAccComputeVpnTunnel_regionFromGateway(RandString(t, 10), region),
 			},
 			{
 				ResourceName:            "google_compute_vpn_tunnel.foobar",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateIdPrefix:     fmt.Sprintf("%s/%s/", getTestProjectFromEnv(), region),
+				ImportStateIdPrefix:     fmt.Sprintf("%s/%s/", acctest.GetTestProjectFromEnv(), region),
 				ImportStateVerifyIgnore: []string{"shared_secret", "detailed_status"},
 			},
 		},
@@ -39,14 +40,14 @@ func TestAccComputeVpnTunnel_regionFromGateway(t *testing.T) {
 func TestAccComputeVpnTunnel_router(t *testing.T) {
 	t.Parallel()
 
-	router := fmt.Sprintf("tf-test-tunnel-%s", randString(t, 10))
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeVpnTunnelDestroyProducer(t),
+	router := fmt.Sprintf("tf-test-tunnel-%s", RandString(t, 10))
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeVpnTunnelDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccComputeVpnTunnelRouter(randString(t, 10), router),
+				Config: testAccComputeVpnTunnelRouter(RandString(t, 10), router),
 			},
 			{
 				ResourceName:            "google_compute_vpn_tunnel.foobar",
@@ -61,13 +62,13 @@ func TestAccComputeVpnTunnel_router(t *testing.T) {
 func TestAccComputeVpnTunnel_defaultTrafficSelectors(t *testing.T) {
 	t.Parallel()
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeVpnTunnelDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeVpnTunnelDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccComputeVpnTunnelDefaultTrafficSelectors(randString(t, 10)),
+				Config: testAccComputeVpnTunnelDefaultTrafficSelectors(RandString(t, 10)),
 			},
 			{
 				ResourceName:            "google_compute_vpn_tunnel.foobar",
@@ -162,41 +163,25 @@ resource "google_compute_address" "foobar" {
   region = google_compute_subnetwork.foobar.region
 }
 
-resource "google_compute_vpn_gateway" "foobar" {
+resource "google_compute_ha_vpn_gateway" "foobar" {
   name    = "tf-test-%[1]s"
   network = google_compute_network.foobar.self_link
   region  = google_compute_subnetwork.foobar.region
 }
 
-resource "google_compute_forwarding_rule" "foobar_esp" {
-  name        = "tf-test-%[1]s-1"
-  region      = google_compute_vpn_gateway.foobar.region
-  ip_protocol = "ESP"
-  ip_address  = google_compute_address.foobar.address
-  target      = google_compute_vpn_gateway.foobar.self_link
-}
-
-resource "google_compute_forwarding_rule" "foobar_udp500" {
-  name        = "tf-test-%[1]s-2"
-  region      = google_compute_forwarding_rule.foobar_esp.region
-  ip_protocol = "UDP"
-  port_range  = "500-500"
-  ip_address  = google_compute_address.foobar.address
-  target      = google_compute_vpn_gateway.foobar.self_link
-}
-
-resource "google_compute_forwarding_rule" "foobar_udp4500" {
-  name        = "tf-test-%[1]s-3"
-  region      = google_compute_forwarding_rule.foobar_udp500.region
-  ip_protocol = "UDP"
-  port_range  = "4500-4500"
-  ip_address  = google_compute_address.foobar.address
-  target      = google_compute_vpn_gateway.foobar.self_link
+resource "google_compute_external_vpn_gateway" "external_gateway" {
+  name            = "external-gateway-%[1]s"
+  redundancy_type = "SINGLE_IP_INTERNALLY_REDUNDANT"
+  description     = "An externally managed VPN gateway"
+  interface {
+    id         = 0
+    ip_address = "8.8.8.8"
+  }
 }
 
 resource "google_compute_router" "foobar" {
   name    = "%[2]s"
-  region  = google_compute_forwarding_rule.foobar_udp500.region
+  region  = google_compute_subnetwork.foobar.region
   network = google_compute_network.foobar.self_link
   bgp {
     asn = 64514
@@ -205,11 +190,13 @@ resource "google_compute_router" "foobar" {
 
 resource "google_compute_vpn_tunnel" "foobar" {
   name               = "tf-test-%[1]s"
-  region             = google_compute_forwarding_rule.foobar_udp4500.region
-  target_vpn_gateway = google_compute_vpn_gateway.foobar.self_link
+  region             = google_compute_subnetwork.foobar.region
+  vpn_gateway = google_compute_ha_vpn_gateway.foobar.id
+  peer_external_gateway           = google_compute_external_vpn_gateway.external_gateway.id
+  peer_external_gateway_interface = 0  
   shared_secret      = "unguessable"
-  peer_ip            = "8.8.8.8"
   router             = google_compute_router.foobar.self_link
+  vpn_gateway_interface           = 0  
 }
 `, suffix, router)
 }

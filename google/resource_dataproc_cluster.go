@@ -12,6 +12,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"google.golang.org/api/dataproc/v1"
 )
 
@@ -56,12 +59,20 @@ var (
 		"cluster_config.0.gce_cluster_config.0.internal_ip_only",
 		"cluster_config.0.gce_cluster_config.0.shielded_instance_config",
 		"cluster_config.0.gce_cluster_config.0.metadata",
+		"cluster_config.0.gce_cluster_config.0.reservation_affinity",
+		"cluster_config.0.gce_cluster_config.0.node_group_affinity",
 	}
 
 	schieldedInstanceConfigKeys = []string{
 		"cluster_config.0.gce_cluster_config.0.shielded_instance_config.0.enable_secure_boot",
 		"cluster_config.0.gce_cluster_config.0.shielded_instance_config.0.enable_vtpm",
 		"cluster_config.0.gce_cluster_config.0.shielded_instance_config.0.enable_integrity_monitoring",
+	}
+
+	reservationAffinityKeys = []string{
+		"cluster_config.0.gce_cluster_config.0.reservation_affinity.0.consume_reservation_type",
+		"cluster_config.0.gce_cluster_config.0.reservation_affinity.0.key",
+		"cluster_config.0.gce_cluster_config.0.reservation_affinity.0.values",
 	}
 
 	preemptibleWorkerDiskConfigKeys = []string{
@@ -74,6 +85,15 @@ var (
 		"cluster_config.0.software_config.0.image_version",
 		"cluster_config.0.software_config.0.override_properties",
 		"cluster_config.0.software_config.0.optional_components",
+	}
+
+	dataprocMetricConfigKeys = []string{
+		"cluster_config.0.dataproc_metric_config.0.metrics",
+	}
+
+	metricKeys = []string{
+		"cluster_config.0.dataproc_metric_config.0.metrics.0.metric_source",
+		"cluster_config.0.dataproc_metric_config.0.metrics.0.metric_overrides",
 	}
 
 	clusterConfigKeys = []string{
@@ -91,6 +111,7 @@ var (
 		"cluster_config.0.metastore_config",
 		"cluster_config.0.lifecycle_config",
 		"cluster_config.0.endpoint_config",
+		"cluster_config.0.dataproc_metric_config",
 	}
 )
 
@@ -127,7 +148,7 @@ func resourceDataprocPropertyDiffSuppress(k, old, new string, d *schema.Resource
 	return false
 }
 
-func resourceDataprocCluster() *schema.Resource {
+func ResourceDataprocCluster() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataprocClusterCreate,
 		Read:   resourceDataprocClusterRead,
@@ -526,7 +547,7 @@ func resourceDataprocCluster() *schema.Resource {
 										AtLeastOneOf:     gceClusterConfigKeys,
 										ForceNew:         true,
 										ConflictsWith:    []string{"cluster_config.0.gce_cluster_config.0.subnetwork"},
-										DiffSuppressFunc: compareSelfLinkOrResourceName,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 										Description:      `The name or self_link of the Google Compute Engine network to the cluster will be part of. Conflicts with subnetwork. If neither is specified, this defaults to the "default" network.`,
 									},
 
@@ -536,7 +557,7 @@ func resourceDataprocCluster() *schema.Resource {
 										AtLeastOneOf:     gceClusterConfigKeys,
 										ForceNew:         true,
 										ConflictsWith:    []string{"cluster_config.0.gce_cluster_config.0.network"},
-										DiffSuppressFunc: compareSelfLinkOrResourceName,
+										DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 										Description:      `The name or self_link of the Google Compute Engine subnetwork the cluster will be part of. Conflicts with network.`,
 									},
 
@@ -567,10 +588,10 @@ func resourceDataprocCluster() *schema.Resource {
 										Elem: &schema.Schema{
 											Type: schema.TypeString,
 											StateFunc: func(v interface{}) string {
-												return canonicalizeServiceScope(v.(string))
+												return tpgresource.CanonicalizeServiceScope(v.(string))
 											},
 										},
-										Set: stringScopeHashcode,
+										Set: tpgresource.StringScopeHashcode,
 									},
 
 									"internal_ip_only": {
@@ -627,6 +648,62 @@ func resourceDataprocCluster() *schema.Resource {
 											},
 										},
 									},
+
+									"reservation_affinity": {
+										Type:         schema.TypeList,
+										Optional:     true,
+										AtLeastOneOf: gceClusterConfigKeys,
+										Computed:     true,
+										MaxItems:     1,
+										Description:  `Reservation Affinity for consuming Zonal reservation.`,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"consume_reservation_type": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													AtLeastOneOf: reservationAffinityKeys,
+													ForceNew:     true,
+													ValidateFunc: validation.StringInSlice([]string{"NO_RESERVATION", "ANY_RESERVATION", "SPECIFIC_RESERVATION"}, false),
+													Description:  `Type of reservation to consume.`,
+												},
+												"key": {
+													Type:         schema.TypeString,
+													Optional:     true,
+													AtLeastOneOf: reservationAffinityKeys,
+													ForceNew:     true,
+													Description:  `Corresponds to the label key of reservation resource.`,
+												},
+												"values": {
+													Type:         schema.TypeSet,
+													Elem:         &schema.Schema{Type: schema.TypeString},
+													Optional:     true,
+													AtLeastOneOf: reservationAffinityKeys,
+													ForceNew:     true,
+													Description:  `Corresponds to the label values of reservation resource.`,
+												},
+											},
+										},
+									},
+
+									"node_group_affinity": {
+										Type:         schema.TypeList,
+										Optional:     true,
+										AtLeastOneOf: gceClusterConfigKeys,
+										Computed:     true,
+										MaxItems:     1,
+										Description:  `Node Group Affinity for sole-tenant clusters.`,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"node_group_uri": {
+													Type:             schema.TypeString,
+													ForceNew:         true,
+													Required:         true,
+													Description:      `The URI of a sole-tenant that the cluster will be created on.`,
+													DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
+												},
+											},
+										},
+									},
 								},
 							},
 						},
@@ -669,7 +746,7 @@ func resourceDataprocCluster() *schema.Resource {
 											"cluster_config.0.preemptible_worker_config.0.disk_config",
 										},
 										ForceNew:     true,
-										ValidateFunc: validation.StringInSlice([]string{"PREEMPTIBILITY_UNSPECIFIED", "NON_PREEMPTIBLE", "PREEMPTIBLE"}, false),
+										ValidateFunc: validation.StringInSlice([]string{"PREEMPTIBILITY_UNSPECIFIED", "NON_PREEMPTIBLE", "PREEMPTIBLE", "SPOT"}, false),
 										Default:      "PREEMPTIBLE",
 									},
 
@@ -876,8 +953,6 @@ by Dataproc`,
 										Description:  `The set of optional components to activate on the cluster.`,
 										Elem: &schema.Schema{
 											Type: schema.TypeString,
-											ValidateFunc: validation.StringInSlice([]string{"COMPONENT_UNSPECIFIED", "ANACONDA", "DOCKER", "DRUID", "HBASE", "FLINK",
-												"HIVE_WEBHCAT", "JUPYTER", "KERBEROS", "PRESTO", "RANGER", "SOLR", "ZEPPELIN", "ZOOKEEPER"}, false),
 										},
 									},
 								},
@@ -931,14 +1006,14 @@ by Dataproc`,
 							AtLeastOneOf:     clusterConfigKeys,
 							MaxItems:         1,
 							Description:      `The autoscaling policy config associated with the cluster.`,
-							DiffSuppressFunc: emptyOrUnsetBlockDiffSuppress,
+							DiffSuppressFunc: tpgresource.EmptyOrUnsetBlockDiffSuppress,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
 									"policy_uri": {
 										Type:             schema.TypeString,
 										Required:         true,
 										Description:      `The autoscaling policy used by the cluster.`,
-										DiffSuppressFunc: locationDiffSuppress,
+										DiffSuppressFunc: tpgresource.LocationDiffSuppress,
 									},
 								},
 							},
@@ -990,7 +1065,7 @@ by Dataproc`,
 										Type:             schema.TypeString,
 										Optional:         true,
 										Description:      `The time when cluster will be auto-deleted. A timestamp in RFC3339 UTC "Zulu" format, accurate to nanoseconds. Example: "2014-10-02T15:01:23.045123456Z".`,
-										DiffSuppressFunc: timestampDiffSuppress(time.RFC3339Nano),
+										DiffSuppressFunc: tpgresource.TimestampDiffSuppress(time.RFC3339Nano),
 										AtLeastOneOf: []string{
 											"cluster_config.0.lifecycle_config.0.idle_delete_ttl",
 											"cluster_config.0.lifecycle_config.0.auto_delete_time",
@@ -1022,11 +1097,51 @@ by Dataproc`,
 								},
 							},
 						},
+
+						"dataproc_metric_config": {
+							Type:         schema.TypeList,
+							Optional:     true,
+							MaxItems:     1,
+							Description:  `The config for Dataproc metrics.`,
+							AtLeastOneOf: clusterConfigKeys,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"metrics": {
+										Type:        schema.TypeList,
+										Required:    true,
+										Description: `Metrics sources to enable.`,
+										Elem:        metricsSchema(),
+									},
+								},
+							},
+						},
 					},
 				},
 			},
 		},
 		UseJSONNumber: true,
+	}
+}
+
+// We need to pull metrics' schema out so we can use it to make a set hash func
+func metricsSchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"metric_source": {
+				Type:         schema.TypeString,
+				ForceNew:     true,
+				Required:     true,
+				ValidateFunc: validation.StringInSlice([]string{"MONITORING_AGENT_DEFAULTS", "HDFS", "SPARK", "YARN", "SPARK_HISTORY_SERVER", "HIVESERVER2"}, false),
+				Description:  `A source for the collection of Dataproc OSS metrics (see [available OSS metrics] (https://cloud.google.com//dataproc/docs/guides/monitoring#available_oss_metrics)).`,
+			},
+			"metric_overrides": {
+				Type:        schema.TypeSet,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Optional:    true,
+				ForceNew:    true,
+				Description: `Specify one or more [available OSS metrics] (https://cloud.google.com/dataproc/docs/guides/monitoring#available_oss_metrics) to collect.`,
+			},
+		},
 	}
 }
 
@@ -1040,6 +1155,8 @@ func instanceConfigSchema(parent string) *schema.Schema {
 		"cluster_config.0." + parent + ".0.accelerators",
 	}
 
+	masterConfig := strings.Contains(parent, "master")
+
 	return &schema.Schema{
 		Type:         schema.TypeList,
 		Optional:     true,
@@ -1052,6 +1169,7 @@ func instanceConfigSchema(parent string) *schema.Schema {
 				"num_instances": {
 					Type:         schema.TypeInt,
 					Optional:     true,
+					ForceNew:     masterConfig,
 					Computed:     true,
 					Description:  `Specifies the number of master/worker nodes to create. If not specified, GCP will default to a predetermined computed value.`,
 					AtLeastOneOf: instanceConfigKeys,
@@ -1178,8 +1296,8 @@ func acceleratorsSchema() *schema.Resource {
 }
 
 func resourceDataprocClusterCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1238,7 +1356,7 @@ func resourceDataprocClusterCreate(d *schema.ResourceData, meta interface{}) err
 	return resourceDataprocClusterRead(d, meta)
 }
 
-func expandVirtualClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.VirtualClusterConfig, error) {
+func expandVirtualClusterConfig(d *schema.ResourceData, config *transport_tpg.Config) (*dataproc.VirtualClusterConfig, error) {
 	conf := &dataproc.VirtualClusterConfig{}
 
 	if v, ok := d.GetOk("virtual_cluster_config"); ok {
@@ -1420,7 +1538,7 @@ func expandGkeNodePoolAutoscalingConfig(cfg map[string]interface{}) *dataproc.Gk
 	return conf
 }
 
-func expandClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.ClusterConfig, error) {
+func expandClusterConfig(d *schema.ResourceData, config *transport_tpg.Config) (*dataproc.ClusterConfig, error) {
 	conf := &dataproc.ClusterConfig{
 		// SDK requires GceClusterConfig to be specified,
 		// even if no explicit values specified
@@ -1480,6 +1598,10 @@ func expandClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.Clus
 		conf.EndpointConfig = expandEndpointConfig(cfg)
 	}
 
+	if cfg, ok := configOptions(d, "cluster_config.0.dataproc_metric_config"); ok {
+		conf.DataprocMetricConfig = expandDataprocMetricConfig(cfg)
+	}
+
 	if cfg, ok := configOptions(d, "cluster_config.0.master_config"); ok {
 		log.Println("[INFO] got master_config")
 		conf.MasterConfig = expandInstanceGroupConfig(cfg)
@@ -1497,7 +1619,7 @@ func expandClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.Clus
 	return conf, nil
 }
 
-func expandGceClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.GceClusterConfig, error) {
+func expandGceClusterConfig(d *schema.ResourceData, config *transport_tpg.Config) (*dataproc.GceClusterConfig, error) {
 	conf := &dataproc.GceClusterConfig{}
 
 	v, ok := d.GetOk("cluster_config.0.gce_cluster_config")
@@ -1535,7 +1657,7 @@ func expandGceClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.G
 		scopesSet := scopes.(*schema.Set)
 		scopes := make([]string, scopesSet.Len())
 		for i, scope := range scopesSet.List() {
-			scopes[i] = canonicalizeServiceScope(scope.(string))
+			scopes[i] = tpgresource.CanonicalizeServiceScope(scope.(string))
 		}
 		conf.ServiceAccountScopes = scopes
 	}
@@ -1556,6 +1678,26 @@ func expandGceClusterConfig(d *schema.ResourceData, config *Config) (*dataproc.G
 		}
 		if v, ok := cfgSic["enable_vtpm"]; ok {
 			conf.ShieldedInstanceConfig.EnableVtpm = v.(bool)
+		}
+	}
+	if v, ok := d.GetOk("cluster_config.0.gce_cluster_config.0.reservation_affinity"); ok {
+		cfgRa := v.([]interface{})[0].(map[string]interface{})
+		conf.ReservationAffinity = &dataproc.ReservationAffinity{}
+		if v, ok := cfgRa["consume_reservation_type"]; ok {
+			conf.ReservationAffinity.ConsumeReservationType = v.(string)
+		}
+		if v, ok := cfgRa["key"]; ok {
+			conf.ReservationAffinity.Key = v.(string)
+		}
+		if v, ok := cfgRa["values"]; ok {
+			conf.ReservationAffinity.Values = convertStringSet(v.(*schema.Set))
+		}
+	}
+	if v, ok := d.GetOk("cluster_config.0.gce_cluster_config.0.node_group_affinity"); ok {
+		cfgNga := v.([]interface{})[0].(map[string]interface{})
+		conf.NodeGroupAffinity = &dataproc.NodeGroupAffinity{}
+		if v, ok := cfgNga["node_group_uri"]; ok {
+			conf.NodeGroupAffinity.NodeGroupUri = v.(string)
 		}
 	}
 	return conf, nil
@@ -1678,6 +1820,23 @@ func expandEndpointConfig(cfg map[string]interface{}) *dataproc.EndpointConfig {
 	return conf
 }
 
+func expandDataprocMetricConfig(cfg map[string]interface{}) *dataproc.DataprocMetricConfig {
+	conf := &dataproc.DataprocMetricConfig{}
+	metricsConfigs := cfg["metrics"].([]interface{})
+	metricsSet := make([]*dataproc.Metric, 0, len(metricsConfigs))
+
+	for _, raw := range metricsConfigs {
+		data := raw.(map[string]interface{})
+		metric := dataproc.Metric{
+			MetricSource:    data["metric_source"].(string),
+			MetricOverrides: convertStringSet(data["metric_overrides"].(*schema.Set)),
+		}
+		metricsSet = append(metricsSet, &metric)
+	}
+	conf.Metrics = metricsSet
+	return conf
+}
+
 func expandMetastoreConfig(cfg map[string]interface{}) *dataproc.MetastoreConfig {
 	conf := &dataproc.MetastoreConfig{}
 	if v, ok := cfg["dataproc_metastore_service"]; ok {
@@ -1740,7 +1899,7 @@ func expandInstanceGroupConfig(cfg map[string]interface{}) *dataproc.InstanceGro
 		icg.NumInstances = int64(v.(int))
 	}
 	if v, ok := cfg["machine_type"]; ok {
-		icg.MachineTypeUri = GetResourceNameFromSelfLink(v.(string))
+		icg.MachineTypeUri = tpgresource.GetResourceNameFromSelfLink(v.(string))
 	}
 	if v, ok := cfg["min_cpu_platform"]; ok {
 		icg.MinCpuPlatform = v.(string)
@@ -1787,8 +1946,8 @@ func expandAccelerators(configured []interface{}) []*dataproc.AcceleratorConfig 
 }
 
 func resourceDataprocClusterUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1894,8 +2053,8 @@ func resourceDataprocClusterUpdate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceDataprocClusterRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1911,7 +2070,7 @@ func resourceDataprocClusterRead(d *schema.ResourceData, meta interface{}) error
 	cluster, err := config.NewDataprocClient(userAgent).Projects.Regions.Clusters.Get(
 		project, region, clusterName).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Dataproc Cluster %q", clusterName))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Dataproc Cluster %q", clusterName))
 	}
 
 	if err := d.Set("name", cluster.ClusterName); err != nil {
@@ -2087,6 +2246,7 @@ func flattenClusterConfig(d *schema.ResourceData, cfg *dataproc.ClusterConfig) (
 		"metastore_config":          flattenMetastoreConfig(d, cfg.MetastoreConfig),
 		"lifecycle_config":          flattenLifecycleConfig(d, cfg.LifecycleConfig),
 		"endpoint_config":           flattenEndpointConfig(d, cfg.EndpointConfig),
+		"dataproc_metric_config":    flattenDataprocMetricConfig(d, cfg.DataprocMetricConfig),
 	}
 
 	if len(cfg.InitializationActions) > 0 {
@@ -2193,6 +2353,26 @@ func flattenEndpointConfig(d *schema.ResourceData, ec *dataproc.EndpointConfig) 
 	return []map[string]interface{}{data}
 }
 
+func flattenDataprocMetricConfig(d *schema.ResourceData, dmc *dataproc.DataprocMetricConfig) []map[string]interface{} {
+	if dmc == nil {
+		return nil
+	}
+
+	metrics := map[string]interface{}{}
+	metricsTypeList := schema.NewSet(schema.HashResource(metricsSchema()), []interface{}{}).List()
+	for _, metric := range dmc.Metrics {
+		data := map[string]interface{}{
+			"metric_source":    metric.MetricSource,
+			"metric_overrides": metric.MetricOverrides,
+		}
+
+		metricsTypeList = append(metricsTypeList, &data)
+	}
+	metrics["metrics"] = metricsTypeList
+
+	return []map[string]interface{}{metrics}
+}
+
 func flattenMetastoreConfig(d *schema.ResourceData, ec *dataproc.MetastoreConfig) []map[string]interface{} {
 	if ec == nil {
 		return nil
@@ -2209,7 +2389,7 @@ func flattenAccelerators(accelerators []*dataproc.AcceleratorConfig) interface{}
 	acceleratorsTypeSet := schema.NewSet(schema.HashResource(acceleratorsSchema()), []interface{}{})
 	for _, accelerator := range accelerators {
 		data := map[string]interface{}{
-			"accelerator_type":  GetResourceNameFromSelfLink(accelerator.AcceleratorTypeUri),
+			"accelerator_type":  tpgresource.GetResourceNameFromSelfLink(accelerator.AcceleratorTypeUri),
 			"accelerator_count": int(accelerator.AcceleratorCount),
 		}
 
@@ -2245,7 +2425,7 @@ func flattenGceClusterConfig(d *schema.ResourceData, gcc *dataproc.GceClusterCon
 	gceConfig := map[string]interface{}{
 		"tags":             schema.NewSet(schema.HashString, convertStringArrToInterface(gcc.Tags)),
 		"service_account":  gcc.ServiceAccount,
-		"zone":             GetResourceNameFromSelfLink(gcc.ZoneUri),
+		"zone":             tpgresource.GetResourceNameFromSelfLink(gcc.ZoneUri),
 		"internal_ip_only": gcc.InternalIpOnly,
 		"metadata":         gcc.Metadata,
 	}
@@ -2257,7 +2437,7 @@ func flattenGceClusterConfig(d *schema.ResourceData, gcc *dataproc.GceClusterCon
 		gceConfig["subnetwork"] = gcc.SubnetworkUri
 	}
 	if len(gcc.ServiceAccountScopes) > 0 {
-		gceConfig["service_account_scopes"] = schema.NewSet(stringScopeHashcode, convertStringArrToInterface(gcc.ServiceAccountScopes))
+		gceConfig["service_account_scopes"] = schema.NewSet(tpgresource.StringScopeHashcode, convertStringArrToInterface(gcc.ServiceAccountScopes))
 	}
 	if gcc.ShieldedInstanceConfig != nil {
 		gceConfig["shielded_instance_config"] = []map[string]interface{}{
@@ -2265,6 +2445,22 @@ func flattenGceClusterConfig(d *schema.ResourceData, gcc *dataproc.GceClusterCon
 				"enable_integrity_monitoring": gcc.ShieldedInstanceConfig.EnableIntegrityMonitoring,
 				"enable_secure_boot":          gcc.ShieldedInstanceConfig.EnableSecureBoot,
 				"enable_vtpm":                 gcc.ShieldedInstanceConfig.EnableVtpm,
+			},
+		}
+	}
+	if gcc.ReservationAffinity != nil {
+		gceConfig["reservation_affinity"] = []map[string]interface{}{
+			{
+				"consume_reservation_type": gcc.ReservationAffinity.ConsumeReservationType,
+				"key":                      gcc.ReservationAffinity.Key,
+				"values":                   gcc.ReservationAffinity.Values,
+			},
+		}
+	}
+	if gcc.NodeGroupAffinity != nil {
+		gceConfig["node_group_affinity"] = []map[string]interface{}{
+			{
+				"node_group_uri": gcc.NodeGroupAffinity.NodeGroupUri,
 			},
 		}
 	}
@@ -2313,7 +2509,7 @@ func flattenInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.InstanceGr
 
 	if icg != nil {
 		data["num_instances"] = icg.NumInstances
-		data["machine_type"] = GetResourceNameFromSelfLink(icg.MachineTypeUri)
+		data["machine_type"] = tpgresource.GetResourceNameFromSelfLink(icg.MachineTypeUri)
 		data["min_cpu_platform"] = icg.MinCpuPlatform
 		data["image_uri"] = icg.ImageUri
 		data["instance_names"] = icg.InstanceNames
@@ -2339,8 +2535,8 @@ func extractInitTimeout(t string) (int, error) {
 }
 
 func resourceDataprocClusterDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}

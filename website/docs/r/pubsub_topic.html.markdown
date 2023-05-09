@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Pub/Sub"
-page_title: "Google: google_pubsub_topic"
 description: |-
   A named resource to which messages are sent by publishers.
 ---
@@ -29,7 +28,7 @@ To get more information about Topic, see:
 * How-to Guides
     * [Managing Topics](https://cloud.google.com/pubsub/docs/admin#managing_topics)
 
-~> **Note:** You can retrieve the email of the Google Managed Pub/Sub Service Account used for forwarding 
+~> **Note:** You can retrieve the email of the Google Managed Pub/Sub Service Account used for forwarding
 by using the `google_project_service_identity` resource.
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
@@ -185,7 +184,7 @@ The following arguments are supported:
   (Optional)
   The encoding of messages validated against schema.
   Default value is `ENCODING_UNSPECIFIED`.
-  Possible values are `ENCODING_UNSPECIFIED`, `JSON`, and `BINARY`.
+  Possible values are: `ENCODING_UNSPECIFIED`, `JSON`, `BINARY`.
 
 ## Attributes Reference
 
@@ -197,7 +196,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -216,4 +215,4 @@ $ terraform import google_pubsub_topic.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

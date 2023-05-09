@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccArtifactRegistryRepository_artifactRegistryRepositoryBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccArtifactRegistryRepository_artifactRegistryRepositoryBasicExample(context),
@@ -59,18 +62,58 @@ resource "google_artifact_registry_repository" "my-repo" {
 `, context)
 }
 
+func TestAccArtifactRegistryRepository_artifactRegistryRepositoryDockerExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccArtifactRegistryRepository_artifactRegistryRepositoryDockerExample(context),
+			},
+			{
+				ResourceName:            "google_artifact_registry_repository.my-repo",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"repository_id", "location"},
+			},
+		},
+	})
+}
+
+func testAccArtifactRegistryRepository_artifactRegistryRepositoryDockerExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_artifact_registry_repository" "my-repo" {
+  location      = "us-central1"
+  repository_id = "tf-test-my-repository%{random_suffix}"
+  description   = "example docker repository%{random_suffix}"
+  format        = "DOCKER"
+
+  docker_config {
+    immutable_tags = true
+  }
+}
+`, context)
+}
+
 func TestAccArtifactRegistryRepository_artifactRegistryRepositoryCmekExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
 		"kms_key_name":  BootstrapKMSKeyInLocation(t, "us-central1").CryptoKey.Name,
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccArtifactRegistryRepository_artifactRegistryRepositoryCmekExample(context),
@@ -93,6 +136,112 @@ resource "google_artifact_registry_repository" "my-repo" {
   description   = "example docker repository with cmek"
   format        = "DOCKER"
   kms_key_name  = "%{kms_key_name}"
+  depends_on = [
+    google_kms_crypto_key_iam_member.crypto_key
+  ]
+}
+
+resource "google_kms_crypto_key_iam_member" "crypto_key" {
+  crypto_key_id = "%{kms_key_name}"
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-artifactregistry.iam.gserviceaccount.com"
+}
+
+data "google_project" "project" {}
+`, context)
+}
+
+func TestAccArtifactRegistryRepository_artifactRegistryRepositoryVirtualExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccArtifactRegistryRepository_artifactRegistryRepositoryVirtualExample(context),
+			},
+			{
+				ResourceName:            "google_artifact_registry_repository.my-repo",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"repository_id", "location"},
+			},
+		},
+	})
+}
+
+func testAccArtifactRegistryRepository_artifactRegistryRepositoryVirtualExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_artifact_registry_repository" "my-repo-upstream" {
+  location      = "us-central1"
+  repository_id = "tf-test-my-repository-upstream%{random_suffix}"
+  description   = "example docker repository (upstream source)%{random_suffix}"
+  format        = "DOCKER"
+}
+
+resource "google_artifact_registry_repository" "my-repo" {
+  depends_on    = []
+  location      = "us-central1"
+  repository_id = "tf-test-my-repository%{random_suffix}"
+  description   = "example virtual docker repository%{random_suffix}"
+  format        = "DOCKER"
+  mode          = "VIRTUAL_REPOSITORY"
+  virtual_repository_config {
+    upstream_policies {
+      id          = "tf-test-my-repository-upstream%{random_suffix}"
+      repository  = google_artifact_registry_repository.my-repo-upstream.id
+      priority    = 1
+    }
+  }
+}
+`, context)
+}
+
+func TestAccArtifactRegistryRepository_artifactRegistryRepositoryRemoteExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckArtifactRegistryRepositoryDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccArtifactRegistryRepository_artifactRegistryRepositoryRemoteExample(context),
+			},
+			{
+				ResourceName:            "google_artifact_registry_repository.my-repo",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"repository_id", "location"},
+			},
+		},
+	})
+}
+
+func testAccArtifactRegistryRepository_artifactRegistryRepositoryRemoteExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_artifact_registry_repository" "my-repo" {
+  location      = "us-central1"
+  repository_id = "tf-test-my-repository%{random_suffix}"
+  description   = "example remote docker repository%{random_suffix}"
+  format        = "DOCKER"
+  mode          = "REMOTE_REPOSITORY"
+  remote_repository_config {
+    description = "docker hub"
+    docker_repository {
+      public_repository = "DOCKER_HUB"
+    }
+  }
 }
 `, context)
 }
@@ -107,9 +256,9 @@ func testAccCheckArtifactRegistryRepositoryDestroyProducer(t *testing.T) func(s 
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{ArtifactRegistryBasePath}}projects/{{project}}/locations/{{location}}/repositories/{{repository_id}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{ArtifactRegistryBasePath}}projects/{{project}}/locations/{{location}}/repositories/{{repository_id}}")
 			if err != nil {
 				return err
 			}
@@ -120,7 +269,7 @@ func testAccCheckArtifactRegistryRepositoryDestroyProducer(t *testing.T) func(s 
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("ArtifactRegistryRepository still exists at %s", url)
 			}

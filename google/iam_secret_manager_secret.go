@@ -20,6 +20,9 @@ import (
 	"github.com/hashicorp/errwrap"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"google.golang.org/api/cloudresourcemanager/v1"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 var SecretManagerSecretIamSchema = map[string]*schema.Schema{
@@ -41,10 +44,10 @@ type SecretManagerSecretIamUpdater struct {
 	project  string
 	secretId string
 	d        TerraformResourceData
-	Config   *Config
+	Config   *transport_tpg.Config
 }
 
-func SecretManagerSecretIamUpdaterProducer(d TerraformResourceData, config *Config) (ResourceIamUpdater, error) {
+func SecretManagerSecretIamUpdaterProducer(d TerraformResourceData, config *transport_tpg.Config) (ResourceIamUpdater, error) {
 	values := make(map[string]string)
 
 	project, _ := getProject(d, config)
@@ -85,7 +88,7 @@ func SecretManagerSecretIamUpdaterProducer(d TerraformResourceData, config *Conf
 	return u, nil
 }
 
-func SecretManagerSecretIdParseFunc(d *schema.ResourceData, config *Config) error {
+func SecretManagerSecretIdParseFunc(d *schema.ResourceData, config *transport_tpg.Config) error {
 	values := make(map[string]string)
 
 	project, _ := getProject(d, config)
@@ -127,18 +130,18 @@ func (u *SecretManagerSecretIamUpdater) GetResourceIamPolicy() (*cloudresourcema
 	}
 	var obj map[string]interface{}
 
-	userAgent, err := generateUserAgentString(u.d, u.Config.userAgent)
+	userAgent, err := generateUserAgentString(u.d, u.Config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
 
-	policy, err := sendRequest(u.Config, "GET", project, url, userAgent, obj)
+	policy, err := transport_tpg.SendRequest(u.Config, "GET", project, url, userAgent, obj)
 	if err != nil {
 		return nil, errwrap.Wrapf(fmt.Sprintf("Error retrieving IAM policy for %s: {{err}}", u.DescribeResource()), err)
 	}
 
 	out := &cloudresourcemanager.Policy{}
-	err = Convert(policy, out)
+	err = tpgresource.Convert(policy, out)
 	if err != nil {
 		return nil, errwrap.Wrapf("Cannot convert a policy to a resource manager policy: {{err}}", err)
 	}
@@ -147,7 +150,7 @@ func (u *SecretManagerSecretIamUpdater) GetResourceIamPolicy() (*cloudresourcema
 }
 
 func (u *SecretManagerSecretIamUpdater) SetResourceIamPolicy(policy *cloudresourcemanager.Policy) error {
-	json, err := ConvertToMap(policy)
+	json, err := tpgresource.ConvertToMap(policy)
 	if err != nil {
 		return err
 	}
@@ -164,12 +167,12 @@ func (u *SecretManagerSecretIamUpdater) SetResourceIamPolicy(policy *cloudresour
 		return err
 	}
 
-	userAgent, err := generateUserAgentString(u.d, u.Config.userAgent)
+	userAgent, err := generateUserAgentString(u.d, u.Config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	_, err = sendRequestWithTimeout(u.Config, "POST", project, url, userAgent, obj, u.d.Timeout(schema.TimeoutCreate))
+	_, err = transport_tpg.SendRequestWithTimeout(u.Config, "POST", project, url, userAgent, obj, u.d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return errwrap.Wrapf(fmt.Sprintf("Error setting IAM policy for %s: {{err}}", u.DescribeResource()), err)
 	}
@@ -179,7 +182,7 @@ func (u *SecretManagerSecretIamUpdater) SetResourceIamPolicy(policy *cloudresour
 
 func (u *SecretManagerSecretIamUpdater) qualifySecretUrl(methodIdentifier string) (string, error) {
 	urlTemplate := fmt.Sprintf("{{SecretManagerBasePath}}%s:%s", fmt.Sprintf("projects/%s/secrets/%s", u.project, u.secretId), methodIdentifier)
-	url, err := replaceVars(u.d, u.Config, urlTemplate)
+	url, err := ReplaceVars(u.d, u.Config, urlTemplate)
 	if err != nil {
 		return "", err
 	}

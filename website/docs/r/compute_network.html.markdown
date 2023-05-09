@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_network"
 description: |-
   Manages a VPC network or legacy network resource on GCP.
 ---
@@ -51,6 +50,17 @@ resource "google_compute_network" "vpc_network" {
   name                    = "vpc-network"
   auto_create_subnetworks = true
   mtu                     = 1460
+}
+```
+## Example Usage - Network Custom Firewall Enforcement Order
+
+
+```hcl
+resource "google_compute_network" "vpc_network" {
+  project                                   = "my-project-name"
+  name                                      = "vpc-network"
+  auto_create_subnetworks                   = true
+  network_firewall_policy_enforcement_order = "BEFORE_CLASSIC_FIREWALL"
 }
 ```
 
@@ -93,25 +103,34 @@ The following arguments are supported:
   of this network in the same region as the router. If set to `GLOBAL`,
   this network's cloud routers will advertise routes with all
   subnetworks of this network, across regions.
-  Possible values are `REGIONAL` and `GLOBAL`.
+  Possible values are: `REGIONAL`, `GLOBAL`.
 
 * `mtu` -
   (Optional)
-  Maximum Transmission Unit in bytes. The minimum value for this field is 1460
-  and the maximum value is 1500 bytes.
+  Maximum Transmission Unit in bytes. The default value is 1460 bytes.
+  The minimum value for this field is 1300 and the maximum value is 8896 bytes (jumbo frames).
+  Note that packets larger than 1500 bytes (standard Ethernet) can be subject to TCP-MSS clamping or dropped
+  with an ICMP `Fragmentation-Needed` message if the packets are routed to the Internet or other VPCs
+  with varying MTUs.
 
 * `enable_ula_internal_ipv6` -
   (Optional)
-  Enable ULA internal ipv6 on this network. Enabling this feature will assign 
+  Enable ULA internal ipv6 on this network. Enabling this feature will assign
   a /48 from google defined ULA prefix fd20::/20.
 
 * `internal_ipv6_range` -
   (Optional)
-  When enabling ula internal ipv6, caller optionally can specify the /48 range 
-  they want from the google defined ULA prefix fd20::/20. The input must be a 
-  valid /48 ULA IPv6 address and must be within the fd20::/20. Operation will 
-  fail if the speficied /48 is already in used by another resource. 
+  When enabling ula internal ipv6, caller optionally can specify the /48 range
+  they want from the google defined ULA prefix fd20::/20. The input must be a
+  valid /48 ULA IPv6 address and must be within the fd20::/20. Operation will
+  fail if the speficied /48 is already in used by another resource.
   If the field is not speficied, then a /48 range will be randomly allocated from fd20::/20 and returned via this field.
+
+* `network_firewall_policy_enforcement_order` -
+  (Optional)
+  Set the order that Firewall Rules and Firewall Policies are evaluated.
+  Default value is `AFTER_CLASSIC_FIREWALL`.
+  Possible values are: `BEFORE_CLASSIC_FIREWALL`, `AFTER_CLASSIC_FIREWALL`.
 
 * `project` - (Optional) The ID of the project in which the resource belongs.
     If it is not provided, the provider project is used.
@@ -135,7 +154,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -154,4 +173,4 @@ $ terraform import google_compute_network.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

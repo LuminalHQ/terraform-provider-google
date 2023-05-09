@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceDatastoreIndex() *schema.Resource {
+func ResourceDatastoreIndex() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDatastoreIndexCreate,
 		Read:   resourceDatastoreIndexRead,
@@ -49,7 +52,7 @@ func resourceDatastoreIndex() *schema.Resource {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"NONE", "ALL_ANCESTORS", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NONE", "ALL_ANCESTORS", ""}),
 				Description:  `Policy for including ancestors in the index. Default value: "NONE" Possible values: ["NONE", "ALL_ANCESTORS"]`,
 				Default:      "NONE",
 			},
@@ -65,7 +68,7 @@ func resourceDatastoreIndex() *schema.Resource {
 							Type:         schema.TypeString,
 							Required:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"ASCENDING", "DESCENDING"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ASCENDING", "DESCENDING"}),
 							Description:  `The direction the index should optimize for sorting. Possible values: ["ASCENDING", "DESCENDING"]`,
 						},
 						"name": {
@@ -94,8 +97,8 @@ func resourceDatastoreIndex() *schema.Resource {
 }
 
 func resourceDatastoreIndexCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -120,7 +123,7 @@ func resourceDatastoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 		obj["properties"] = propertiesProp
 	}
 
-	url, err := replaceVars(d, config, "{{DatastoreBasePath}}projects/{{project}}/indexes")
+	url, err := ReplaceVars(d, config, "{{DatastoreBasePath}}projects/{{project}}/indexes")
 	if err != nil {
 		return err
 	}
@@ -139,13 +142,13 @@ func resourceDatastoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), datastoreIndex409Contention)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.DatastoreIndex409Contention)
 	if err != nil {
 		return fmt.Errorf("Error creating Index: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/indexes/{{index_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/indexes/{{index_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -154,12 +157,13 @@ func resourceDatastoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = datastoreOperationWaitTimeWithResponse(
+	err = DatastoreOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Index", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Index: %s", err)
 	}
 
@@ -168,7 +172,7 @@ func resourceDatastoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/indexes/{{index_id}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/indexes/{{index_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -180,13 +184,13 @@ func resourceDatastoreIndexCreate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceDatastoreIndexRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DatastoreBasePath}}projects/{{project}}/indexes/{{index_id}}")
+	url, err := ReplaceVars(d, config, "{{DatastoreBasePath}}projects/{{project}}/indexes/{{index_id}}")
 	if err != nil {
 		return err
 	}
@@ -204,9 +208,9 @@ func resourceDatastoreIndexRead(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, datastoreIndex409Contention)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.DatastoreIndex409Contention)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DatastoreIndex %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DatastoreIndex %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -230,8 +234,8 @@ func resourceDatastoreIndexRead(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceDatastoreIndexDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -244,7 +248,7 @@ func resourceDatastoreIndexDelete(d *schema.ResourceData, meta interface{}) erro
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{DatastoreBasePath}}projects/{{project}}/indexes/{{index_id}}")
+	url, err := ReplaceVars(d, config, "{{DatastoreBasePath}}projects/{{project}}/indexes/{{index_id}}")
 	if err != nil {
 		return err
 	}
@@ -257,12 +261,12 @@ func resourceDatastoreIndexDelete(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), datastoreIndex409Contention)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.DatastoreIndex409Contention)
 	if err != nil {
-		return handleNotFoundError(err, d, "Index")
+		return transport_tpg.HandleNotFoundError(err, d, "Index")
 	}
 
-	err = datastoreOperationWaitTime(
+	err = DatastoreOperationWaitTime(
 		config, res, project, "Deleting Index", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -275,8 +279,8 @@ func resourceDatastoreIndexDelete(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceDatastoreIndexImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/indexes/(?P<index_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<index_id>[^/]+)",
 		"(?P<index_id>[^/]+)",
@@ -285,7 +289,7 @@ func resourceDatastoreIndexImport(d *schema.ResourceData, meta interface{}) ([]*
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/indexes/{{index_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/indexes/{{index_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -294,19 +298,19 @@ func resourceDatastoreIndexImport(d *schema.ResourceData, meta interface{}) ([]*
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDatastoreIndexIndexId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDatastoreIndexIndexId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDatastoreIndexKind(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDatastoreIndexKind(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDatastoreIndexAncestor(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDatastoreIndexAncestor(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDatastoreIndexProperties(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDatastoreIndexProperties(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -325,23 +329,23 @@ func flattenDatastoreIndexProperties(v interface{}, d *schema.ResourceData, conf
 	}
 	return transformed
 }
-func flattenDatastoreIndexPropertiesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDatastoreIndexPropertiesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDatastoreIndexPropertiesDirection(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDatastoreIndexPropertiesDirection(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDatastoreIndexKind(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDatastoreIndexKind(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDatastoreIndexAncestor(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDatastoreIndexAncestor(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDatastoreIndexProperties(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDatastoreIndexProperties(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -370,10 +374,10 @@ func expandDatastoreIndexProperties(v interface{}, d TerraformResourceData, conf
 	return req, nil
 }
 
-func expandDatastoreIndexPropertiesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDatastoreIndexPropertiesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDatastoreIndexPropertiesDirection(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDatastoreIndexPropertiesDirection(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

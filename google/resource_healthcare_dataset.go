@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceHealthcareDataset() *schema.Resource {
+func ResourceHealthcareDataset() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceHealthcareDatasetCreate,
 		Read:   resourceHealthcareDatasetRead,
@@ -79,8 +81,8 @@ func resourceHealthcareDataset() *schema.Resource {
 }
 
 func resourceHealthcareDatasetCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -99,7 +101,7 @@ func resourceHealthcareDatasetCreate(d *schema.ResourceData, meta interface{}) e
 		obj["timeZone"] = timeZoneProp
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets?datasetId={{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets?datasetId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -118,13 +120,13 @@ func resourceHealthcareDatasetCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), healthcareDatasetNotInitialized)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.HealthcareDatasetNotInitialized)
 	if err != nil {
 		return fmt.Errorf("Error creating Dataset: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/datasets/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/datasets/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -136,13 +138,13 @@ func resourceHealthcareDatasetCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceHealthcareDatasetRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -160,9 +162,9 @@ func resourceHealthcareDatasetRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, healthcareDatasetNotInitialized)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.HealthcareDatasetNotInitialized)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("HealthcareDataset %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("HealthcareDataset %q", d.Id()))
 	}
 
 	res, err = resourceHealthcareDatasetDecoder(d, meta, res)
@@ -192,8 +194,8 @@ func resourceHealthcareDatasetRead(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceHealthcareDatasetUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -214,7 +216,7 @@ func resourceHealthcareDatasetUpdate(d *schema.ResourceData, meta interface{}) e
 		obj["timeZone"] = timeZoneProp
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -225,9 +227,9 @@ func resourceHealthcareDatasetUpdate(d *schema.ResourceData, meta interface{}) e
 	if d.HasChange("time_zone") {
 		updateMask = append(updateMask, "timeZone")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -237,7 +239,7 @@ func resourceHealthcareDatasetUpdate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), healthcareDatasetNotInitialized)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.HealthcareDatasetNotInitialized)
 
 	if err != nil {
 		return fmt.Errorf("Error updating Dataset %q: %s", d.Id(), err)
@@ -249,8 +251,8 @@ func resourceHealthcareDatasetUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceHealthcareDatasetDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -263,7 +265,7 @@ func resourceHealthcareDatasetDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}projects/{{project}}/locations/{{location}}/datasets/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -276,9 +278,9 @@ func resourceHealthcareDatasetDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), healthcareDatasetNotInitialized)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.HealthcareDatasetNotInitialized)
 	if err != nil {
-		return handleNotFoundError(err, d, "Dataset")
+		return transport_tpg.HandleNotFoundError(err, d, "Dataset")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Dataset %q: %#v", d.Id(), res)
@@ -286,8 +288,8 @@ func resourceHealthcareDatasetDelete(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceHealthcareDatasetImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/datasets/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -296,7 +298,7 @@ func resourceHealthcareDatasetImport(d *schema.ResourceData, meta interface{}) (
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/datasets/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/datasets/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -305,19 +307,19 @@ func resourceHealthcareDatasetImport(d *schema.ResourceData, meta interface{}) (
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenHealthcareDatasetName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareDatasetName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareDatasetTimeZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareDatasetTimeZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandHealthcareDatasetName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareDatasetName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareDatasetTimeZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareDatasetTimeZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

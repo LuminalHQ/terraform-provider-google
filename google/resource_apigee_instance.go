@@ -22,9 +22,36 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceApigeeInstance() *schema.Resource {
+// Supress diffs when the lists of project have the same number of entries to handle the case that
+// API does not return what the user originally provided. Instead, API does some transformation.
+// For example, user provides a list of project number, but API returns a list of project Id.
+func projectListDiffSuppress(_, _, _ string, d *schema.ResourceData) bool {
+	return ProjectListDiffSuppressFunc(d)
+}
+
+func ProjectListDiffSuppressFunc(d TerraformResourceDataChange) bool {
+	kLength := "consumer_accept_list.#"
+	oldLength, newLength := d.GetChange(kLength)
+
+	oldInt, ok := oldLength.(int)
+	if !ok {
+		return false
+	}
+
+	newInt, ok := newLength.(int)
+	if !ok {
+		return false
+	}
+	log.Printf("[DEBUG] - suppressing diff with oldInt %d, newInt %d", oldInt, newInt)
+
+	return oldInt == newInt
+}
+
+func ResourceApigeeInstance() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceApigeeInstanceCreate,
 		Read:   resourceApigeeInstanceRead,
@@ -60,10 +87,11 @@ func resourceApigeeInstance() *schema.Resource {
 in the format 'organizations/{{org_name}}'.`,
 			},
 			"consumer_accept_list": {
-				Type:     schema.TypeList,
-				Computed: true,
-				Optional: true,
-				ForceNew: true,
+				Type:             schema.TypeList,
+				Computed:         true,
+				Optional:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: projectListDiffSuppress,
 				Description: `Optional. Customer accept list represents the list of projects (id/number) on customer
 side that can privately connect to the service attachment. It is an optional field
 which the customers can provide during the instance creation. By default, the customer
@@ -108,7 +136,7 @@ Input format: "a.b.c.d/22"`,
 				Computed: true,
 				Optional: true,
 				ForceNew: true,
-				Description: `The size of the CIDR block range that will be reserved by the instance. For valid values, 
+				Description: `The size of the CIDR block range that will be reserved by the instance. For valid values,
 see [CidrRange](https://cloud.google.com/apigee/docs/reference/apis/apigee/rest/v1/organizations.instances#CidrRange) on the documentation.`,
 			},
 			"host": {
@@ -134,8 +162,8 @@ forward traffic to this service attachment using the PSC endpoints.`,
 }
 
 func resourceApigeeInstanceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -190,14 +218,14 @@ func resourceApigeeInstanceCreate(d *schema.ResourceData, meta interface{}) erro
 		obj["consumerAcceptList"] = consumerAcceptListProp
 	}
 
-	lockName, err := replaceVars(d, config, "{{org_id}}/apigeeInstances")
+	lockName, err := ReplaceVars(d, config, "{{org_id}}/apigeeInstances")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{org_id}}/instances")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{org_id}}/instances")
 	if err != nil {
 		return err
 	}
@@ -210,13 +238,13 @@ func resourceApigeeInstanceCreate(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isApigeeRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsApigeeRetryableError)
 	if err != nil {
 		return fmt.Errorf("Error creating Instance: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{org_id}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "{{org_id}}/instances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -225,12 +253,13 @@ func resourceApigeeInstanceCreate(d *schema.ResourceData, meta interface{}) erro
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = apigeeOperationWaitTimeWithResponse(
+	err = ApigeeOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating Instance", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Instance: %s", err)
 	}
 
@@ -239,7 +268,7 @@ func resourceApigeeInstanceCreate(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{org_id}}/instances/{{name}}")
+	id, err = ReplaceVars(d, config, "{{org_id}}/instances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -251,13 +280,13 @@ func resourceApigeeInstanceCreate(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceApigeeInstanceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{org_id}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{org_id}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -269,9 +298,9 @@ func resourceApigeeInstanceRead(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isApigeeRetryableError)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsApigeeRetryableError)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ApigeeInstance %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ApigeeInstance %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenApigeeInstanceName(res["name"], d, config)); err != nil {
@@ -309,22 +338,22 @@ func resourceApigeeInstanceRead(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceApigeeInstanceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	lockName, err := replaceVars(d, config, "{{org_id}}/apigeeInstances")
+	lockName, err := ReplaceVars(d, config, "{{org_id}}/apigeeInstances")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}{{org_id}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}{{org_id}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -337,12 +366,12 @@ func resourceApigeeInstanceDelete(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isApigeeRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsApigeeRetryableError)
 	if err != nil {
-		return handleNotFoundError(err, d, "Instance")
+		return transport_tpg.HandleNotFoundError(err, d, "Instance")
 	}
 
-	err = apigeeOperationWaitTime(
+	err = ApigeeOperationWaitTime(
 		config, res, "Deleting Instance", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -355,10 +384,10 @@ func resourceApigeeInstanceDelete(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceApigeeInstanceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats cannot import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -390,7 +419,7 @@ func resourceApigeeInstanceImport(d *schema.ResourceData, meta interface{}) ([]*
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{org_id}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "{{org_id}}/instances/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -399,74 +428,74 @@ func resourceApigeeInstanceImport(d *schema.ResourceData, meta interface{}) ([]*
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenApigeeInstanceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceLocation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceLocation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstancePeeringCidrRange(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstancePeeringCidrRange(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceDiskEncryptionKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceDiskEncryptionKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceHost(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceHost(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstancePort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstancePort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceConsumerAcceptList(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceConsumerAcceptList(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeInstanceServiceAttachment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeInstanceServiceAttachment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandApigeeInstanceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstanceLocation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceLocation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstancePeeringCidrRange(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstancePeeringCidrRange(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstanceIpRange(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceIpRange(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstanceDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstanceDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstanceDiskEncryptionKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceDiskEncryptionKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeInstanceConsumerAcceptList(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeInstanceConsumerAcceptList(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

@@ -23,9 +23,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceComputeSnapshot() *schema.Resource {
+func ResourceComputeSnapshot() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeSnapshotCreate,
 		Read:   resourceComputeSnapshotRead,
@@ -59,8 +62,19 @@ character, which cannot be a dash.`,
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `A reference to the disk used to create this snapshot.`,
+			},
+			"chain_name": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+				Description: `Creates the new snapshot in the snapshot chain labeled with the
+specified name. The chain name must be 1-63 characters long and
+comply with RFC1035. This is an uncommon option only for advanced
+service owners who needs to create separate snapshot chains, for
+example, for chargeback tracking.  When you describe your snapshot
+resource, this field is visible only if it has a non-empty value.`,
 			},
 			"description": {
 				Type:        schema.TypeString,
@@ -78,8 +92,19 @@ character, which cannot be a dash.`,
 				Type:     schema.TypeList,
 				Optional: true,
 				ForceNew: true,
-				Description: `The customer-supplied encryption key of the snapshot. Required if the
-source snapshot is protected by a customer-supplied encryption key.`,
+				Description: `Encrypts the snapshot using a customer-supplied encryption key.
+
+After you encrypt a snapshot using a customer-supplied key, you must
+provide the same key if you use the snapshot later. For example, you
+must provide the encryption key when you create a disk from the
+encrypted snapshot in a future request.
+
+Customer-supplied encryption keys do not protect access to metadata of
+the snapshot.
+
+If you do not provide an encryption key when creating the snapshot,
+then the snapshot will be encrypted using an automatically generated
+key and you do not need to provide a key to use the snapshot later.`,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -215,13 +240,19 @@ creation/deletion.`,
 }
 
 func resourceComputeSnapshotCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	obj := make(map[string]interface{})
+	chainNameProp, err := expandComputeSnapshotChainName(d.Get("chain_name"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("chain_name"); !isEmptyValue(reflect.ValueOf(chainNameProp)) && (ok || !reflect.DeepEqual(v, chainNameProp)) {
+		obj["chainName"] = chainNameProp
+	}
 	nameProp, err := expandComputeSnapshotName(d.Get("name"), d, config)
 	if err != nil {
 		return err
@@ -277,7 +308,7 @@ func resourceComputeSnapshotCreate(d *schema.ResourceData, meta interface{}) err
 		obj["sourceDiskEncryptionKey"] = sourceDiskEncryptionKeyProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}PRE_CREATE_REPLACE_ME/createSnapshot")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}PRE_CREATE_REPLACE_ME/createSnapshot")
 	if err != nil {
 		return err
 	}
@@ -297,19 +328,19 @@ func resourceComputeSnapshotCreate(d *schema.ResourceData, meta interface{}) err
 	}
 
 	url = regexp.MustCompile("PRE_CREATE_REPLACE_ME").ReplaceAllLiteralString(url, sourceDiskProp.(string))
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Snapshot: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/snapshots/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/snapshots/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating Snapshot", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -325,13 +356,13 @@ func resourceComputeSnapshotCreate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeSnapshotRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/snapshots/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/snapshots/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -349,9 +380,9 @@ func resourceComputeSnapshotRead(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeSnapshot %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeSnapshot %q", d.Id()))
 	}
 
 	res, err = resourceComputeSnapshotDecoder(d, meta, res)
@@ -377,6 +408,9 @@ func resourceComputeSnapshotRead(d *schema.ResourceData, meta interface{}) error
 		return fmt.Errorf("Error reading Snapshot: %s", err)
 	}
 	if err := d.Set("disk_size_gb", flattenComputeSnapshotDiskSizeGb(res["diskSizeGb"], d, config)); err != nil {
+		return fmt.Errorf("Error reading Snapshot: %s", err)
+	}
+	if err := d.Set("chain_name", flattenComputeSnapshotChainName(res["chainName"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Snapshot: %s", err)
 	}
 	if err := d.Set("name", flattenComputeSnapshotName(res["name"], d, config)); err != nil {
@@ -406,7 +440,7 @@ func resourceComputeSnapshotRead(d *schema.ResourceData, meta interface{}) error
 	if err := d.Set("snapshot_encryption_key", flattenComputeSnapshotSnapshotEncryptionKey(res["snapshotEncryptionKey"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Snapshot: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading Snapshot: %s", err)
 	}
 
@@ -414,8 +448,8 @@ func resourceComputeSnapshotRead(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceComputeSnapshotUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -446,7 +480,7 @@ func resourceComputeSnapshotUpdate(d *schema.ResourceData, meta interface{}) err
 			obj["labelFingerprint"] = labelFingerprintProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/snapshots/{{name}}/setLabels")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/snapshots/{{name}}/setLabels")
 		if err != nil {
 			return err
 		}
@@ -456,14 +490,14 @@ func resourceComputeSnapshotUpdate(d *schema.ResourceData, meta interface{}) err
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Snapshot %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating Snapshot %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating Snapshot", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -477,8 +511,8 @@ func resourceComputeSnapshotUpdate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeSnapshotDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -491,7 +525,7 @@ func resourceComputeSnapshotDelete(d *schema.ResourceData, meta interface{}) err
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/snapshots/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/snapshots/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -504,12 +538,12 @@ func resourceComputeSnapshotDelete(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Snapshot")
+		return transport_tpg.HandleNotFoundError(err, d, "Snapshot")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting Snapshot", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -522,8 +556,8 @@ func resourceComputeSnapshotDelete(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceComputeSnapshotImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/snapshots/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -532,7 +566,7 @@ func resourceComputeSnapshotImport(d *schema.ResourceData, meta interface{}) ([]
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/snapshots/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/snapshots/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -541,14 +575,14 @@ func resourceComputeSnapshotImport(d *schema.ResourceData, meta interface{}) ([]
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeSnapshotCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotSnapshotId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSnapshotId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -562,10 +596,10 @@ func flattenComputeSnapshotSnapshotId(v interface{}, d *schema.ResourceData, con
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeSnapshotDiskSizeGb(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotDiskSizeGb(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -579,18 +613,22 @@ func flattenComputeSnapshotDiskSizeGb(v interface{}, d *schema.ResourceData, con
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeSnapshotName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotChainName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotStorageBytes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeSnapshotStorageBytes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -604,33 +642,33 @@ func flattenComputeSnapshotStorageBytes(v interface{}, d *schema.ResourceData, c
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeSnapshotStorageLocations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotStorageLocations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotLicenses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotLicenses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return convertAndMapStringArr(v.([]interface{}), ConvertSelfLinkToV1)
+	return convertAndMapStringArr(v.([]interface{}), tpgresource.ConvertSelfLinkToV1)
 }
 
-func flattenComputeSnapshotLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotLabelFingerprint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotLabelFingerprint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotSourceDisk(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSourceDisk(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeSnapshotSnapshotEncryptionKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSnapshotEncryptionKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -649,35 +687,39 @@ func flattenComputeSnapshotSnapshotEncryptionKey(v interface{}, d *schema.Resour
 		flattenComputeSnapshotSnapshotEncryptionKeyKmsKeyServiceAccount(original["kmsKeyServiceAccount"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeSnapshotSnapshotEncryptionKeyRawKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSnapshotEncryptionKeyRawKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return d.Get("snapshot_encryption_key.0.raw_key")
 }
 
-func flattenComputeSnapshotSnapshotEncryptionKeySha256(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSnapshotEncryptionKeySha256(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotSnapshotEncryptionKeyKmsKeySelfLink(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSnapshotEncryptionKeyKmsKeySelfLink(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeSnapshotSnapshotEncryptionKeyKmsKeyServiceAccount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeSnapshotSnapshotEncryptionKeyKmsKeyServiceAccount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeSnapshotName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotChainName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotStorageLocations(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandComputeSnapshotStorageLocations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeSnapshotLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -688,11 +730,11 @@ func expandComputeSnapshotLabels(v interface{}, d TerraformResourceData, config 
 	return m, nil
 }
 
-func expandComputeSnapshotLabelFingerprint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotLabelFingerprint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotSourceDisk(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSourceDisk(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseZonalFieldValue("disks", v.(string), "project", "zone", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for source_disk: %s", err)
@@ -700,7 +742,7 @@ func expandComputeSnapshotSourceDisk(v interface{}, d TerraformResourceData, con
 	return f.RelativeLink(), nil
 }
 
-func expandComputeSnapshotZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("zones", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for zone: %s", err)
@@ -708,7 +750,7 @@ func expandComputeSnapshotZone(v interface{}, d TerraformResourceData, config *C
 	return f.RelativeLink(), nil
 }
 
-func expandComputeSnapshotSnapshotEncryptionKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSnapshotEncryptionKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -748,23 +790,23 @@ func expandComputeSnapshotSnapshotEncryptionKey(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandComputeSnapshotSnapshotEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSnapshotEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotSnapshotEncryptionKeySha256(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSnapshotEncryptionKeySha256(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotSnapshotEncryptionKeyKmsKeySelfLink(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSnapshotEncryptionKeyKmsKeySelfLink(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotSnapshotEncryptionKeyKmsKeyServiceAccount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSnapshotEncryptionKeyKmsKeyServiceAccount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotSourceDiskEncryptionKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSourceDiskEncryptionKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -790,11 +832,11 @@ func expandComputeSnapshotSourceDiskEncryptionKey(v interface{}, d TerraformReso
 	return transformed, nil
 }
 
-func expandComputeSnapshotSourceDiskEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSourceDiskEncryptionKeyRawKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeSnapshotSourceDiskEncryptionKeyKmsKeyServiceAccount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeSnapshotSourceDiskEncryptionKeyKmsKeyServiceAccount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

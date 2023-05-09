@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccNetworkServicesEdgeCacheKeyset_networkServicesEdgeCacheKeysetBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckNetworkServicesEdgeCacheKeysetDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheKeysetDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccNetworkServicesEdgeCacheKeyset_networkServicesEdgeCacheKeysetBasicExample(context),
@@ -52,7 +55,7 @@ func testAccNetworkServicesEdgeCacheKeyset_networkServicesEdgeCacheKeysetBasicEx
 	return Nprintf(`
 
 resource "google_network_services_edge_cache_keyset" "default" {
-  name                 = "default%{random_suffix}"
+  name                 = "tf-test-my-keyset%{random_suffix}"
   description          = "The default keyset"
   public_key {
     id = "my-public-key"
@@ -61,6 +64,61 @@ resource "google_network_services_edge_cache_keyset" "default" {
   public_key {
     id = "my-public-key-2"
     value = "hzd03llxB1u5FOLKFkZ6_wCJqC7jtN0bg7xlBqS6WVM"
+  }
+}
+`, context)
+}
+
+func TestAccNetworkServicesEdgeCacheKeyset_networkServicesEdgeCacheKeysetDualTokenExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckNetworkServicesEdgeCacheKeysetDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccNetworkServicesEdgeCacheKeyset_networkServicesEdgeCacheKeysetDualTokenExample(context),
+			},
+			{
+				ResourceName:            "google_network_services_edge_cache_keyset.default",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name"},
+			},
+		},
+	})
+}
+
+func testAccNetworkServicesEdgeCacheKeyset_networkServicesEdgeCacheKeysetDualTokenExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_secret_manager_secret" "secret-basic" {
+  secret_id = "tf-test-secret-name%{random_suffix}"
+
+  replication {
+    automatic = true
+  }
+}
+
+resource "google_secret_manager_secret_version" "secret-version-basic" {
+  secret = google_secret_manager_secret.secret-basic.id
+
+  secret_data = "secret-data"
+}
+
+resource "google_network_services_edge_cache_keyset" "default" {
+  name        = "tf-test-my-keyset%{random_suffix}"
+  description = "The default keyset"
+  public_key {
+    id      = "my-public-key"
+    managed = true
+  }
+  validation_shared_keys {
+    secret_version = google_secret_manager_secret_version.secret-version-basic.id
   }
 }
 `, context)
@@ -76,9 +134,9 @@ func testAccCheckNetworkServicesEdgeCacheKeysetDestroyProducer(t *testing.T) fun
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheKeysets/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheKeysets/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -89,7 +147,7 @@ func testAccCheckNetworkServicesEdgeCacheKeysetDestroyProducer(t *testing.T) fun
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("NetworkServicesEdgeCacheKeyset still exists at %s", url)
 			}

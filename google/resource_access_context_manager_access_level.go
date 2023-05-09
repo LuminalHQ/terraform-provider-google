@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceAccessContextManagerAccessLevel() *schema.Resource {
+func ResourceAccessContextManagerAccessLevel() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAccessContextManagerAccessLevelCreate,
 		Read:   resourceAccessContextManagerAccessLevelRead,
@@ -92,7 +95,7 @@ allowed.`,
 An empty list allows all management levels. Possible values: ["MANAGEMENT_UNSPECIFIED", "NONE", "BASIC", "COMPLETE"]`,
 													Elem: &schema.Schema{
 														Type:         schema.TypeString,
-														ValidateFunc: validateEnum([]string{"MANAGEMENT_UNSPECIFIED", "NONE", "BASIC", "COMPLETE"}),
+														ValidateFunc: verify.ValidateEnum([]string{"MANAGEMENT_UNSPECIFIED", "NONE", "BASIC", "COMPLETE"}),
 													},
 												},
 												"allowed_encryption_statuses": {
@@ -102,7 +105,7 @@ An empty list allows all management levels. Possible values: ["MANAGEMENT_UNSPEC
 An empty list allows all statuses. Possible values: ["ENCRYPTION_UNSPECIFIED", "ENCRYPTION_UNSUPPORTED", "UNENCRYPTED", "ENCRYPTED"]`,
 													Elem: &schema.Schema{
 														Type:         schema.TypeString,
-														ValidateFunc: validateEnum([]string{"ENCRYPTION_UNSPECIFIED", "ENCRYPTION_UNSUPPORTED", "UNENCRYPTED", "ENCRYPTED"}),
+														ValidateFunc: verify.ValidateEnum([]string{"ENCRYPTION_UNSPECIFIED", "ENCRYPTION_UNSUPPORTED", "UNENCRYPTED", "ENCRYPTED"}),
 													},
 												},
 												"os_constraints": {
@@ -115,7 +118,7 @@ An empty list allows all types and all versions.`,
 															"os_type": {
 																Type:         schema.TypeString,
 																Required:     true,
-																ValidateFunc: validateEnum([]string{"OS_UNSPECIFIED", "DESKTOP_MAC", "DESKTOP_WINDOWS", "DESKTOP_LINUX", "DESKTOP_CHROME_OS", "ANDROID", "IOS"}),
+																ValidateFunc: verify.ValidateEnum([]string{"OS_UNSPECIFIED", "DESKTOP_MAC", "DESKTOP_WINDOWS", "DESKTOP_LINUX", "DESKTOP_CHROME_OS", "ANDROID", "IOS"}),
 																Description:  `The operating system type of the device. Possible values: ["OS_UNSPECIFIED", "DESKTOP_MAC", "DESKTOP_WINDOWS", "DESKTOP_LINUX", "DESKTOP_CHROME_OS", "ANDROID", "IOS"]`,
 															},
 															"minimum_version": {
@@ -219,7 +222,7 @@ Format: accessPolicies/{policy_id}/accessLevels/{short_name}`,
 						"combining_function": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"AND", "OR", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"AND", "OR", ""}),
 							Description: `How the conditions list should be combined to determine if a request
 is granted this AccessLevel. If AND is used, each Condition in
 conditions must be satisfied for the AccessLevel to be applied. If
@@ -234,7 +237,7 @@ for the AccessLevel to be applied. Default value: "AND" Possible values: ["AND",
 			"custom": {
 				Type:     schema.TypeList,
 				Optional: true,
-				Description: `Custom access level conditions are set using the Cloud Common Expression Language to represent the necessary conditions for the level to apply to a request. 
+				Description: `Custom access level conditions are set using the Cloud Common Expression Language to represent the necessary conditions for the level to apply to a request.
 See CEL spec at: https://github.com/google/cel-spec.`,
 				MaxItems: 1,
 				Elem: &schema.Resource{
@@ -243,7 +246,7 @@ See CEL spec at: https://github.com/google/cel-spec.`,
 							Type:     schema.TypeList,
 							Required: true,
 							Description: `Represents a textual expression in the Common Expression Language (CEL) syntax. CEL is a C-like expression language.
-This page details the objects and attributes that are used to the build the CEL expressions for 
+This page details the objects and attributes that are used to the build the CEL expressions for
 custom access levels - https://cloud.google.com/access-context-manager/docs/custom-access-level-spec.`,
 							MaxItems: 1,
 							Elem: &schema.Resource{
@@ -286,8 +289,8 @@ custom access levels - https://cloud.google.com/access-context-manager/docs/cust
 }
 
 func resourceAccessContextManagerAccessLevelCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -335,7 +338,7 @@ func resourceAccessContextManagerAccessLevelCreate(d *schema.ResourceData, meta 
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{parent}}/accessLevels")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{parent}}/accessLevels")
 	if err != nil {
 		return err
 	}
@@ -348,13 +351,13 @@ func resourceAccessContextManagerAccessLevelCreate(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating AccessLevel: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -363,12 +366,13 @@ func resourceAccessContextManagerAccessLevelCreate(d *schema.ResourceData, meta 
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = accessContextManagerOperationWaitTimeWithResponse(
+	err = AccessContextManagerOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating AccessLevel", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create AccessLevel: %s", err)
 	}
 
@@ -377,7 +381,7 @@ func resourceAccessContextManagerAccessLevelCreate(d *schema.ResourceData, meta 
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{name}}")
+	id, err = ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -389,13 +393,13 @@ func resourceAccessContextManagerAccessLevelCreate(d *schema.ResourceData, meta 
 }
 
 func resourceAccessContextManagerAccessLevelRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -407,9 +411,9 @@ func resourceAccessContextManagerAccessLevelRead(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AccessContextManagerAccessLevel %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AccessContextManagerAccessLevel %q", d.Id()))
 	}
 
 	if err := d.Set("title", flattenAccessContextManagerAccessLevelTitle(res["title"], d, config)); err != nil {
@@ -432,8 +436,8 @@ func resourceAccessContextManagerAccessLevelRead(d *schema.ResourceData, meta in
 }
 
 func resourceAccessContextManagerAccessLevelUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -471,7 +475,7 @@ func resourceAccessContextManagerAccessLevelUpdate(d *schema.ResourceData, meta 
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -494,9 +498,9 @@ func resourceAccessContextManagerAccessLevelUpdate(d *schema.ResourceData, meta 
 	if d.HasChange("custom") {
 		updateMask = append(updateMask, "custom")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -506,7 +510,7 @@ func resourceAccessContextManagerAccessLevelUpdate(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating AccessLevel %q: %s", d.Id(), err)
@@ -514,7 +518,7 @@ func resourceAccessContextManagerAccessLevelUpdate(d *schema.ResourceData, meta 
 		log.Printf("[DEBUG] Finished updating AccessLevel %q: %#v", d.Id(), res)
 	}
 
-	err = accessContextManagerOperationWaitTime(
+	err = AccessContextManagerOperationWaitTime(
 		config, res, "Updating AccessLevel", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -526,15 +530,15 @@ func resourceAccessContextManagerAccessLevelUpdate(d *schema.ResourceData, meta 
 }
 
 func resourceAccessContextManagerAccessLevelDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -547,12 +551,12 @@ func resourceAccessContextManagerAccessLevelDelete(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "AccessLevel")
+		return transport_tpg.HandleNotFoundError(err, d, "AccessLevel")
 	}
 
-	err = accessContextManagerOperationWaitTime(
+	err = AccessContextManagerOperationWaitTime(
 		config, res, "Deleting AccessLevel", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -565,10 +569,10 @@ func resourceAccessContextManagerAccessLevelDelete(d *schema.ResourceData, meta 
 }
 
 func resourceAccessContextManagerAccessLevelImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 	stringParts := strings.Split(d.Get("name").(string), "/")
@@ -581,15 +585,15 @@ func resourceAccessContextManagerAccessLevelImport(d *schema.ResourceData, meta 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAccessContextManagerAccessLevelTitle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelTitle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -604,7 +608,7 @@ func flattenAccessContextManagerAccessLevelBasic(v interface{}, d *schema.Resour
 		flattenAccessContextManagerAccessLevelBasicConditions(original["conditions"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAccessContextManagerAccessLevelBasicCombiningFunction(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicCombiningFunction(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil || isEmptyValue(reflect.ValueOf(v)) {
 		return "AND"
 	}
@@ -612,7 +616,7 @@ func flattenAccessContextManagerAccessLevelBasicCombiningFunction(v interface{},
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -635,23 +639,23 @@ func flattenAccessContextManagerAccessLevelBasicConditions(v interface{}, d *sch
 	}
 	return transformed
 }
-func flattenAccessContextManagerAccessLevelBasicConditionsIpSubnetworks(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsIpSubnetworks(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsRequiredAccessLevels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsRequiredAccessLevels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsMembers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsMembers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsNegate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsNegate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -674,19 +678,19 @@ func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicy(v interfa
 		flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireCorpOwned(original["requireCorpOwned"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireScreenLock(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireScreenLock(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedEncryptionStatuses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedEncryptionStatuses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedDeviceManagementLevels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedDeviceManagementLevels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraints(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraints(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -706,31 +710,31 @@ func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstrai
 	}
 	return transformed
 }
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsMinimumVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsMinimumVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsRequireVerifiedChromeOs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsRequireVerifiedChromeOs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsOsType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsOsType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireAdminApproval(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireAdminApproval(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireCorpOwned(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireCorpOwned(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelBasicConditionsRegions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelBasicConditionsRegions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelCustom(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelCustom(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -743,7 +747,7 @@ func flattenAccessContextManagerAccessLevelCustom(v interface{}, d *schema.Resou
 		flattenAccessContextManagerAccessLevelCustomExpr(original["expr"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAccessContextManagerAccessLevelCustomExpr(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelCustomExpr(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -762,35 +766,35 @@ func flattenAccessContextManagerAccessLevelCustomExpr(v interface{}, d *schema.R
 		flattenAccessContextManagerAccessLevelCustomExprLocation(original["location"], d, config)
 	return []interface{}{transformed}
 }
-func flattenAccessContextManagerAccessLevelCustomExprExpression(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelCustomExprExpression(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelCustomExprTitle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelCustomExprTitle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelCustomExprDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelCustomExprDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelCustomExprLocation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelCustomExprLocation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerAccessLevelName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerAccessLevelName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAccessContextManagerAccessLevelTitle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelTitle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -816,11 +820,11 @@ func expandAccessContextManagerAccessLevelBasic(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicCombiningFunction(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicCombiningFunction(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -877,23 +881,23 @@ func expandAccessContextManagerAccessLevelBasicConditions(v interface{}, d Terra
 	return req, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsIpSubnetworks(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsIpSubnetworks(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsRequiredAccessLevels(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsRequiredAccessLevels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsMembers(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsMembers(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsNegate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsNegate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -947,19 +951,19 @@ func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicy(v interfac
 	return transformed, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireScreenLock(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireScreenLock(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedEncryptionStatuses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedEncryptionStatuses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedDeviceManagementLevels(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyAllowedDeviceManagementLevels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraints(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraints(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -995,31 +999,31 @@ func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstrain
 	return req, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsMinimumVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsMinimumVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsRequireVerifiedChromeOs(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsRequireVerifiedChromeOs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsOsType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyOsConstraintsOsType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireAdminApproval(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireAdminApproval(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireCorpOwned(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsDevicePolicyRequireCorpOwned(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelBasicConditionsRegions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelBasicConditionsRegions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelCustom(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelCustom(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1038,7 +1042,7 @@ func expandAccessContextManagerAccessLevelCustom(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandAccessContextManagerAccessLevelCustomExpr(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelCustomExpr(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1078,27 +1082,27 @@ func expandAccessContextManagerAccessLevelCustomExpr(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandAccessContextManagerAccessLevelCustomExprExpression(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelCustomExprExpression(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelCustomExprTitle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelCustomExprTitle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelCustomExprDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelCustomExprDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelCustomExprLocation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelCustomExprLocation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelParent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelParent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerAccessLevelName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerAccessLevelName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

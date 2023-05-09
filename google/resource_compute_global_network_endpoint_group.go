@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeGlobalNetworkEndpointGroup() *schema.Resource {
+func ResourceComputeGlobalNetworkEndpointGroup() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeGlobalNetworkEndpointGroupCreate,
 		Read:   resourceComputeGlobalNetworkEndpointGroupRead,
@@ -43,7 +47,7 @@ func resourceComputeGlobalNetworkEndpointGroup() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateGCEName,
+				ValidateFunc: verify.ValidateGCEName,
 				Description: `Name of the resource; provided by the client when the resource is
 created. The name must be 1-63 characters long, and comply with
 RFC1035. Specifically, the name must be 1-63 characters long and match
@@ -56,7 +60,7 @@ character, which cannot be a dash.`,
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"INTERNET_IP_PORT", "INTERNET_FQDN_PORT"}),
+				ValidateFunc: verify.ValidateEnum([]string{"INTERNET_IP_PORT", "INTERNET_FQDN_PORT"}),
 				Description:  `Type of network endpoints in this network endpoint group. Possible values: ["INTERNET_IP_PORT", "INTERNET_FQDN_PORT"]`,
 			},
 			"default_port": {
@@ -89,8 +93,8 @@ you create the resource.`,
 }
 
 func resourceComputeGlobalNetworkEndpointGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -121,7 +125,7 @@ func resourceComputeGlobalNetworkEndpointGroupCreate(d *schema.ResourceData, met
 		obj["defaultPort"] = defaultPortProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/networkEndpointGroups")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/networkEndpointGroups")
 	if err != nil {
 		return err
 	}
@@ -140,19 +144,19 @@ func resourceComputeGlobalNetworkEndpointGroupCreate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating GlobalNetworkEndpointGroup: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/networkEndpointGroups/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/networkEndpointGroups/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating GlobalNetworkEndpointGroup", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -168,13 +172,13 @@ func resourceComputeGlobalNetworkEndpointGroupCreate(d *schema.ResourceData, met
 }
 
 func resourceComputeGlobalNetworkEndpointGroupRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/networkEndpointGroups/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/networkEndpointGroups/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -192,9 +196,9 @@ func resourceComputeGlobalNetworkEndpointGroupRead(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeGlobalNetworkEndpointGroup %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeGlobalNetworkEndpointGroup %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -213,7 +217,7 @@ func resourceComputeGlobalNetworkEndpointGroupRead(d *schema.ResourceData, meta 
 	if err := d.Set("default_port", flattenComputeGlobalNetworkEndpointGroupDefaultPort(res["defaultPort"], d, config)); err != nil {
 		return fmt.Errorf("Error reading GlobalNetworkEndpointGroup: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading GlobalNetworkEndpointGroup: %s", err)
 	}
 
@@ -221,8 +225,8 @@ func resourceComputeGlobalNetworkEndpointGroupRead(d *schema.ResourceData, meta 
 }
 
 func resourceComputeGlobalNetworkEndpointGroupDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -235,7 +239,7 @@ func resourceComputeGlobalNetworkEndpointGroupDelete(d *schema.ResourceData, met
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/networkEndpointGroups/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/networkEndpointGroups/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -248,12 +252,12 @@ func resourceComputeGlobalNetworkEndpointGroupDelete(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "GlobalNetworkEndpointGroup")
+		return transport_tpg.HandleNotFoundError(err, d, "GlobalNetworkEndpointGroup")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting GlobalNetworkEndpointGroup", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -266,8 +270,8 @@ func resourceComputeGlobalNetworkEndpointGroupDelete(d *schema.ResourceData, met
 }
 
 func resourceComputeGlobalNetworkEndpointGroupImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/networkEndpointGroups/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -276,7 +280,7 @@ func resourceComputeGlobalNetworkEndpointGroupImport(d *schema.ResourceData, met
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/networkEndpointGroups/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/networkEndpointGroups/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -285,22 +289,22 @@ func resourceComputeGlobalNetworkEndpointGroupImport(d *schema.ResourceData, met
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeGlobalNetworkEndpointGroupName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalNetworkEndpointGroupName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalNetworkEndpointGroupDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalNetworkEndpointGroupDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalNetworkEndpointGroupNetworkEndpointType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalNetworkEndpointGroupNetworkEndpointType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeGlobalNetworkEndpointGroupDefaultPort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeGlobalNetworkEndpointGroupDefaultPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -314,18 +318,18 @@ func flattenComputeGlobalNetworkEndpointGroupDefaultPort(v interface{}, d *schem
 	return v // let terraform core handle it otherwise
 }
 
-func expandComputeGlobalNetworkEndpointGroupName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalNetworkEndpointGroupName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalNetworkEndpointGroupDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalNetworkEndpointGroupDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalNetworkEndpointGroupNetworkEndpointType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalNetworkEndpointGroupNetworkEndpointType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeGlobalNetworkEndpointGroupDefaultPort(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeGlobalNetworkEndpointGroupDefaultPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

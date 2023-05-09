@@ -1,23 +1,28 @@
 package google
 
 import (
+	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccDialogflowCXEnvironment_update(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"org_id":          getTestOrgFromEnv(t),
-		"billing_account": getTestBillingAccountFromEnv(t),
-		"random_suffix":   randString(t, 10),
+		"org_id":          acctest.GetTestOrgFromEnv(t),
+		"billing_account": acctest.GetTestBillingAccountFromEnv(t),
+		"random_suffix":   RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDialogflowCXEnvironment_basic(context),
@@ -125,4 +130,153 @@ func testAccDialogflowCXEnvironment_full(context map[string]interface{}) string 
         }
     }
 	  `, context)
+}
+
+func TestAccDialogflowCXEnvironment_dialogflowcxEnvironmentFullExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDialogflowCXEnvironmentDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDialogflowCXEnvironment_dialogflowcxEnvironmentFullExample(context),
+			},
+			{
+				ResourceName:            "google_dialogflow_cx_environment.development",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"parent"},
+			},
+		},
+	})
+}
+
+func testAccDialogflowCXEnvironment_dialogflowcxEnvironmentFullExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_dialogflow_cx_agent" "agent" {
+  display_name = "tf-test-dialogflowcx-agent%{random_suffix}"
+  location = "global"
+  default_language_code = "en"
+  supported_language_codes = ["fr","de","es"]
+  time_zone = "America/New_York"
+  description = "Example description."
+  avatar_uri = "https://cloud.google.com/_static/images/cloud/icons/favicons/onecloud/super_cloud.png"
+  enable_stackdriver_logging = true
+  enable_spell_correction    = true
+	speech_to_text_settings {
+		enable_speech_adaptation = true
+	}
+}
+
+resource "google_dialogflow_cx_version" "version_1" {
+  parent       = google_dialogflow_cx_agent.agent.start_flow
+  display_name = "1.0.0"
+  description  = "version 1.0.0"
+}
+
+resource "google_dialogflow_cx_environment" "development" {
+  parent       = google_dialogflow_cx_agent.agent.id
+  display_name = "Development"
+  description  = "Development Environment"
+  version_configs {
+    version = google_dialogflow_cx_version.version_1.id
+  }
+}
+`, context)
+}
+
+func TestAccDialogflowCXEnvironment_dialogflowcxEnvironmentRegional(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckDialogflowCXEnvironmentDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDialogflowCXEnvironment_dialogflowcxEnvironmentFRegional(context),
+			},
+			{
+				ResourceName:            "google_dialogflow_cx_environment.development",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"parent"},
+			},
+		},
+	})
+}
+
+func testAccDialogflowCXEnvironment_dialogflowcxEnvironmentFRegional(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_dialogflow_cx_agent" "agent" {
+	display_name = "issue12880"
+	location = "europe-west2"
+	default_language_code = "en"
+	supported_language_codes = ["fr","de","es"]
+	time_zone = "Europe/London"
+	description = "CX BOT Agent"
+	enable_stackdriver_logging = true
+		speech_to_text_settings {
+			enable_speech_adaptation = true
+		}
+	}
+
+resource "google_dialogflow_cx_version" "version_1" {
+	parent       = google_dialogflow_cx_agent.agent.start_flow
+	display_name = "1.0.0"
+	description  = "version 1.0.0"
+}
+
+resource "google_dialogflow_cx_environment" "development" {
+	parent       = google_dialogflow_cx_agent.agent.id
+	display_name = "Development"
+	description  = "Development Environment"
+	version_configs {
+		version = google_dialogflow_cx_version.version_1.id
+	}
+}
+`, context)
+}
+
+func testAccCheckDialogflowCXEnvironmentDestroyProducer(t *testing.T) func(s *terraform.State) error {
+	return func(s *terraform.State) error {
+		for name, rs := range s.RootModule().Resources {
+			if rs.Type != "google_dialogflow_cx_environment" {
+				continue
+			}
+			if strings.HasPrefix(name, "data.") {
+				continue
+			}
+
+			config := GoogleProviderConfig(t)
+
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{DialogflowCXBasePath}}{{parent}}/environments/{{name}}")
+			if err != nil {
+				return err
+			}
+
+			billingProject := ""
+
+			if config.BillingProject != "" {
+				billingProject = config.BillingProject
+			}
+
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
+			if err == nil {
+				return fmt.Errorf("DialogflowCXEnvironment still exists at %s", url)
+			}
+		}
+
+		return nil
+	}
 }

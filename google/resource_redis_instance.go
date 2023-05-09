@@ -27,6 +27,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 // Is the new redis version less than the old one?
@@ -67,7 +71,7 @@ func secondaryIpDiffSuppress(_, old, new string, _ *schema.ResourceData) bool {
 	return false
 }
 
-func resourceRedisInstance() *schema.Resource {
+func ResourceRedisInstance() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceRedisInstanceCreate,
 		Read:   resourceRedisInstanceRead,
@@ -97,7 +101,7 @@ func resourceRedisInstance() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRegexp(`^[a-z][a-z0-9-]{0,39}[a-z0-9]$`),
+				ValidateFunc: verify.ValidateRegexp(`^[a-z][a-z0-9-]{0,39}[a-z0-9]$`),
 				Description:  `The ID of the instance or a fully qualified identifier for the instance.`,
 			},
 			"alternative_location_id": {
@@ -123,7 +127,7 @@ Default value is "false" meaning AUTH is disabled.`,
 				Computed:         true,
 				Optional:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description: `The full name of the Google Compute Engine network to which the
 instance is connected. If left unspecified, the default network
 will be used.`,
@@ -132,7 +136,7 @@ will be used.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"DIRECT_PEERING", "PRIVATE_SERVICE_ACCESS", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"DIRECT_PEERING", "PRIVATE_SERVICE_ACCESS", ""}),
 				Description:  `The connection mode of the Redis instance. Default value: "DIRECT_PEERING" Possible values: ["DIRECT_PEERING", "PRIVATE_SERVICE_ACCESS"]`,
 				Default:      "DIRECT_PEERING",
 			},
@@ -190,7 +194,7 @@ of weekly_window is expected to be one.`,
 									"day": {
 										Type:         schema.TypeString,
 										Required:     true,
-										ValidateFunc: validateEnum([]string{"DAY_OF_WEEK_UNSPECIFIED", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
+										ValidateFunc: verify.ValidateEnum([]string{"DAY_OF_WEEK_UNSPECIFIED", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
 										Description: `Required. The day of week that maintenance updates occur.
 
 - DAY_OF_WEEK_UNSPECIFIED: The day of the week is unspecified.
@@ -298,16 +302,67 @@ resolution and up to nine fractional digits.`,
 					},
 				},
 			},
+			"persistence_config": {
+				Type:        schema.TypeList,
+				Computed:    true,
+				Optional:    true,
+				Description: `Persistence configuration for an instance.`,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"persistence_mode": {
+							Type:         schema.TypeString,
+							Computed:     true,
+							Optional:     true,
+							ValidateFunc: verify.ValidateEnum([]string{"DISABLED", "RDB"}),
+							Description: `Optional. Controls whether Persistence features are enabled. If not provided, the existing value will be used.
+
+- DISABLED: 	Persistence is disabled for the instance, and any existing snapshots are deleted.
+- RDB: RDB based Persistence is enabled. Possible values: ["DISABLED", "RDB"]`,
+						},
+						"rdb_snapshot_period": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							ValidateFunc: verify.ValidateEnum([]string{"ONE_HOUR", "SIX_HOURS", "TWELVE_HOURS", "TWENTY_FOUR_HOURS", ""}),
+							Description: `Optional. Available snapshot periods for scheduling.
+
+- ONE_HOUR:	Snapshot every 1 hour.
+- SIX_HOURS:	Snapshot every 6 hours.
+- TWELVE_HOURS:	Snapshot every 12 hours.
+- TWENTY_FOUR_HOURS:	Snapshot every 24 hours. Possible values: ["ONE_HOUR", "SIX_HOURS", "TWELVE_HOURS", "TWENTY_FOUR_HOURS"]`,
+						},
+						"rdb_snapshot_start_time": {
+							Type:     schema.TypeString,
+							Computed: true,
+							Optional: true,
+							Description: `Optional. Date and time that the first snapshot was/will be attempted,
+and to which future snapshots will be aligned. If not provided,
+the current time will be used.
+A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution
+and up to nine fractional digits.
+Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
+						},
+						"rdb_next_snapshot_time": {
+							Type:     schema.TypeString,
+							Computed: true,
+							Description: `Output only. The next time that a snapshot attempt is scheduled to occur.
+A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and up
+to nine fractional digits.
+Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
+						},
+					},
+				},
+			},
 			"read_replicas_mode": {
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"READ_REPLICAS_DISABLED", "READ_REPLICAS_ENABLED", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"READ_REPLICAS_DISABLED", "READ_REPLICAS_ENABLED", ""}),
 				Description: `Optional. Read replica mode. Can only be specified when trying to create the instance.
 If not set, Memorystore Redis backend will default to READ_REPLICAS_DISABLED.
-- READ_REPLICAS_DISABLED: If disabled, read endpoint will not be provided and the 
+- READ_REPLICAS_DISABLED: If disabled, read endpoint will not be provided and the
 instance cannot scale up or down the number of replicas.
-- READ_REPLICAS_ENABLED: If enabled, read endpoint will be provided and the instance 
+- READ_REPLICAS_ENABLED: If enabled, read endpoint will be provided and the instance
 can scale up and down the number of replicas. Possible values: ["READ_REPLICAS_DISABLED", "READ_REPLICAS_ENABLED"]`,
 			},
 			"redis_configs": {
@@ -323,7 +378,7 @@ https://cloud.google.com/memorystore/docs/redis/reference/rest/v1/projects.locat
 				Computed: true,
 				Optional: true,
 				Description: `The version of Redis software. If not provided, latest supported
-version will be used. Please check the API documentation linked 
+version will be used. Please check the API documentation linked
 at the top for the latest valid values.`,
 			},
 			"region": {
@@ -337,9 +392,9 @@ at the top for the latest valid values.`,
 				Type:     schema.TypeInt,
 				Computed: true,
 				Optional: true,
-				Description: `Optional. The number of replica nodes. The valid range for the Standard Tier with 
+				Description: `Optional. The number of replica nodes. The valid range for the Standard Tier with
 read replicas enabled is [1-5] and defaults to 2. If read replicas are not enabled
-for a Standard Tier instance, the only valid value is 1 and the default is 1. 
+for a Standard Tier instance, the only valid value is 1 and the default is 1.
 The valid value for basic tier is 0 and the default is also 0.`,
 			},
 			"reserved_ip_range": {
@@ -360,14 +415,14 @@ network.`,
 				DiffSuppressFunc: secondaryIpDiffSuppress,
 				Description: `Optional. Additional IP range for node placement. Required when enabling read replicas on
 an existing instance. For DIRECT_PEERING mode value must be a CIDR range of size /28, or
-"auto". For PRIVATE_SERVICE_ACCESS mode value must be the name of an allocated address 
+"auto". For PRIVATE_SERVICE_ACCESS mode value must be the name of an allocated address
 range associated with the private service access connection, or "auto".`,
 			},
 			"tier": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"BASIC", "STANDARD_HA", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"BASIC", "STANDARD_HA", ""}),
 				Description: `The service tier of the instance. Must be one of these values:
 
 - BASIC: standalone instance
@@ -378,7 +433,7 @@ range associated with the private service access connection, or "auto".`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"SERVER_AUTHENTICATION", "DISABLED", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"SERVER_AUTHENTICATION", "DISABLED", ""}),
 				Description: `The TLS mode of the Redis instance, If not provided, TLS is disabled for the instance.
 
 - SERVER_AUTHENTICATION: Client to Server traffic encryption enabled with server authentication Default value: "DISABLED" Possible values: ["SERVER_AUTHENTICATION", "DISABLED"]`,
@@ -447,7 +502,7 @@ will exhibit some lag behind the primary. Write requests must target 'host'.`,
 			"read_endpoint_port": {
 				Type:     schema.TypeInt,
 				Computed: true,
-				Description: `Output only. The port number of the exposed readonly redis endpoint. Standard tier only. 
+				Description: `Output only. The port number of the exposed readonly redis endpoint. Standard tier only.
 Write requests should target 'port'.`,
 			},
 			"server_ca_certs": {
@@ -502,8 +557,8 @@ Write requests should target 'port'.`,
 }
 
 func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -562,6 +617,12 @@ func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error
 		return err
 	} else if v, ok := d.GetOkExists("name"); !isEmptyValue(reflect.ValueOf(nameProp)) && (ok || !reflect.DeepEqual(v, nameProp)) {
 		obj["name"] = nameProp
+	}
+	persistenceConfigProp, err := expandRedisInstancePersistenceConfig(d.Get("persistence_config"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("persistence_config"); !isEmptyValue(reflect.ValueOf(persistenceConfigProp)) && (ok || !reflect.DeepEqual(v, persistenceConfigProp)) {
+		obj["persistenceConfig"] = persistenceConfigProp
 	}
 	maintenancePolicyProp, err := expandRedisInstanceMaintenancePolicy(d.Get("maintenance_policy"), d, config)
 	if err != nil {
@@ -635,7 +696,7 @@ func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances?instanceId={{name}}")
+	url, err := ReplaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances?instanceId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -654,13 +715,13 @@ func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Instance: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -669,12 +730,13 @@ func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = redisOperationWaitTimeWithResponse(
+	err = RedisOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Instance", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Instance: %s", err)
 	}
 
@@ -691,7 +753,7 @@ func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -703,13 +765,13 @@ func resourceRedisInstanceCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceRedisInstanceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -727,9 +789,9 @@ func resourceRedisInstanceRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("RedisInstance %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("RedisInstance %q", d.Id()))
 	}
 
 	// res, err = resourceRedisInstanceDecoder(d, meta, res)
@@ -792,6 +854,9 @@ func resourceRedisInstanceRead(d *schema.ResourceData, meta interface{}) error {
 	if err := d.Set("name", flattenRedisInstanceName(res["name"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Instance: %s", err)
 	}
+	if err := d.Set("persistence_config", flattenRedisInstancePersistenceConfig(res["persistenceConfig"], d, config)); err != nil {
+		return fmt.Errorf("Error reading Instance: %s", err)
+	}
 	if err := d.Set("maintenance_policy", flattenRedisInstanceMaintenancePolicy(res["maintenancePolicy"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Instance: %s", err)
 	}
@@ -808,9 +873,6 @@ func resourceRedisInstanceRead(d *schema.ResourceData, meta interface{}) error {
 		return fmt.Errorf("Error reading Instance: %s", err)
 	}
 	if err := d.Set("redis_version", flattenRedisInstanceRedisVersion(res["redisVersion"], d, config)); err != nil {
-		return fmt.Errorf("Error reading Instance: %s", err)
-	}
-	if err := d.Set("reserved_ip_range", flattenRedisInstanceReservedIpRange(res["reservedIpRange"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Instance: %s", err)
 	}
 	if err := d.Set("tier", flattenRedisInstanceTier(res["tier"], d, config)); err != nil {
@@ -848,8 +910,8 @@ func resourceRedisInstanceRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -886,6 +948,12 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 		return err
 	} else if v, ok := d.GetOkExists("redis_configs"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, redisConfigsProp)) {
 		obj["redisConfigs"] = redisConfigsProp
+	}
+	persistenceConfigProp, err := expandRedisInstancePersistenceConfig(d.Get("persistence_config"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("persistence_config"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, persistenceConfigProp)) {
+		obj["persistenceConfig"] = persistenceConfigProp
 	}
 	maintenancePolicyProp, err := expandRedisInstanceMaintenancePolicy(d.Get("maintenance_policy"), d, config)
 	if err != nil {
@@ -929,7 +997,7 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -951,6 +1019,10 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 
 	if d.HasChange("redis_configs") {
 		updateMask = append(updateMask, "redisConfigs")
+	}
+
+	if d.HasChange("persistence_config") {
+		updateMask = append(updateMask, "persistenceConfig")
 	}
 
 	if d.HasChange("maintenance_policy") {
@@ -976,9 +1048,9 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 	if d.HasChange("secondary_ip_range") {
 		updateMask = append(updateMask, "secondaryIpRange")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -990,7 +1062,7 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 
 	// if updateMask is empty we are not updating anything so skip the post
 	if len(updateMask) > 0 {
-		res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 		if err != nil {
 			return fmt.Errorf("Error updating Instance %q: %s", d.Id(), err)
@@ -998,7 +1070,7 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 			log.Printf("[DEBUG] Finished updating Instance %q: %#v", d.Id(), res)
 		}
 
-		err = redisOperationWaitTime(
+		err = RedisOperationWaitTime(
 			config, res, project, "Updating Instance", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 
@@ -1018,7 +1090,7 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 			obj["redisVersion"] = redisVersionProp
 		}
 
-		url, err := replaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}:upgrade")
+		url, err := ReplaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}:upgrade")
 		if err != nil {
 			return err
 		}
@@ -1028,14 +1100,14 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating Instance %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating Instance %q: %#v", d.Id(), res)
 		}
 
-		err = redisOperationWaitTime(
+		err = RedisOperationWaitTime(
 			config, res, project, "Updating Instance", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -1049,8 +1121,8 @@ func resourceRedisInstanceUpdate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceRedisInstanceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1063,7 +1135,7 @@ func resourceRedisInstanceDelete(d *schema.ResourceData, meta interface{}) error
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
+	url, err := ReplaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1076,12 +1148,12 @@ func resourceRedisInstanceDelete(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Instance")
+		return transport_tpg.HandleNotFoundError(err, d, "Instance")
 	}
 
-	err = redisOperationWaitTime(
+	err = RedisOperationWaitTime(
 		config, res, project, "Deleting Instance", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -1094,8 +1166,8 @@ func resourceRedisInstanceDelete(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceRedisInstanceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<region>[^/]+)/instances/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -1105,7 +1177,7 @@ func resourceRedisInstanceImport(d *schema.ResourceData, meta interface{}) ([]*s
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -1114,58 +1186,93 @@ func resourceRedisInstanceImport(d *schema.ResourceData, meta interface{}) ([]*s
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenRedisInstanceAlternativeLocationId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceAlternativeLocationId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceAuthEnabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceAuthEnabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceAuthorizedNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceAuthorizedNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceConnectMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceConnectMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceCurrentLocationId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceCurrentLocationId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceHost(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceHost(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceRedisConfigs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceRedisConfigs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceLocationId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceLocationId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenRedisInstanceMaintenancePolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstancePersistenceConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["persistence_mode"] =
+		flattenRedisInstancePersistenceConfigPersistenceMode(original["persistenceMode"], d, config)
+	transformed["rdb_snapshot_period"] =
+		flattenRedisInstancePersistenceConfigRdbSnapshotPeriod(original["rdbSnapshotPeriod"], d, config)
+	transformed["rdb_next_snapshot_time"] =
+		flattenRedisInstancePersistenceConfigRdbNextSnapshotTime(original["rdbNextSnapshotTime"], d, config)
+	transformed["rdb_snapshot_start_time"] =
+		flattenRedisInstancePersistenceConfigRdbSnapshotStartTime(original["rdbSnapshotStartTime"], d, config)
+	return []interface{}{transformed}
+}
+func flattenRedisInstancePersistenceConfigPersistenceMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenRedisInstancePersistenceConfigRdbSnapshotPeriod(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenRedisInstancePersistenceConfigRdbNextSnapshotTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenRedisInstancePersistenceConfigRdbSnapshotStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenRedisInstanceMaintenancePolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1184,19 +1291,19 @@ func flattenRedisInstanceMaintenancePolicy(v interface{}, d *schema.ResourceData
 		flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(original["weeklyMaintenanceWindow"], d, config)
 	return []interface{}{transformed}
 }
-func flattenRedisInstanceMaintenancePolicyCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenancePolicyUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenancePolicyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1216,15 +1323,15 @@ func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(v interface{},
 	}
 	return transformed
 }
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDay(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDay(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDuration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDuration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1240,10 +1347,10 @@ func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime(v int
 		flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeNanos(original["nanos"], d, config)
 	return []interface{}{transformed}
 }
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeHours(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeHours(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1257,10 +1364,10 @@ func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeHours(
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeMinutes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeMinutes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1274,10 +1381,10 @@ func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeMinute
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1291,10 +1398,10 @@ func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeSecond
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeNanos(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeNanos(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1308,7 +1415,7 @@ func flattenRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeNanos(
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstanceMaintenanceSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenanceSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1325,22 +1432,22 @@ func flattenRedisInstanceMaintenanceSchedule(v interface{}, d *schema.ResourceDa
 		flattenRedisInstanceMaintenanceScheduleScheduleDeadlineTime(original["scheduleDeadlineTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenRedisInstanceMaintenanceScheduleStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenanceScheduleStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenanceScheduleEndTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenanceScheduleEndTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMaintenanceScheduleScheduleDeadlineTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMaintenanceScheduleScheduleDeadlineTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceMemorySizeGb(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceMemorySizeGb(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1354,10 +1461,10 @@ func flattenRedisInstanceMemorySizeGb(v interface{}, d *schema.ResourceData, con
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstancePort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstancePort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1371,27 +1478,23 @@ func flattenRedisInstancePort(v interface{}, d *schema.ResourceData, config *Con
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstancePersistenceIamIdentity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstancePersistenceIamIdentity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceRedisVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceRedisVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceReservedIpRange(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceTier(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceTier(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceTransitEncryptionMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceTransitEncryptionMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return v
-}
-
-func flattenRedisInstanceServerCaCerts(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceServerCaCerts(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1413,30 +1516,30 @@ func flattenRedisInstanceServerCaCerts(v interface{}, d *schema.ResourceData, co
 	}
 	return transformed
 }
-func flattenRedisInstanceServerCaCertsSerialNumber(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceServerCaCertsSerialNumber(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceServerCaCertsCert(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceServerCaCertsCert(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceServerCaCertsCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceServerCaCertsCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceServerCaCertsExpireTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceServerCaCertsExpireTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceServerCaCertsSha1Fingerprint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceServerCaCertsSha1Fingerprint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceReplicaCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceReplicaCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1450,7 +1553,7 @@ func flattenRedisInstanceReplicaCount(v interface{}, d *schema.ResourceData, con
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstanceNodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceNodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1469,22 +1572,22 @@ func flattenRedisInstanceNodes(v interface{}, d *schema.ResourceData, config *Co
 	}
 	return transformed
 }
-func flattenRedisInstanceNodesId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceNodesId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceNodesZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceNodesZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceReadEndpoint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceReadEndpoint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceReadEndpointPort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceReadEndpointPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1498,27 +1601,27 @@ func flattenRedisInstanceReadEndpointPort(v interface{}, d *schema.ResourceData,
 	return v // let terraform core handle it otherwise
 }
 
-func flattenRedisInstanceReadReplicasMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceReadReplicasMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceSecondaryIpRange(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceSecondaryIpRange(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenRedisInstanceCustomerManagedKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenRedisInstanceCustomerManagedKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandRedisInstanceAlternativeLocationId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceAlternativeLocationId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceAuthEnabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceAuthEnabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceAuthorizedNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceAuthorizedNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	fv, err := ParseNetworkFieldValue(v.(string), d, config)
 	if err != nil {
 		return nil, err
@@ -1526,15 +1629,15 @@ func expandRedisInstanceAuthorizedNetwork(v interface{}, d TerraformResourceData
 	return fv.RelativeLink(), nil
 }
 
-func expandRedisInstanceConnectMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceConnectMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandRedisInstanceLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1545,7 +1648,7 @@ func expandRedisInstanceLabels(v interface{}, d TerraformResourceData, config *C
 	return m, nil
 }
 
-func expandRedisInstanceRedisConfigs(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandRedisInstanceRedisConfigs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1556,15 +1659,71 @@ func expandRedisInstanceRedisConfigs(v interface{}, d TerraformResourceData, con
 	return m, nil
 }
 
-func expandRedisInstanceLocationId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceLocationId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return replaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
+func expandRedisInstanceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return ReplaceVars(d, config, "projects/{{project}}/locations/{{region}}/instances/{{name}}")
 }
 
-func expandRedisInstanceMaintenancePolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstancePersistenceConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPersistenceMode, err := expandRedisInstancePersistenceConfigPersistenceMode(original["persistence_mode"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPersistenceMode); val.IsValid() && !isEmptyValue(val) {
+		transformed["persistenceMode"] = transformedPersistenceMode
+	}
+
+	transformedRdbSnapshotPeriod, err := expandRedisInstancePersistenceConfigRdbSnapshotPeriod(original["rdb_snapshot_period"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedRdbSnapshotPeriod); val.IsValid() && !isEmptyValue(val) {
+		transformed["rdbSnapshotPeriod"] = transformedRdbSnapshotPeriod
+	}
+
+	transformedRdbNextSnapshotTime, err := expandRedisInstancePersistenceConfigRdbNextSnapshotTime(original["rdb_next_snapshot_time"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedRdbNextSnapshotTime); val.IsValid() && !isEmptyValue(val) {
+		transformed["rdbNextSnapshotTime"] = transformedRdbNextSnapshotTime
+	}
+
+	transformedRdbSnapshotStartTime, err := expandRedisInstancePersistenceConfigRdbSnapshotStartTime(original["rdb_snapshot_start_time"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedRdbSnapshotStartTime); val.IsValid() && !isEmptyValue(val) {
+		transformed["rdbSnapshotStartTime"] = transformedRdbSnapshotStartTime
+	}
+
+	return transformed, nil
+}
+
+func expandRedisInstancePersistenceConfigPersistenceMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandRedisInstancePersistenceConfigRdbSnapshotPeriod(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandRedisInstancePersistenceConfigRdbNextSnapshotTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandRedisInstancePersistenceConfigRdbSnapshotStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandRedisInstanceMaintenancePolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1604,19 +1763,19 @@ func expandRedisInstanceMaintenancePolicy(v interface{}, d TerraformResourceData
 	return transformed, nil
 }
 
-func expandRedisInstanceMaintenancePolicyCreateTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyCreateTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyUpdateTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyUpdateTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1652,15 +1811,15 @@ func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow(v interface{}, 
 	return req, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDay(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDay(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDuration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowDuration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1705,23 +1864,23 @@ func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime(v inte
 	return transformed, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeHours(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeHours(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeMinutes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeMinutes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeNanos(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTimeNanos(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenanceSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenanceSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1754,56 +1913,56 @@ func expandRedisInstanceMaintenanceSchedule(v interface{}, d TerraformResourceDa
 	return transformed, nil
 }
 
-func expandRedisInstanceMaintenanceScheduleStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenanceScheduleStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenanceScheduleEndTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenanceScheduleEndTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMaintenanceScheduleScheduleDeadlineTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMaintenanceScheduleScheduleDeadlineTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceMemorySizeGb(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceMemorySizeGb(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceRedisVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceRedisVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceReservedIpRange(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceReservedIpRange(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceTier(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceTier(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceTransitEncryptionMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceTransitEncryptionMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceReplicaCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceReplicaCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceReadReplicasMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceReadReplicasMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceSecondaryIpRange(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceSecondaryIpRange(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandRedisInstanceCustomerManagedKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandRedisInstanceCustomerManagedKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 func resourceRedisInstanceEncoder(d *schema.ResourceData, meta interface{}, obj map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	region, err := getRegionFromSchema("region", "location_id", d, config)
 	if err != nil {
 		return nil, err
@@ -1815,16 +1974,16 @@ func resourceRedisInstanceEncoder(d *schema.ResourceData, meta interface{}, obj 
 }
 
 func resourceRedisInstanceDecoder(d *schema.ResourceData, meta interface{}, res map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
 
 	if v, ok := res["authEnabled"].(bool); ok {
 		if v {
-			url, err := replaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}/authString")
+			url, err := ReplaceVars(d, config, "{{RedisBasePath}}projects/{{project}}/locations/{{region}}/instances/{{name}}/authString")
 			if err != nil {
 				return nil, err
 			}
@@ -1843,7 +2002,7 @@ func resourceRedisInstanceDecoder(d *schema.ResourceData, meta interface{}, res 
 				billingProject = bp
 			}
 
-			res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+			res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 			if err != nil {
 				return nil, fmt.Errorf("Error reading AuthString: %s", err)
 			}

@@ -14,7 +14,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Eventarc"
-page_title: "Google: google_eventarc_trigger"
 description: |-
   The Eventarc Trigger resource
 ---
@@ -132,6 +131,10 @@ The `matching_criteria` block supports:
     
 - - -
 
+* `channel` -
+  (Optional)
+  Optional. The name of the channel associated with the trigger in `projects/{project}/locations/{location}/channels/{channel}` format. You must provide a channel to receive events from Eventarc SaaS partners.
+  
 * `labels` -
   (Optional)
   Optional. User labels attached to the triggers that can be used to group resources.
@@ -207,6 +210,9 @@ In addition to the arguments listed above, the following computed attributes are
 
 * `id` - an identifier for the resource with format `projects/{{project}}/locations/{{location}}/triggers/{{name}}`
 
+* `conditions` -
+  Output only. The reason(s) why a trigger is in FAILED state.
+  
 * `create_time` -
   Output only. The creation time.
   
@@ -222,7 +228,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

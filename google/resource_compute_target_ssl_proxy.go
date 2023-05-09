@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeTargetSslProxy() *schema.Resource {
+func ResourceComputeTargetSslProxy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeTargetSslProxyCreate,
 		Read:   resourceComputeTargetSslProxyRead,
@@ -59,16 +63,13 @@ first character must be a lowercase letter, and all following
 characters must be a dash, lowercase letter, or digit, except the last
 character, which cannot be a dash.`,
 			},
-			"ssl_certificates": {
-				Type:     schema.TypeList,
-				Required: true,
-				Description: `A list of SslCertificate resources that are used to authenticate
-connections between users and the load balancer. At least one
-SSL certificate must be specified.`,
-				Elem: &schema.Schema{
-					Type:             schema.TypeString,
-					DiffSuppressFunc: compareSelfLinkOrResourceName,
-				},
+			"certificate_map": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Description: `A reference to the CertificateMap resource uri that identifies a certificate map
+associated with the given target proxy. This field can only be set for global target proxies.
+Accepted format is '//certificatemanager.googleapis.com/projects/{project}/locations/{location}/certificateMaps/{resourceName}'.`,
+				ExactlyOneOf: []string{"ssl_certificates", "certificate_map"},
 			},
 			"description": {
 				Type:        schema.TypeString,
@@ -79,10 +80,22 @@ SSL certificate must be specified.`,
 			"proxy_header": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"NONE", "PROXY_V1", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NONE", "PROXY_V1", ""}),
 				Description: `Specifies the type of proxy header to append before sending data to
 the backend. Default value: "NONE" Possible values: ["NONE", "PROXY_V1"]`,
 				Default: "NONE",
+			},
+			"ssl_certificates": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Description: `A list of SslCertificate resources that are used to authenticate
+connections between users and the load balancer. At least one
+SSL certificate must be specified.`,
+				Elem: &schema.Schema{
+					Type:             schema.TypeString,
+					DiffSuppressFunc: compareSelfLinkOrResourceName,
+				},
+				ExactlyOneOf: []string{"ssl_certificates", "certificate_map"},
 			},
 			"ssl_policy": {
 				Type:             schema.TypeString,
@@ -118,8 +131,8 @@ resource will not have any SSL policy configured.`,
 }
 
 func resourceComputeTargetSslProxyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -155,6 +168,12 @@ func resourceComputeTargetSslProxyCreate(d *schema.ResourceData, meta interface{
 	} else if v, ok := d.GetOkExists("ssl_certificates"); !isEmptyValue(reflect.ValueOf(sslCertificatesProp)) && (ok || !reflect.DeepEqual(v, sslCertificatesProp)) {
 		obj["sslCertificates"] = sslCertificatesProp
 	}
+	certificateMapProp, err := expandComputeTargetSslProxyCertificateMap(d.Get("certificate_map"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("certificate_map"); !isEmptyValue(reflect.ValueOf(certificateMapProp)) && (ok || !reflect.DeepEqual(v, certificateMapProp)) {
+		obj["certificateMap"] = certificateMapProp
+	}
 	sslPolicyProp, err := expandComputeTargetSslProxySslPolicy(d.Get("ssl_policy"), d, config)
 	if err != nil {
 		return err
@@ -162,7 +181,7 @@ func resourceComputeTargetSslProxyCreate(d *schema.ResourceData, meta interface{
 		obj["sslPolicy"] = sslPolicyProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies")
 	if err != nil {
 		return err
 	}
@@ -181,19 +200,19 @@ func resourceComputeTargetSslProxyCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating TargetSslProxy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/targetSslProxies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/targetSslProxies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating TargetSslProxy", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -209,13 +228,13 @@ func resourceComputeTargetSslProxyCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetSslProxyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -233,9 +252,9 @@ func resourceComputeTargetSslProxyRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeTargetSslProxy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeTargetSslProxy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -263,10 +282,13 @@ func resourceComputeTargetSslProxyRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("ssl_certificates", flattenComputeTargetSslProxySslCertificates(res["sslCertificates"], d, config)); err != nil {
 		return fmt.Errorf("Error reading TargetSslProxy: %s", err)
 	}
+	if err := d.Set("certificate_map", flattenComputeTargetSslProxyCertificateMap(res["certificateMap"], d, config)); err != nil {
+		return fmt.Errorf("Error reading TargetSslProxy: %s", err)
+	}
 	if err := d.Set("ssl_policy", flattenComputeTargetSslProxySslPolicy(res["sslPolicy"], d, config)); err != nil {
 		return fmt.Errorf("Error reading TargetSslProxy: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading TargetSslProxy: %s", err)
 	}
 
@@ -274,8 +296,8 @@ func resourceComputeTargetSslProxyRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -300,7 +322,7 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			obj["proxyHeader"] = proxyHeaderProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setProxyHeader")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setProxyHeader")
 		if err != nil {
 			return err
 		}
@@ -310,14 +332,14 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating TargetSslProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating TargetSslProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating TargetSslProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -334,7 +356,7 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			obj["service"] = serviceProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setBackendService")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setBackendService")
 		if err != nil {
 			return err
 		}
@@ -344,14 +366,14 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating TargetSslProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating TargetSslProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating TargetSslProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -368,7 +390,7 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			obj["sslCertificates"] = sslCertificatesProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setSslCertificates")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setSslCertificates")
 		if err != nil {
 			return err
 		}
@@ -378,14 +400,48 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating TargetSslProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating TargetSslProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
+			config, res, project, "Updating TargetSslProxy", userAgent,
+			d.Timeout(schema.TimeoutUpdate))
+		if err != nil {
+			return err
+		}
+	}
+	if d.HasChange("certificate_map") {
+		obj := make(map[string]interface{})
+
+		certificateMapProp, err := expandComputeTargetSslProxyCertificateMap(d.Get("certificate_map"), d, config)
+		if err != nil {
+			return err
+		} else if v, ok := d.GetOkExists("certificate_map"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, certificateMapProp)) {
+			obj["certificateMap"] = certificateMapProp
+		}
+
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setCertificateMap")
+		if err != nil {
+			return err
+		}
+
+		// err == nil indicates that the billing_project value was found
+		if bp, err := getBillingProject(d, config); err == nil {
+			billingProject = bp
+		}
+
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		if err != nil {
+			return fmt.Errorf("Error updating TargetSslProxy %q: %s", d.Id(), err)
+		} else {
+			log.Printf("[DEBUG] Finished updating TargetSslProxy %q: %#v", d.Id(), res)
+		}
+
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating TargetSslProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -402,7 +458,7 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			obj["sslPolicy"] = sslPolicyProp
 		}
 
-		url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setSslPolicy")
+		url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}/setSslPolicy")
 		if err != nil {
 			return err
 		}
@@ -412,14 +468,14 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 			billingProject = bp
 		}
 
-		res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return fmt.Errorf("Error updating TargetSslProxy %q: %s", d.Id(), err)
 		} else {
 			log.Printf("[DEBUG] Finished updating TargetSslProxy %q: %#v", d.Id(), res)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Updating TargetSslProxy", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
@@ -433,8 +489,8 @@ func resourceComputeTargetSslProxyUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetSslProxyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -447,7 +503,7 @@ func resourceComputeTargetSslProxyDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/targetSslProxies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -460,12 +516,12 @@ func resourceComputeTargetSslProxyDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "TargetSslProxy")
+		return transport_tpg.HandleNotFoundError(err, d, "TargetSslProxy")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting TargetSslProxy", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -478,8 +534,8 @@ func resourceComputeTargetSslProxyDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeTargetSslProxyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/targetSslProxies/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -488,7 +544,7 @@ func resourceComputeTargetSslProxyImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/targetSslProxies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/targetSslProxies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -497,18 +553,18 @@ func resourceComputeTargetSslProxyImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeTargetSslProxyCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetSslProxyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetSslProxyProxyId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyProxyId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -522,48 +578,52 @@ func flattenComputeTargetSslProxyProxyId(v interface{}, d *schema.ResourceData, 
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeTargetSslProxyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetSslProxyProxyHeader(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyProxyHeader(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeTargetSslProxyBackendService(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyBackendService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenComputeTargetSslProxySslCertificates(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxySslCertificates(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return convertAndMapStringArr(v.([]interface{}), ConvertSelfLinkToV1)
+	return convertAndMapStringArr(v.([]interface{}), tpgresource.ConvertSelfLinkToV1)
 }
 
-func flattenComputeTargetSslProxySslPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeTargetSslProxyCertificateMap(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeTargetSslProxySslPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func expandComputeTargetSslProxyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetSslProxyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetSslProxyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetSslProxyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetSslProxyProxyHeader(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetSslProxyProxyHeader(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeTargetSslProxyBackendService(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetSslProxyBackendService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("backendServices", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for backend_service: %s", err)
@@ -571,7 +631,7 @@ func expandComputeTargetSslProxyBackendService(v interface{}, d TerraformResourc
 	return f.RelativeLink(), nil
 }
 
-func expandComputeTargetSslProxySslCertificates(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetSslProxySslCertificates(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -587,7 +647,11 @@ func expandComputeTargetSslProxySslCertificates(v interface{}, d TerraformResour
 	return req, nil
 }
 
-func expandComputeTargetSslProxySslPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeTargetSslProxyCertificateMap(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeTargetSslProxySslPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("sslPolicies", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for ssl_policy: %s", err)

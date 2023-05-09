@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	eventarc "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/eventarc"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceEventarcTrigger() *schema.Resource {
+func ResourceEventarcTrigger() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceEventarcTriggerCreate,
 		Read:   resourceEventarcTriggerRead,
@@ -75,6 +77,14 @@ func resourceEventarcTrigger() *schema.Resource {
 				Description: "Required. The resource name of the trigger. Must be unique within the location on the project.",
 			},
 
+			"channel": {
+				Type:             schema.TypeString,
+				Optional:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				Description:      "Optional. The name of the channel associated with the trigger in `projects/{project}/locations/{location}/channels/{channel}` format. You must provide a channel to receive events from Eventarc SaaS partners.",
+			},
+
 			"labels": {
 				Type:        schema.TypeMap,
 				Optional:    true,
@@ -106,6 +116,13 @@ func resourceEventarcTrigger() *schema.Resource {
 				Description: "Optional. In order to deliver messages, Eventarc may use other GCP products as transport intermediary. This field contains a reference to that transport intermediary. This information can be used for debugging purposes.",
 				MaxItems:    1,
 				Elem:        EventarcTriggerTransportSchema(),
+			},
+
+			"conditions": {
+				Type:        schema.TypeMap,
+				Computed:    true,
+				Description: "Output only. The reason(s) why a trigger is in FAILED state.",
+				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 
 			"create_time": {
@@ -294,7 +311,7 @@ func EventarcTriggerTransportPubsubSchema() *schema.Resource {
 }
 
 func resourceEventarcTriggerCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -305,6 +322,7 @@ func resourceEventarcTriggerCreate(d *schema.ResourceData, meta interface{}) err
 		Location:         dcl.String(d.Get("location").(string)),
 		MatchingCriteria: expandEventarcTriggerMatchingCriteriaArray(d.Get("matching_criteria")),
 		Name:             dcl.String(d.Get("name").(string)),
+		Channel:          dcl.String(d.Get("channel").(string)),
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		ServiceAccount:   dcl.String(d.Get("service_account").(string)),
@@ -317,7 +335,7 @@ func resourceEventarcTriggerCreate(d *schema.ResourceData, meta interface{}) err
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -326,8 +344,8 @@ func resourceEventarcTriggerCreate(d *schema.ResourceData, meta interface{}) err
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -349,7 +367,7 @@ func resourceEventarcTriggerCreate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceEventarcTriggerRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -360,13 +378,14 @@ func resourceEventarcTriggerRead(d *schema.ResourceData, meta interface{}) error
 		Location:         dcl.String(d.Get("location").(string)),
 		MatchingCriteria: expandEventarcTriggerMatchingCriteriaArray(d.Get("matching_criteria")),
 		Name:             dcl.String(d.Get("name").(string)),
+		Channel:          dcl.String(d.Get("channel").(string)),
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		ServiceAccount:   dcl.String(d.Get("service_account").(string)),
 		Transport:        expandEventarcTriggerTransport(d.Get("transport")),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -375,8 +394,8 @@ func resourceEventarcTriggerRead(d *schema.ResourceData, meta interface{}) error
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -400,6 +419,9 @@ func resourceEventarcTriggerRead(d *schema.ResourceData, meta interface{}) error
 	if err = d.Set("name", res.Name); err != nil {
 		return fmt.Errorf("error setting name in state: %s", err)
 	}
+	if err = d.Set("channel", res.Channel); err != nil {
+		return fmt.Errorf("error setting channel in state: %s", err)
+	}
 	if err = d.Set("labels", res.Labels); err != nil {
 		return fmt.Errorf("error setting labels in state: %s", err)
 	}
@@ -411,6 +433,9 @@ func resourceEventarcTriggerRead(d *schema.ResourceData, meta interface{}) error
 	}
 	if err = d.Set("transport", flattenEventarcTriggerTransport(res.Transport)); err != nil {
 		return fmt.Errorf("error setting transport in state: %s", err)
+	}
+	if err = d.Set("conditions", res.Conditions); err != nil {
+		return fmt.Errorf("error setting conditions in state: %s", err)
 	}
 	if err = d.Set("create_time", res.CreateTime); err != nil {
 		return fmt.Errorf("error setting create_time in state: %s", err)
@@ -428,7 +453,7 @@ func resourceEventarcTriggerRead(d *schema.ResourceData, meta interface{}) error
 	return nil
 }
 func resourceEventarcTriggerUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -439,13 +464,14 @@ func resourceEventarcTriggerUpdate(d *schema.ResourceData, meta interface{}) err
 		Location:         dcl.String(d.Get("location").(string)),
 		MatchingCriteria: expandEventarcTriggerMatchingCriteriaArray(d.Get("matching_criteria")),
 		Name:             dcl.String(d.Get("name").(string)),
+		Channel:          dcl.String(d.Get("channel").(string)),
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		ServiceAccount:   dcl.String(d.Get("service_account").(string)),
 		Transport:        expandEventarcTriggerTransport(d.Get("transport")),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -455,8 +481,8 @@ func resourceEventarcTriggerUpdate(d *schema.ResourceData, meta interface{}) err
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -478,7 +504,7 @@ func resourceEventarcTriggerUpdate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceEventarcTriggerDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -489,6 +515,7 @@ func resourceEventarcTriggerDelete(d *schema.ResourceData, meta interface{}) err
 		Location:         dcl.String(d.Get("location").(string)),
 		MatchingCriteria: expandEventarcTriggerMatchingCriteriaArray(d.Get("matching_criteria")),
 		Name:             dcl.String(d.Get("name").(string)),
+		Channel:          dcl.String(d.Get("channel").(string)),
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		ServiceAccount:   dcl.String(d.Get("service_account").(string)),
@@ -496,7 +523,7 @@ func resourceEventarcTriggerDelete(d *schema.ResourceData, meta interface{}) err
 	}
 
 	log.Printf("[DEBUG] Deleting Trigger %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -505,8 +532,8 @@ func resourceEventarcTriggerDelete(d *schema.ResourceData, meta interface{}) err
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLEventarcClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -521,9 +548,9 @@ func resourceEventarcTriggerDelete(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceEventarcTriggerImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/triggers/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",

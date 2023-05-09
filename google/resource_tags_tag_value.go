@@ -23,9 +23,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceTagsTagValue() *schema.Resource {
+func ResourceTagsTagValue() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceTagsTagValueCreate,
 		Read:   resourceTagsTagValueRead,
@@ -79,13 +82,12 @@ A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and up to n
 			"namespaced_name": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: `Output only. Namespaced name of the TagValue. Will be in the format {organizationId}/{tag_key_short_name}/{shortName}.`,
+				Description: `Output only. Namespaced name of the TagValue. Will be in the format {parentNamespace}/{tagKeyShortName}/{shortName}.`,
 			},
 			"update_time": {
 				Type:     schema.TypeString,
 				Computed: true,
 				Description: `Output only. Update time.
-
 A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and up to nine fractional digits. Examples: "2014-10-02T15:01:23Z" and "2014-10-02T15:01:23.045123456Z".`,
 			},
 		},
@@ -94,8 +96,8 @@ A timestamp in RFC3339 UTC "Zulu" format, with nanosecond resolution and up to n
 }
 
 func resourceTagsTagValueCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -120,14 +122,14 @@ func resourceTagsTagValueCreate(d *schema.ResourceData, meta interface{}) error 
 		obj["description"] = descriptionProp
 	}
 
-	lockName, err := replaceVars(d, config, "tagValues/{{parent}}")
+	lockName, err := ReplaceVars(d, config, "tagValues/{{parent}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{TagsBasePath}}tagValues")
+	url, err := ReplaceVars(d, config, "{{TagsBasePath}}tagValues")
 	if err != nil {
 		return err
 	}
@@ -140,13 +142,13 @@ func resourceTagsTagValueCreate(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating TagValue: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "tagValues/{{name}}")
+	id, err := ReplaceVars(d, config, "tagValues/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -155,12 +157,13 @@ func resourceTagsTagValueCreate(d *schema.ResourceData, meta interface{}) error 
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = tagsOperationWaitTimeWithResponse(
+	err = TagsOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating TagValue", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create TagValue: %s", err)
 	}
 
@@ -169,7 +172,7 @@ func resourceTagsTagValueCreate(d *schema.ResourceData, meta interface{}) error 
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "tagValues/{{name}}")
+	id, err = ReplaceVars(d, config, "tagValues/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -181,13 +184,13 @@ func resourceTagsTagValueCreate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceTagsTagValueRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{TagsBasePath}}tagValues/{{name}}")
+	url, err := ReplaceVars(d, config, "{{TagsBasePath}}tagValues/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -199,9 +202,9 @@ func resourceTagsTagValueRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("TagsTagValue %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("TagsTagValue %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenTagsTagValueName(res["name"], d, config)); err != nil {
@@ -230,8 +233,8 @@ func resourceTagsTagValueRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceTagsTagValueUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -246,14 +249,14 @@ func resourceTagsTagValueUpdate(d *schema.ResourceData, meta interface{}) error 
 		obj["description"] = descriptionProp
 	}
 
-	lockName, err := replaceVars(d, config, "tagValues/{{parent}}")
+	lockName, err := ReplaceVars(d, config, "tagValues/{{parent}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{TagsBasePath}}tagValues/{{name}}")
+	url, err := ReplaceVars(d, config, "{{TagsBasePath}}tagValues/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -264,9 +267,9 @@ func resourceTagsTagValueUpdate(d *schema.ResourceData, meta interface{}) error 
 	if d.HasChange("description") {
 		updateMask = append(updateMask, "description")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -276,7 +279,7 @@ func resourceTagsTagValueUpdate(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating TagValue %q: %s", d.Id(), err)
@@ -284,7 +287,7 @@ func resourceTagsTagValueUpdate(d *schema.ResourceData, meta interface{}) error 
 		log.Printf("[DEBUG] Finished updating TagValue %q: %#v", d.Id(), res)
 	}
 
-	err = tagsOperationWaitTime(
+	err = TagsOperationWaitTime(
 		config, res, "Updating TagValue", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -296,22 +299,22 @@ func resourceTagsTagValueUpdate(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceTagsTagValueDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	lockName, err := replaceVars(d, config, "tagValues/{{parent}}")
+	lockName, err := ReplaceVars(d, config, "tagValues/{{parent}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{TagsBasePath}}tagValues/{{name}}")
+	url, err := ReplaceVars(d, config, "{{TagsBasePath}}tagValues/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -324,12 +327,12 @@ func resourceTagsTagValueDelete(d *schema.ResourceData, meta interface{}) error 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "TagValue")
+		return transport_tpg.HandleNotFoundError(err, d, "TagValue")
 	}
 
-	err = tagsOperationWaitTime(
+	err = TagsOperationWaitTime(
 		config, res, "Deleting TagValue", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -342,8 +345,8 @@ func resourceTagsTagValueDelete(d *schema.ResourceData, meta interface{}) error 
 }
 
 func resourceTagsTagValueImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"tagValues/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
 	}, d, config); err != nil {
@@ -351,7 +354,7 @@ func resourceTagsTagValueImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "tagValues/{{name}}")
+	id, err := ReplaceVars(d, config, "tagValues/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -360,45 +363,45 @@ func resourceTagsTagValueImport(d *schema.ResourceData, meta interface{}) ([]*sc
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenTagsTagValueName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenTagsTagValueParent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueParent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenTagsTagValueShortName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueShortName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenTagsTagValueNamespacedName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueNamespacedName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenTagsTagValueDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenTagsTagValueCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenTagsTagValueUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenTagsTagValueUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandTagsTagValueParent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandTagsTagValueParent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandTagsTagValueShortName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandTagsTagValueShortName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandTagsTagValueDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandTagsTagValueDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

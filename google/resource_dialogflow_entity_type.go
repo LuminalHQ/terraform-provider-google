@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceDialogflowEntityType() *schema.Resource {
+func ResourceDialogflowEntityType() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDialogflowEntityTypeCreate,
 		Read:   resourceDialogflowEntityTypeRead,
@@ -50,7 +53,7 @@ func resourceDialogflowEntityType() *schema.Resource {
 			"kind": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ValidateFunc: validateEnum([]string{"KIND_MAP", "KIND_LIST", "KIND_REGEXP"}),
+				ValidateFunc: verify.ValidateEnum([]string{"KIND_MAP", "KIND_LIST", "KIND_REGEXP"}),
 				Description: `Indicates the kind of entity type.
 * KIND_MAP: Map entity types allow mapping of a group of synonyms to a reference value.
 * KIND_LIST: List entity types contain a set of entries that do not map to reference values. However, list entity
@@ -95,7 +98,7 @@ For KIND_LIST entity types:
 			"name": {
 				Type:     schema.TypeString,
 				Computed: true,
-				Description: `The unique identifier of the entity type. 
+				Description: `The unique identifier of the entity type.
 Format: projects/<Project ID>/agent/entityTypes/<Entity type ID>.`,
 			},
 			"project": {
@@ -110,8 +113,8 @@ Format: projects/<Project ID>/agent/entityTypes/<Entity type ID>.`,
 }
 
 func resourceDialogflowEntityTypeCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -142,7 +145,7 @@ func resourceDialogflowEntityTypeCreate(d *schema.ResourceData, meta interface{}
 		obj["entities"] = entitiesProp
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent/entityTypes/")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent/entityTypes/")
 	if err != nil {
 		return err
 	}
@@ -161,7 +164,7 @@ func resourceDialogflowEntityTypeCreate(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating EntityType: %s", err)
 	}
@@ -170,7 +173,7 @@ func resourceDialogflowEntityTypeCreate(d *schema.ResourceData, meta interface{}
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -200,13 +203,13 @@ func resourceDialogflowEntityTypeCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceDialogflowEntityTypeRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -224,9 +227,9 @@ func resourceDialogflowEntityTypeRead(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DialogflowEntityType %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DialogflowEntityType %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -253,8 +256,8 @@ func resourceDialogflowEntityTypeRead(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceDialogflowEntityTypeUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -293,7 +296,7 @@ func resourceDialogflowEntityTypeUpdate(d *schema.ResourceData, meta interface{}
 		obj["entities"] = entitiesProp
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -305,7 +308,7 @@ func resourceDialogflowEntityTypeUpdate(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating EntityType %q: %s", d.Id(), err)
@@ -317,8 +320,8 @@ func resourceDialogflowEntityTypeUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceDialogflowEntityTypeDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -331,7 +334,7 @@ func resourceDialogflowEntityTypeDelete(d *schema.ResourceData, meta interface{}
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -344,9 +347,9 @@ func resourceDialogflowEntityTypeDelete(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "EntityType")
+		return transport_tpg.HandleNotFoundError(err, d, "EntityType")
 	}
 
 	log.Printf("[DEBUG] Finished deleting EntityType %q: %#v", d.Id(), res)
@@ -355,10 +358,10 @@ func resourceDialogflowEntityTypeDelete(d *schema.ResourceData, meta interface{}
 
 func resourceDialogflowEntityTypeImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -376,23 +379,23 @@ func resourceDialogflowEntityTypeImport(d *schema.ResourceData, meta interface{}
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDialogflowEntityTypeName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowEntityTypeDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowEntityTypeKind(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeKind(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowEntityTypeEnableFuzzyExtraction(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeEnableFuzzyExtraction(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowEntityTypeEntities(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeEntities(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -411,27 +414,27 @@ func flattenDialogflowEntityTypeEntities(v interface{}, d *schema.ResourceData, 
 	}
 	return transformed
 }
-func flattenDialogflowEntityTypeEntitiesValue(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeEntitiesValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowEntityTypeEntitiesSynonyms(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowEntityTypeEntitiesSynonyms(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDialogflowEntityTypeDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowEntityTypeDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowEntityTypeKind(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowEntityTypeKind(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowEntityTypeEnableFuzzyExtraction(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowEntityTypeEnableFuzzyExtraction(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowEntityTypeEntities(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowEntityTypeEntities(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -460,10 +463,10 @@ func expandDialogflowEntityTypeEntities(v interface{}, d TerraformResourceData, 
 	return req, nil
 }
 
-func expandDialogflowEntityTypeEntitiesValue(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowEntityTypeEntitiesValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowEntityTypeEntitiesSynonyms(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowEntityTypeEntitiesSynonyms(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

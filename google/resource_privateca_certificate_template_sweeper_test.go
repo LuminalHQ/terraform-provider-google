@@ -22,6 +22,8 @@ import (
 
 	privateca "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/privateca"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func init() {
@@ -34,7 +36,7 @@ func init() {
 func testSweepPrivatecaCertificateTemplate(region string) error {
 	log.Print("[INFO][SWEEPER_LOG] Starting sweeper for PrivatecaCertificateTemplate")
 
-	config, err := sharedConfigForRegion(region)
+	config, err := acctest.SharedConfigForRegion(region)
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] error getting shared config for region: %s", err)
 		return err
@@ -47,7 +49,7 @@ func testSweepPrivatecaCertificateTemplate(region string) error {
 	}
 
 	t := &testing.T{}
-	billingId := getTestBillingAccountFromEnv(t)
+	billingId := acctest.GetTestBillingAccountFromEnv(t)
 
 	// Setup variables to be used for Delete arguments.
 	d := map[string]string{
@@ -58,7 +60,7 @@ func testSweepPrivatecaCertificateTemplate(region string) error {
 		"billing_account": billingId,
 	}
 
-	client := NewDCLPrivatecaClient(config, config.userAgent, "", 0)
+	client := transport_tpg.NewDCLPrivatecaClient(config, config.UserAgent, "", 0)
 	err = client.DeleteAllCertificateTemplate(context.Background(), d["project"], d["location"], isDeletablePrivatecaCertificateTemplate)
 	if err != nil {
 		return err
@@ -67,5 +69,5 @@ func testSweepPrivatecaCertificateTemplate(region string) error {
 }
 
 func isDeletablePrivatecaCertificateTemplate(r *privateca.CertificateTemplate) bool {
-	return isSweepableTestResource(*r.Name)
+	return acctest.IsSweepableTestResource(*r.Name)
 }

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Cloud Asset Inventory"
-page_title: "Google: google_cloud_asset_folder_feed"
 description: |-
   Describes a Cloud Asset Inventory feed used to to listen to asset updates.
 ---
@@ -89,7 +88,7 @@ The following arguments are supported:
 * `billing_project` -
   (Required)
   The project whose identity will be used when sending messages to the
-  destination pubsub topic. It also specifies the project for API 
+  destination pubsub topic. It also specifies the project for API
   enablement check, quota, and billing.
 
 * `feed_id` -
@@ -125,7 +124,7 @@ The following arguments are supported:
 
 * `asset_names` -
   (Optional)
-  A list of the full names of the assets to receive updates. You must specify either or both of 
+  A list of the full names of the assets to receive updates. You must specify either or both of
   assetNames and assetTypes. Only asset updates matching specified assetNames and assetTypes are
   exported to the feed. For example: //compute.googleapis.com/projects/my_project_123/zones/zone1/instances/instance1.
   See https://cloud.google.com/apis/design/resourceNames#fullResourceName for more info.
@@ -141,7 +140,7 @@ The following arguments are supported:
 * `content_type` -
   (Optional)
   Asset content type. If not specified, no content but the asset name and type will be returned.
-  Possible values are `CONTENT_TYPE_UNSPECIFIED`, `RESOURCE`, `IAM_POLICY`, `ORG_POLICY`, and `ACCESS_POLICY`.
+  Possible values are: `CONTENT_TYPE_UNSPECIFIED`, `RESOURCE`, `IAM_POLICY`, `ORG_POLICY`, `OS_INVENTORY`, `ACCESS_POLICY`.
 
 * `condition` -
   (Optional)
@@ -171,7 +170,7 @@ The following arguments are supported:
 
 * `location` -
   (Optional)
-  String indicating the location of the expression for error reporting, e.g. a file 
+  String indicating the location of the expression for error reporting, e.g. a file
   name and a position in the file.
 
 ## Attributes Reference
@@ -191,7 +190,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -209,4 +208,4 @@ $ terraform import google_cloud_asset_folder_feed.default {{folder_id}}/{{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

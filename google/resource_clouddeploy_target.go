@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	clouddeploy "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/clouddeploy"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceClouddeployTarget() *schema.Resource {
+func ResourceClouddeployTarget() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceClouddeployTargetCreate,
 		Read:   resourceClouddeployTargetRead,
@@ -72,7 +74,7 @@ func resourceClouddeployTarget() *schema.Resource {
 				Description:   "Information specifying an Anthos Cluster.",
 				MaxItems:      1,
 				Elem:          ClouddeployTargetAnthosClusterSchema(),
-				ConflictsWith: []string{"gke"},
+				ConflictsWith: []string{"gke", "run"},
 			},
 
 			"description": {
@@ -95,7 +97,7 @@ func resourceClouddeployTarget() *schema.Resource {
 				Description:   "Information specifying a GKE Cluster.",
 				MaxItems:      1,
 				Elem:          ClouddeployTargetGkeSchema(),
-				ConflictsWith: []string{"anthos_cluster"},
+				ConflictsWith: []string{"anthos_cluster", "run"},
 			},
 
 			"labels": {
@@ -118,6 +120,15 @@ func resourceClouddeployTarget() *schema.Resource {
 				Type:        schema.TypeBool,
 				Optional:    true,
 				Description: "Optional. Whether or not the `Target` requires approval.",
+			},
+
+			"run": {
+				Type:          schema.TypeList,
+				Optional:      true,
+				Description:   "Information specifying a Cloud Run deployment target.",
+				MaxItems:      1,
+				Elem:          ClouddeployTargetRunSchema(),
+				ConflictsWith: []string{"gke", "anthos_cluster"},
 			},
 
 			"create_time": {
@@ -183,6 +194,13 @@ func ClouddeployTargetExecutionConfigsSchema() *schema.Resource {
 				Description: "Optional. Cloud Storage location in which to store execution outputs. This can either be a bucket (\"gs://my-bucket\") or a path within a bucket (\"gs://my-bucket/my-dir\"). If unspecified, a default bucket located in the same region will be used.",
 			},
 
+			"execution_timeout": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Optional:    true,
+				Description: "Optional. Execution timeout for a Cloud Build Execution. This must be between 10m and 24h in seconds format. If unspecified, a default timeout of 1h is used.",
+			},
+
 			"service_account": {
 				Type:        schema.TypeString,
 				Computed:    true,
@@ -219,8 +237,20 @@ func ClouddeployTargetGkeSchema() *schema.Resource {
 	}
 }
 
+func ClouddeployTargetRunSchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"location": {
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Required. The location where the Cloud Run Service should be located. Format is `projects/{project}/locations/{location}`.",
+			},
+		},
+	}
+}
+
 func resourceClouddeployTargetCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -237,6 +267,7 @@ func resourceClouddeployTargetCreate(d *schema.ResourceData, meta interface{}) e
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		RequireApproval:  dcl.Bool(d.Get("require_approval").(bool)),
+		Run:              expandClouddeployTargetRun(d.Get("run")),
 	}
 
 	id, err := obj.ID()
@@ -245,7 +276,7 @@ func resourceClouddeployTargetCreate(d *schema.ResourceData, meta interface{}) e
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -254,8 +285,8 @@ func resourceClouddeployTargetCreate(d *schema.ResourceData, meta interface{}) e
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -277,7 +308,7 @@ func resourceClouddeployTargetCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceClouddeployTargetRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -294,9 +325,10 @@ func resourceClouddeployTargetRead(d *schema.ResourceData, meta interface{}) err
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		RequireApproval:  dcl.Bool(d.Get("require_approval").(bool)),
+		Run:              expandClouddeployTargetRun(d.Get("run")),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -305,8 +337,8 @@ func resourceClouddeployTargetRead(d *schema.ResourceData, meta interface{}) err
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -348,6 +380,9 @@ func resourceClouddeployTargetRead(d *schema.ResourceData, meta interface{}) err
 	if err = d.Set("require_approval", res.RequireApproval); err != nil {
 		return fmt.Errorf("error setting require_approval in state: %s", err)
 	}
+	if err = d.Set("run", flattenClouddeployTargetRun(res.Run)); err != nil {
+		return fmt.Errorf("error setting run in state: %s", err)
+	}
 	if err = d.Set("create_time", res.CreateTime); err != nil {
 		return fmt.Errorf("error setting create_time in state: %s", err)
 	}
@@ -367,7 +402,7 @@ func resourceClouddeployTargetRead(d *schema.ResourceData, meta interface{}) err
 	return nil
 }
 func resourceClouddeployTargetUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -384,9 +419,10 @@ func resourceClouddeployTargetUpdate(d *schema.ResourceData, meta interface{}) e
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		RequireApproval:  dcl.Bool(d.Get("require_approval").(bool)),
+		Run:              expandClouddeployTargetRun(d.Get("run")),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -396,8 +432,8 @@ func resourceClouddeployTargetUpdate(d *schema.ResourceData, meta interface{}) e
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -419,7 +455,7 @@ func resourceClouddeployTargetUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceClouddeployTargetDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -436,10 +472,11 @@ func resourceClouddeployTargetDelete(d *schema.ResourceData, meta interface{}) e
 		Labels:           checkStringMap(d.Get("labels")),
 		Project:          dcl.String(project),
 		RequireApproval:  dcl.Bool(d.Get("require_approval").(bool)),
+		Run:              expandClouddeployTargetRun(d.Get("run")),
 	}
 
 	log.Printf("[DEBUG] Deleting Target %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -448,8 +485,8 @@ func resourceClouddeployTargetDelete(d *schema.ResourceData, meta interface{}) e
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -464,9 +501,9 @@ func resourceClouddeployTargetDelete(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceClouddeployTargetImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/targets/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -535,10 +572,11 @@ func expandClouddeployTargetExecutionConfigs(o interface{}) *clouddeploy.TargetE
 
 	obj := o.(map[string]interface{})
 	return &clouddeploy.TargetExecutionConfigs{
-		Usages:          expandClouddeployTargetExecutionConfigsUsagesArray(obj["usages"]),
-		ArtifactStorage: dcl.StringOrNil(obj["artifact_storage"].(string)),
-		ServiceAccount:  dcl.StringOrNil(obj["service_account"].(string)),
-		WorkerPool:      dcl.String(obj["worker_pool"].(string)),
+		Usages:           expandClouddeployTargetExecutionConfigsUsagesArray(obj["usages"]),
+		ArtifactStorage:  dcl.StringOrNil(obj["artifact_storage"].(string)),
+		ExecutionTimeout: dcl.StringOrNil(obj["execution_timeout"].(string)),
+		ServiceAccount:   dcl.StringOrNil(obj["service_account"].(string)),
+		WorkerPool:       dcl.String(obj["worker_pool"].(string)),
 	}
 }
 
@@ -561,10 +599,11 @@ func flattenClouddeployTargetExecutionConfigs(obj *clouddeploy.TargetExecutionCo
 		return nil
 	}
 	transformed := map[string]interface{}{
-		"usages":           flattenClouddeployTargetExecutionConfigsUsagesArray(obj.Usages),
-		"artifact_storage": obj.ArtifactStorage,
-		"service_account":  obj.ServiceAccount,
-		"worker_pool":      obj.WorkerPool,
+		"usages":            flattenClouddeployTargetExecutionConfigsUsagesArray(obj.Usages),
+		"artifact_storage":  obj.ArtifactStorage,
+		"execution_timeout": obj.ExecutionTimeout,
+		"service_account":   obj.ServiceAccount,
+		"worker_pool":       obj.WorkerPool,
 	}
 
 	return transformed
@@ -593,6 +632,32 @@ func flattenClouddeployTargetGke(obj *clouddeploy.TargetGke) interface{} {
 	transformed := map[string]interface{}{
 		"cluster":     obj.Cluster,
 		"internal_ip": obj.InternalIP,
+	}
+
+	return []interface{}{transformed}
+
+}
+
+func expandClouddeployTargetRun(o interface{}) *clouddeploy.TargetRun {
+	if o == nil {
+		return clouddeploy.EmptyTargetRun
+	}
+	objArr := o.([]interface{})
+	if len(objArr) == 0 || objArr[0] == nil {
+		return clouddeploy.EmptyTargetRun
+	}
+	obj := objArr[0].(map[string]interface{})
+	return &clouddeploy.TargetRun{
+		Location: dcl.String(obj["location"].(string)),
+	}
+}
+
+func flattenClouddeployTargetRun(obj *clouddeploy.TargetRun) interface{} {
+	if obj == nil || obj.Empty() {
+		return nil
+	}
+	transformed := map[string]interface{}{
+		"location": obj.Location,
 	}
 
 	return []interface{}{transformed}

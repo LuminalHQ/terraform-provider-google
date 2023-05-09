@@ -2,33 +2,35 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccComputePerInstanceConfig_statefulBasic(t *testing.T) {
 	// Multiple fine-grained resources
-	skipIfVcr(t)
+	acctest.SkipIfVcr(t)
 	t.Parallel()
 
-	suffix := randString(t, 10)
+	suffix := RandString(t, 10)
 	igmName := fmt.Sprintf("tf-test-igm-%s", suffix)
 	context := map[string]interface{}{
 		"igm_name":      igmName,
 		"random_suffix": suffix,
-		"config_name":   fmt.Sprintf("instance-%s", randString(t, 10)),
-		"config_name2":  fmt.Sprintf("instance-%s", randString(t, 10)),
-		"config_name3":  fmt.Sprintf("instance-%s", randString(t, 10)),
-		"config_name4":  fmt.Sprintf("instance-%s", randString(t, 10)),
+		"config_name":   fmt.Sprintf("instance-%s", RandString(t, 10)),
+		"config_name2":  fmt.Sprintf("instance-%s", RandString(t, 10)),
+		"config_name3":  fmt.Sprintf("instance-%s", RandString(t, 10)),
+		"config_name4":  fmt.Sprintf("instance-%s", RandString(t, 10)),
 	}
 	igmId := fmt.Sprintf("projects/%s/zones/%s/instanceGroupManagers/%s",
-		getTestProjectFromEnv(), getTestZoneFromEnv(), igmName)
+		acctest.GetTestProjectFromEnv(), acctest.GetTestZoneFromEnv(), igmName)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				// Create one endpoint
@@ -92,14 +94,14 @@ func TestAccComputePerInstanceConfig_update(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
-		"igm_name":      fmt.Sprintf("tf-test-igm-%s", randString(t, 10)),
-		"config_name":   fmt.Sprintf("instance-%s", randString(t, 10)),
+		"random_suffix": RandString(t, 10),
+		"igm_name":      fmt.Sprintf("tf-test-igm-%s", RandString(t, 10)),
+		"config_name":   fmt.Sprintf("instance-%s", RandString(t, 10)),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				// Create one config
@@ -311,10 +313,10 @@ func testAccCheckComputePerInstanceConfigDestroyed(t *testing.T, igmId, configNa
 }
 
 func testAccComputePerInstanceConfigListNames(t *testing.T, igmId string) (map[string]struct{}, error) {
-	config := googleProviderConfig(t)
+	config := GoogleProviderConfig(t)
 
 	url := fmt.Sprintf("%s%s/listPerInstanceConfigs", config.ComputeBasePath, igmId)
-	res, err := sendRequest(config, "POST", "", url, config.userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "POST", "", url, config.UserAgent, nil)
 	if err != nil {
 		return nil, err
 	}

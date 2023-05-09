@@ -15,6 +15,7 @@
 package google
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"reflect"
@@ -22,6 +23,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func certManagerDefaultScopeDiffSuppress(_, old, new string, diff *schema.ResourceData) bool {
@@ -31,7 +35,7 @@ func certManagerDefaultScopeDiffSuppress(_, old, new string, diff *schema.Resour
 	return false
 }
 
-func resourceCertificateManagerCertificate() *schema.Resource {
+func ResourceCertificateManagerCertificate() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCertificateManagerCertificateCreate,
 		Read:   resourceCertificateManagerCertificateRead,
@@ -46,6 +50,15 @@ func resourceCertificateManagerCertificate() *schema.Resource {
 			Create: schema.DefaultTimeout(20 * time.Minute),
 			Update: schema.DefaultTimeout(20 * time.Minute),
 			Delete: schema.DefaultTimeout(20 * time.Minute),
+		},
+
+		SchemaVersion: 1,
+		StateUpgraders: []schema.StateUpgrader{
+			{
+				Type:    resourceCertificateManagerCertificateResourceV0().CoreConfigSchema().ImpliedType(),
+				Upgrade: ResourceCertificateManagerCertificateUpgradeV0,
+				Version: 0,
+			},
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -68,6 +81,12 @@ and all following characters must be a dash, underscore, letter or digit.`,
 				Description: `Set of label tags associated with the Certificate resource.`,
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
+			"location": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: `The Certificate Manager location. If not specified, "global" is used.`,
+				Default:     "global",
+			},
 			"managed": {
 				Type:     schema.TypeList,
 				Optional: true,
@@ -79,10 +98,11 @@ automatically, for as long as it's authorized to do so.`,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"dns_authorizations": {
-							Type:        schema.TypeList,
-							Optional:    true,
-							ForceNew:    true,
-							Description: `Authorizations that will be used for performing domain authorization`,
+							Type:             schema.TypeList,
+							Optional:         true,
+							ForceNew:         true,
+							DiffSuppressFunc: tpgresource.ProjectNumberDiffSuppress,
+							Description:      `Authorizations that will be used for performing domain authorization`,
 							Elem: &schema.Schema{
 								Type: schema.TypeString,
 							},
@@ -185,18 +205,41 @@ certificates before they expire remains the user's responsibility.`,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"certificate_pem": {
+							Type:       schema.TypeString,
+							Optional:   true,
+							Deprecated: "Deprecated in favor of `pem_certificate`",
+							ForceNew:   true,
+							Description: `**Deprecated** The certificate chain in PEM-encoded form.
+
+Leaf certificate comes first, followed by intermediate ones if any.`,
+							Sensitive:    true,
+							ExactlyOneOf: []string{"self_managed.0.certificate_pem", "self_managed.0.pem_certificate"},
+						},
+						"pem_certificate": {
 							Type:     schema.TypeString,
-							Required: true,
+							Optional: true,
+							ForceNew: true,
 							Description: `The certificate chain in PEM-encoded form.
 
 Leaf certificate comes first, followed by intermediate ones if any.`,
-							Sensitive: true,
+							ExactlyOneOf: []string{"self_managed.0.certificate_pem", "self_managed.0.pem_certificate"},
+						},
+						"pem_private_key": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							ForceNew:     true,
+							Description:  `The private key of the leaf certificate in PEM-encoded form.`,
+							Sensitive:    true,
+							ExactlyOneOf: []string{"self_managed.0.private_key_pem", "self_managed.0.pem_private_key"},
 						},
 						"private_key_pem": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: `The private key of the leaf certificate in PEM-encoded form.`,
-							Sensitive:   true,
+							Type:         schema.TypeString,
+							Optional:     true,
+							Deprecated:   "Deprecated in favor of `pem_private_key`",
+							ForceNew:     true,
+							Description:  `**Deprecated** The private key of the leaf certificate in PEM-encoded form.`,
+							Sensitive:    true,
+							ExactlyOneOf: []string{"self_managed.0.private_key_pem", "self_managed.0.pem_private_key"},
 						},
 					},
 				},
@@ -214,8 +257,8 @@ Leaf certificate comes first, followed by intermediate ones if any.`,
 }
 
 func resourceCertificateManagerCertificateCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -252,7 +295,7 @@ func resourceCertificateManagerCertificateCreate(d *schema.ResourceData, meta in
 		obj["managed"] = managedProp
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificates?certificateId={{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/{{location}}/certificates?certificateId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -271,19 +314,19 @@ func resourceCertificateManagerCertificateCreate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Certificate: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/certificates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/certificates/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Creating Certificate", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -299,13 +342,13 @@ func resourceCertificateManagerCertificateCreate(d *schema.ResourceData, meta in
 }
 
 func resourceCertificateManagerCertificateRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/{{location}}/certificates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -323,9 +366,9 @@ func resourceCertificateManagerCertificateRead(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CertificateManagerCertificate %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CertificateManagerCertificate %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -341,9 +384,6 @@ func resourceCertificateManagerCertificateRead(d *schema.ResourceData, meta inte
 	if err := d.Set("scope", flattenCertificateManagerCertificateScope(res["scope"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Certificate: %s", err)
 	}
-	if err := d.Set("self_managed", flattenCertificateManagerCertificateSelfManaged(res["selfManaged"], d, config)); err != nil {
-		return fmt.Errorf("Error reading Certificate: %s", err)
-	}
 	if err := d.Set("managed", flattenCertificateManagerCertificateManaged(res["managed"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Certificate: %s", err)
 	}
@@ -352,8 +392,8 @@ func resourceCertificateManagerCertificateRead(d *schema.ResourceData, meta inte
 }
 
 func resourceCertificateManagerCertificateUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -380,7 +420,7 @@ func resourceCertificateManagerCertificateUpdate(d *schema.ResourceData, meta in
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/{{location}}/certificates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -395,9 +435,9 @@ func resourceCertificateManagerCertificateUpdate(d *schema.ResourceData, meta in
 	if d.HasChange("labels") {
 		updateMask = append(updateMask, "labels")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -407,7 +447,7 @@ func resourceCertificateManagerCertificateUpdate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Certificate %q: %s", d.Id(), err)
@@ -415,7 +455,7 @@ func resourceCertificateManagerCertificateUpdate(d *schema.ResourceData, meta in
 		log.Printf("[DEBUG] Finished updating Certificate %q: %#v", d.Id(), res)
 	}
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Updating Certificate", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -427,8 +467,8 @@ func resourceCertificateManagerCertificateUpdate(d *schema.ResourceData, meta in
 }
 
 func resourceCertificateManagerCertificateDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -441,7 +481,7 @@ func resourceCertificateManagerCertificateDelete(d *schema.ResourceData, meta in
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/{{location}}/certificates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -454,12 +494,12 @@ func resourceCertificateManagerCertificateDelete(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Certificate")
+		return transport_tpg.HandleNotFoundError(err, d, "Certificate")
 	}
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Deleting Certificate", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -472,17 +512,17 @@ func resourceCertificateManagerCertificateDelete(d *schema.ResourceData, meta in
 }
 
 func resourceCertificateManagerCertificateImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
-		"projects/(?P<project>[^/]+)/locations/global/certificates/(?P<name>[^/]+)",
-		"(?P<project>[^/]+)/(?P<name>[^/]+)",
-		"(?P<name>[^/]+)",
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
+		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/certificates/(?P<name>[^/]+)",
+		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
+		"(?P<location>[^/]+)/(?P<name>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/certificates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/certificates/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -491,42 +531,19 @@ func resourceCertificateManagerCertificateImport(d *schema.ResourceData, meta in
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCertificateManagerCertificateDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateScope(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateScope(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateSelfManaged(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	if v == nil {
-		return nil
-	}
-	original := v.(map[string]interface{})
-	if len(original) == 0 {
-		return nil
-	}
-	transformed := make(map[string]interface{})
-	transformed["certificate_pem"] =
-		flattenCertificateManagerCertificateSelfManagedCertificatePem(original["certificatePem"], d, config)
-	transformed["private_key_pem"] =
-		flattenCertificateManagerCertificateSelfManagedPrivateKeyPem(original["privateKeyPem"], d, config)
-	return []interface{}{transformed}
-}
-func flattenCertificateManagerCertificateSelfManagedCertificatePem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return v
-}
-
-func flattenCertificateManagerCertificateSelfManagedPrivateKeyPem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return v
-}
-
-func flattenCertificateManagerCertificateManaged(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManaged(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -547,19 +564,19 @@ func flattenCertificateManagerCertificateManaged(v interface{}, d *schema.Resour
 		flattenCertificateManagerCertificateManagedAuthorizationAttemptInfo(original["authorizationAttemptInfo"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCertificateManagerCertificateManagedDomains(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedDomains(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedDnsAuthorizations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
-	return d.Get("managed.0.dns_authorizations")
-}
-
-func flattenCertificateManagerCertificateManagedState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedDnsAuthorizations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedProvisioningIssue(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCertificateManagerCertificateManagedProvisioningIssue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -574,15 +591,15 @@ func flattenCertificateManagerCertificateManagedProvisioningIssue(v interface{},
 		flattenCertificateManagerCertificateManagedProvisioningIssueDetails(original["details"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCertificateManagerCertificateManagedProvisioningIssueReason(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedProvisioningIssueReason(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedProvisioningIssueDetails(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedProvisioningIssueDetails(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfo(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfo(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -603,27 +620,27 @@ func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfo(v inter
 	}
 	return transformed
 }
-func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoDomain(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoDomain(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoFailureReason(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoFailureReason(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoDetails(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerCertificateManagedAuthorizationAttemptInfoDetails(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCertificateManagerCertificateDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCertificateManagerCertificateLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -634,11 +651,11 @@ func expandCertificateManagerCertificateLabels(v interface{}, d TerraformResourc
 	return m, nil
 }
 
-func expandCertificateManagerCertificateScope(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateScope(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateSelfManaged(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateSelfManaged(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -661,18 +678,40 @@ func expandCertificateManagerCertificateSelfManaged(v interface{}, d TerraformRe
 		transformed["privateKeyPem"] = transformedPrivateKeyPem
 	}
 
+	transformedPemCertificate, err := expandCertificateManagerCertificateSelfManagedPemCertificate(original["pem_certificate"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPemCertificate); val.IsValid() && !isEmptyValue(val) {
+		transformed["pemCertificate"] = transformedPemCertificate
+	}
+
+	transformedPemPrivateKey, err := expandCertificateManagerCertificateSelfManagedPemPrivateKey(original["pem_private_key"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPemPrivateKey); val.IsValid() && !isEmptyValue(val) {
+		transformed["pemPrivateKey"] = transformedPemPrivateKey
+	}
+
 	return transformed, nil
 }
 
-func expandCertificateManagerCertificateSelfManagedCertificatePem(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateSelfManagedCertificatePem(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateSelfManagedPrivateKeyPem(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateSelfManagedPrivateKeyPem(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManaged(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateSelfManagedPemCertificate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCertificateManagerCertificateSelfManagedPemPrivateKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCertificateManagerCertificateManaged(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -719,19 +758,19 @@ func expandCertificateManagerCertificateManaged(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandCertificateManagerCertificateManagedDomains(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedDomains(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedDnsAuthorizations(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedDnsAuthorizations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedState(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedState(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedProvisioningIssue(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedProvisioningIssue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -757,15 +796,15 @@ func expandCertificateManagerCertificateManagedProvisioningIssue(v interface{}, 
 	return transformed, nil
 }
 
-func expandCertificateManagerCertificateManagedProvisioningIssueReason(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedProvisioningIssueReason(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedProvisioningIssueDetails(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedProvisioningIssueDetails(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedAuthorizationAttemptInfo(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedAuthorizationAttemptInfo(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -808,18 +847,228 @@ func expandCertificateManagerCertificateManagedAuthorizationAttemptInfo(v interf
 	return req, nil
 }
 
-func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoDomain(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoDomain(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoState(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoState(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoFailureReason(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoFailureReason(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoDetails(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerCertificateManagedAuthorizationAttemptInfoDetails(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
+}
+
+func ResourceCertificateManagerCertificateUpgradeV0(_ context.Context, rawState map[string]interface{}, meta interface{}) (map[string]interface{}, error) {
+	log.Printf("[DEBUG] Attributes before migration: %#v", rawState)
+	// Version 0 didn't support location. Default it to global.
+	rawState["location"] = "global"
+	log.Printf("[DEBUG] Attributes after migration: %#v", rawState)
+	return rawState, nil
+}
+
+func resourceCertificateManagerCertificateResourceV0() *schema.Resource {
+	return &schema.Resource{
+		Create: resourceCertificateManagerCertificateCreate,
+		Read:   resourceCertificateManagerCertificateRead,
+		Update: resourceCertificateManagerCertificateUpdate,
+		Delete: resourceCertificateManagerCertificateDelete,
+
+		Importer: &schema.ResourceImporter{
+			State: resourceCertificateManagerCertificateImport,
+		},
+
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(20 * time.Minute),
+			Update: schema.DefaultTimeout(20 * time.Minute),
+			Delete: schema.DefaultTimeout(20 * time.Minute),
+		},
+
+		Schema: map[string]*schema.Schema{
+			"name": {
+				Type:     schema.TypeString,
+				Required: true,
+				ForceNew: true,
+				Description: `A user-defined name of the certificate. Certificate names must be unique
+The name must be 1-64 characters long, and match the regular expression [a-zA-Z][a-zA-Z0-9_-]* which means the first character must be a letter,
+and all following characters must be a dash, underscore, letter or digit.`,
+			},
+			"description": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: `A human-readable description of the resource.`,
+			},
+			"labels": {
+				Type:        schema.TypeMap,
+				Optional:    true,
+				Description: `Set of label tags associated with the Certificate resource.`,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+			},
+			"managed": {
+				Type:     schema.TypeList,
+				Optional: true,
+				ForceNew: true,
+				Description: `Configuration and state of a Managed Certificate.
+Certificate Manager provisions and renews Managed Certificates
+automatically, for as long as it's authorized to do so.`,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"dns_authorizations": {
+							Type:             schema.TypeList,
+							Optional:         true,
+							ForceNew:         true,
+							DiffSuppressFunc: tpgresource.ProjectNumberDiffSuppress,
+							Description:      `Authorizations that will be used for performing domain authorization`,
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"domains": {
+							Type:     schema.TypeList,
+							Optional: true,
+							ForceNew: true,
+							Description: `The domains for which a managed SSL certificate will be generated.
+Wildcard domains are only supported with DNS challenge resolution`,
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"authorization_attempt_info": {
+							Type:     schema.TypeList,
+							Computed: true,
+							Description: `Detailed state of the latest authorization attempt for each domain
+specified for this Managed Certificate.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"details": {
+										Type:     schema.TypeString,
+										Computed: true,
+										Description: `Human readable explanation for reaching the state. Provided to help
+address the configuration issues.
+Not guaranteed to be stable. For programmatic access use 'failure_reason' field.`,
+									},
+									"domain": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: `Domain name of the authorization attempt.`,
+									},
+									"failure_reason": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: `Reason for failure of the authorization attempt for the domain.`,
+									},
+									"state": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: `State of the domain for managed certificate issuance.`,
+									},
+								},
+							},
+						},
+						"provisioning_issue": {
+							Type:        schema.TypeList,
+							Computed:    true,
+							Description: `Information about issues with provisioning this Managed Certificate.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"details": {
+										Type:     schema.TypeString,
+										Computed: true,
+										Description: `Human readable explanation about the issue. Provided to help address
+the configuration issues.
+Not guaranteed to be stable. For programmatic access use 'reason' field.`,
+									},
+									"reason": {
+										Type:        schema.TypeString,
+										Computed:    true,
+										Description: `Reason for provisioning failures.`,
+									},
+								},
+							},
+						},
+						"state": {
+							Type:        schema.TypeString,
+							Computed:    true,
+							Description: `A state of this Managed Certificate.`,
+						},
+					},
+				},
+				ExactlyOneOf: []string{"self_managed", "managed"},
+			},
+			"scope": {
+				Type:             schema.TypeString,
+				Optional:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: certManagerDefaultScopeDiffSuppress,
+				Description: `The scope of the certificate.
+
+DEFAULT: Certificates with default scope are served from core Google data centers.
+If unsure, choose this option.
+
+EDGE_CACHE: Certificates with scope EDGE_CACHE are special-purposed certificates,
+served from non-core Google data centers.
+Currently allowed only for managed certificates.`,
+				Default: "DEFAULT",
+			},
+			"self_managed": {
+				Type:     schema.TypeList,
+				Optional: true,
+				ForceNew: true,
+				Description: `Certificate data for a SelfManaged Certificate.
+SelfManaged Certificates are uploaded by the user. Updating such
+certificates before they expire remains the user's responsibility.`,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"certificate_pem": {
+							Type:       schema.TypeString,
+							Optional:   true,
+							Deprecated: "Deprecated in favor of `pem_certificate`",
+							Description: `**Deprecated** The certificate chain in PEM-encoded form.
+
+Leaf certificate comes first, followed by intermediate ones if any.`,
+							Sensitive:    true,
+							ExactlyOneOf: []string{"self_managed.0.certificate_pem", "self_managed.0.pem_certificate"},
+						},
+						"pem_certificate": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Description: `The certificate chain in PEM-encoded form.
+
+Leaf certificate comes first, followed by intermediate ones if any.`,
+							ExactlyOneOf: []string{"self_managed.0.certificate_pem", "self_managed.0.pem_certificate"},
+						},
+						"pem_private_key": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Description:  `The private key of the leaf certificate in PEM-encoded form.`,
+							Sensitive:    true,
+							ExactlyOneOf: []string{"self_managed.0.private_key_pem", "self_managed.0.pem_private_key"},
+						},
+						"private_key_pem": {
+							Type:         schema.TypeString,
+							Optional:     true,
+							Deprecated:   "Deprecated in favor of `pem_private_key`",
+							Description:  `**Deprecated** The private key of the leaf certificate in PEM-encoded form.`,
+							Sensitive:    true,
+							ExactlyOneOf: []string{"self_managed.0.private_key_pem", "self_managed.0.pem_private_key"},
+						},
+					},
+				},
+				ExactlyOneOf: []string{"self_managed", "managed"},
+			},
+			"project": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+				ForceNew: true,
+			},
+		},
+		UseJSONNumber: true,
+	}
 }

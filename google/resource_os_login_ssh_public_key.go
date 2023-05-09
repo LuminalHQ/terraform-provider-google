@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceOSLoginSSHPublicKey() *schema.Resource {
+func ResourceOSLoginSSHPublicKey() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceOSLoginSSHPublicKeyCreate,
 		Read:   resourceOSLoginSSHPublicKeyRead,
@@ -76,8 +78,8 @@ func resourceOSLoginSSHPublicKey() *schema.Resource {
 }
 
 func resourceOSLoginSSHPublicKeyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -96,7 +98,7 @@ func resourceOSLoginSSHPublicKeyCreate(d *schema.ResourceData, meta interface{})
 		obj["expirationTimeUsec"] = expirationTimeUsecProp
 	}
 
-	url, err := replaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}:importSshPublicKey")
+	url, err := ReplaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}:importSshPublicKey")
 	if err != nil {
 		return err
 	}
@@ -112,18 +114,18 @@ func resourceOSLoginSSHPublicKeyCreate(d *schema.ResourceData, meta interface{})
 	// Don't use `getProject()` because we only want to set the project in the URL
 	// if the user set it explicitly on the resource.
 	if p, ok := d.GetOk("project"); ok {
-		url, err = addQueryParams(url, map[string]string{"projectId": p.(string)})
+		url, err = transport_tpg.AddQueryParams(url, map[string]string{"projectId": p.(string)})
 		if err != nil {
 			return err
 		}
 	}
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating SSHPublicKey: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "users/{{user}}/sshPublicKeys/{{fingerprint}}")
+	id, err := ReplaceVars(d, config, "users/{{user}}/sshPublicKeys/{{fingerprint}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -146,7 +148,7 @@ func resourceOSLoginSSHPublicKeyCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	// Store the ID now
-	id, err = replaceVars(d, config, "users/{{user}}/sshPublicKeys/{{fingerprint}}")
+	id, err = ReplaceVars(d, config, "users/{{user}}/sshPublicKeys/{{fingerprint}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -158,13 +160,13 @@ func resourceOSLoginSSHPublicKeyCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceOSLoginSSHPublicKeyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}/sshPublicKeys/{{fingerprint}}/{{name}}")
+	url, err := ReplaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}/sshPublicKeys/{{fingerprint}}/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -176,9 +178,9 @@ func resourceOSLoginSSHPublicKeyRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("OSLoginSSHPublicKey %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("OSLoginSSHPublicKey %q", d.Id()))
 	}
 
 	if err := d.Set("key", flattenOSLoginSSHPublicKeyKey(res["key"], d, config)); err != nil {
@@ -195,8 +197,8 @@ func resourceOSLoginSSHPublicKeyRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceOSLoginSSHPublicKeyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -211,7 +213,7 @@ func resourceOSLoginSSHPublicKeyUpdate(d *schema.ResourceData, meta interface{})
 		obj["expirationTimeUsec"] = expirationTimeUsecProp
 	}
 
-	url, err := replaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}/sshPublicKeys/{{fingerprint}}/{{name}}")
+	url, err := ReplaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}/sshPublicKeys/{{fingerprint}}/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -222,9 +224,9 @@ func resourceOSLoginSSHPublicKeyUpdate(d *schema.ResourceData, meta interface{})
 	if d.HasChange("expiration_time_usec") {
 		updateMask = append(updateMask, "expirationTimeUsec")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -234,7 +236,7 @@ func resourceOSLoginSSHPublicKeyUpdate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating SSHPublicKey %q: %s", d.Id(), err)
@@ -246,15 +248,15 @@ func resourceOSLoginSSHPublicKeyUpdate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceOSLoginSSHPublicKeyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}/sshPublicKeys/{{fingerprint}}/{{name}}")
+	url, err := ReplaceVars(d, config, "{{OSLoginBasePath}}users/{{user}}/sshPublicKeys/{{fingerprint}}/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -267,9 +269,9 @@ func resourceOSLoginSSHPublicKeyDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "SSHPublicKey")
+		return transport_tpg.HandleNotFoundError(err, d, "SSHPublicKey")
 	}
 
 	log.Printf("[DEBUG] Finished deleting SSHPublicKey %q: %#v", d.Id(), res)
@@ -277,8 +279,8 @@ func resourceOSLoginSSHPublicKeyDelete(d *schema.ResourceData, meta interface{})
 }
 
 func resourceOSLoginSSHPublicKeyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"users/(?P<user>[^/]+)/sshPublicKeys/(?P<fingerprint>[^/]+)",
 		"(?P<user>[^/]+)/(?P<fingerprint>[^/]+)",
 	}, d, config); err != nil {
@@ -286,7 +288,7 @@ func resourceOSLoginSSHPublicKeyImport(d *schema.ResourceData, meta interface{})
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "users/{{user}}/sshPublicKeys/{{fingerprint}}")
+	id, err := ReplaceVars(d, config, "users/{{user}}/sshPublicKeys/{{fingerprint}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -295,22 +297,22 @@ func resourceOSLoginSSHPublicKeyImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenOSLoginSSHPublicKeyKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSLoginSSHPublicKeyKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSLoginSSHPublicKeyExpirationTimeUsec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSLoginSSHPublicKeyExpirationTimeUsec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSLoginSSHPublicKeyFingerprint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSLoginSSHPublicKeyFingerprint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandOSLoginSSHPublicKeyKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSLoginSSHPublicKeyKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSLoginSSHPublicKeyExpirationTimeUsec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSLoginSSHPublicKeyExpirationTimeUsec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

@@ -21,9 +21,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceGameServicesGameServerConfig() *schema.Resource {
+func ResourceGameServicesGameServerConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceGameServicesGameServerConfigCreate,
 		Read:   resourceGameServicesGameServerConfigRead,
@@ -210,8 +212,8 @@ any of the selector entries.`,
 }
 
 func resourceGameServicesGameServerConfigCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -242,7 +244,7 @@ func resourceGameServicesGameServerConfigCreate(d *schema.ResourceData, meta int
 		obj["scalingConfigs"] = scalingConfigsProp
 	}
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs?configId={{config_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs?configId={{config_id}}")
 	if err != nil {
 		return err
 	}
@@ -261,13 +263,13 @@ func resourceGameServicesGameServerConfigCreate(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating GameServerConfig: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -276,12 +278,13 @@ func resourceGameServicesGameServerConfigCreate(d *schema.ResourceData, meta int
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = gameServicesOperationWaitTimeWithResponse(
+	err = GameServicesOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating GameServerConfig", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create GameServerConfig: %s", err)
 	}
 
@@ -290,7 +293,7 @@ func resourceGameServicesGameServerConfigCreate(d *schema.ResourceData, meta int
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
+	id, err = ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -302,13 +305,13 @@ func resourceGameServicesGameServerConfigCreate(d *schema.ResourceData, meta int
 }
 
 func resourceGameServicesGameServerConfigRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
 	if err != nil {
 		return err
 	}
@@ -326,9 +329,9 @@ func resourceGameServicesGameServerConfigRead(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("GameServicesGameServerConfig %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("GameServicesGameServerConfig %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -355,8 +358,8 @@ func resourceGameServicesGameServerConfigRead(d *schema.ResourceData, meta inter
 }
 
 func resourceGameServicesGameServerConfigDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -369,7 +372,7 @@ func resourceGameServicesGameServerConfigDelete(d *schema.ResourceData, meta int
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
+	url, err := ReplaceVars(d, config, "{{GameServicesBasePath}}projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
 	if err != nil {
 		return err
 	}
@@ -382,12 +385,12 @@ func resourceGameServicesGameServerConfigDelete(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "GameServerConfig")
+		return transport_tpg.HandleNotFoundError(err, d, "GameServerConfig")
 	}
 
-	err = gameServicesOperationWaitTime(
+	err = GameServicesOperationWaitTime(
 		config, res, project, "Deleting GameServerConfig", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -400,8 +403,8 @@ func resourceGameServicesGameServerConfigDelete(d *schema.ResourceData, meta int
 }
 
 func resourceGameServicesGameServerConfigImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/gameServerDeployments/(?P<deployment_id>[^/]+)/configs/(?P<config_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<deployment_id>[^/]+)/(?P<config_id>[^/]+)",
 		"(?P<location>[^/]+)/(?P<deployment_id>[^/]+)/(?P<config_id>[^/]+)",
@@ -410,7 +413,7 @@ func resourceGameServicesGameServerConfigImport(d *schema.ResourceData, meta int
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/gameServerDeployments/{{deployment_id}}/configs/{{config_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -419,19 +422,19 @@ func resourceGameServicesGameServerConfigImport(d *schema.ResourceData, meta int
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenGameServicesGameServerConfigName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigFleetConfigs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigFleetConfigs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -450,15 +453,15 @@ func flattenGameServicesGameServerConfigFleetConfigs(v interface{}, d *schema.Re
 	}
 	return transformed
 }
-func flattenGameServicesGameServerConfigFleetConfigsFleetSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigFleetConfigsFleetSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigFleetConfigsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigFleetConfigsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -479,15 +482,15 @@ func flattenGameServicesGameServerConfigScalingConfigs(v interface{}, d *schema.
 	}
 	return transformed
 }
-func flattenGameServicesGameServerConfigScalingConfigsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigsFleetAutoscalerSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsFleetAutoscalerSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigsSelectors(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSelectors(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -505,11 +508,11 @@ func flattenGameServicesGameServerConfigScalingConfigsSelectors(v interface{}, d
 	}
 	return transformed
 }
-func flattenGameServicesGameServerConfigScalingConfigsSelectorsLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSelectorsLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigsSchedules(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSchedules(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -530,27 +533,27 @@ func flattenGameServicesGameServerConfigScalingConfigsSchedules(v interface{}, d
 	}
 	return transformed
 }
-func flattenGameServicesGameServerConfigScalingConfigsSchedulesStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSchedulesStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigsSchedulesEndTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSchedulesEndTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigsSchedulesCronJobDuration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSchedulesCronJobDuration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenGameServicesGameServerConfigScalingConfigsSchedulesCronSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenGameServicesGameServerConfigScalingConfigsSchedulesCronSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandGameServicesGameServerConfigDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandGameServicesGameServerConfigLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -561,7 +564,7 @@ func expandGameServicesGameServerConfigLabels(v interface{}, d TerraformResource
 	return m, nil
 }
 
-func expandGameServicesGameServerConfigFleetConfigs(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigFleetConfigs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -590,15 +593,15 @@ func expandGameServicesGameServerConfigFleetConfigs(v interface{}, d TerraformRe
 	return req, nil
 }
 
-func expandGameServicesGameServerConfigFleetConfigsFleetSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigFleetConfigsFleetSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigFleetConfigsName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigFleetConfigsName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigs(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -641,15 +644,15 @@ func expandGameServicesGameServerConfigScalingConfigs(v interface{}, d Terraform
 	return req, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsFleetAutoscalerSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsFleetAutoscalerSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSelectors(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsSelectors(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -671,7 +674,7 @@ func expandGameServicesGameServerConfigScalingConfigsSelectors(v interface{}, d 
 	return req, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSelectorsLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandGameServicesGameServerConfigScalingConfigsSelectorsLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -682,7 +685,7 @@ func expandGameServicesGameServerConfigScalingConfigsSelectorsLabels(v interface
 	return m, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSchedules(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsSchedules(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -725,18 +728,18 @@ func expandGameServicesGameServerConfigScalingConfigsSchedules(v interface{}, d 
 	return req, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSchedulesStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsSchedulesStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSchedulesEndTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsSchedulesEndTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSchedulesCronJobDuration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsSchedulesCronJobDuration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandGameServicesGameServerConfigScalingConfigsSchedulesCronSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandGameServicesGameServerConfigScalingConfigsSchedulesCronSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

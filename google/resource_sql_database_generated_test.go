@@ -21,6 +21,9 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccSQLDatabase_sqlDatabaseBasicExample(t *testing.T) {
@@ -28,13 +31,13 @@ func TestAccSQLDatabase_sqlDatabaseBasicExample(t *testing.T) {
 
 	context := map[string]interface{}{
 		"deletion_protection": false,
-		"random_suffix":       randString(t, 10),
+		"random_suffix":       RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckSQLDatabaseDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckSQLDatabaseDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccSQLDatabase_sqlDatabaseBasicExample(context),
@@ -69,6 +72,54 @@ resource "google_sql_database_instance" "instance" {
 `, context)
 }
 
+func TestAccSQLDatabase_sqlDatabaseDeletionPolicyExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"deletion_protection": false,
+		"random_suffix":       RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckSQLDatabaseDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccSQLDatabase_sqlDatabaseDeletionPolicyExample(context),
+			},
+			{
+				ResourceName:            "google_sql_database.database_deletion_policy",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"deletion_policy"},
+			},
+		},
+	})
+}
+
+func testAccSQLDatabase_sqlDatabaseDeletionPolicyExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_sql_database" "database_deletion_policy" {
+  name     = "tf-test-my-database%{random_suffix}"
+  instance = google_sql_database_instance.instance.name
+  deletion_policy = "ABANDON"
+}
+
+# See versions at https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sql_database_instance#database_version
+resource "google_sql_database_instance" "instance" {
+  name             = "tf-test-my-database-instance%{random_suffix}"
+  region           = "us-central1"
+  database_version = "POSTGRES_14"
+  settings {
+    tier = "db-g1-small"
+  }
+
+  deletion_protection  = "%{deletion_protection}"
+}
+`, context)
+}
+
 func testAccCheckSQLDatabaseDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -79,9 +130,9 @@ func testAccCheckSQLDatabaseDestroyProducer(t *testing.T) func(s *terraform.Stat
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{SQLBasePath}}projects/{{project}}/instances/{{instance}}/databases/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -92,7 +143,7 @@ func testAccCheckSQLDatabaseDestroyProducer(t *testing.T) func(s *terraform.Stat
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("SQLDatabase still exists at %s", url)
 			}

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Security Command Center (SCC)"
-page_title: "Google: google_scc_source"
 description: |-
   A Cloud Security Command Center's (Cloud SCC) finding source.
 ---
@@ -28,7 +27,7 @@ monitor, etc.
 
 To get more information about Source, see:
 
-* [API documentation](https://cloud.google.com/security-command-center/docs/reference/rest/v1beta1/organizations.sources)
+* [API documentation](https://cloud.google.com/security-command-center/docs/reference/rest/v1/organizations.sources)
 * How-to Guides
     * [Official Documentation](https://cloud.google.com/security-command-center/docs)
 
@@ -84,7 +83,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceDocumentAIProcessor() *schema.Resource {
+func ResourceDocumentAIProcessor() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDocumentAIProcessorCreate,
 		Read:   resourceDocumentAIProcessorRead,
@@ -80,8 +83,8 @@ func resourceDocumentAIProcessor() *schema.Resource {
 }
 
 func resourceDocumentAIProcessorCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -106,7 +109,7 @@ func resourceDocumentAIProcessorCreate(d *schema.ResourceData, meta interface{})
 		obj["kmsKeyName"] = kmsKeyNameProp
 	}
 
-	url, err := replaceVars(d, config, "{{DocumentAIBasePath}}projects/{{project}}/locations/{{location}}/processors")
+	url, err := ReplaceVars(d, config, "{{DocumentAIBasePath}}projects/{{project}}/locations/{{location}}/processors")
 	if err != nil {
 		return err
 	}
@@ -125,7 +128,7 @@ func resourceDocumentAIProcessorCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Processor: %s", err)
 	}
@@ -134,7 +137,7 @@ func resourceDocumentAIProcessorCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/processors/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/processors/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -146,13 +149,13 @@ func resourceDocumentAIProcessorCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceDocumentAIProcessorRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DocumentAIBasePath}}projects/{{project}}/locations/{{location}}/processors/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DocumentAIBasePath}}projects/{{project}}/locations/{{location}}/processors/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -170,9 +173,9 @@ func resourceDocumentAIProcessorRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DocumentAIProcessor %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DocumentAIProcessor %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -196,8 +199,8 @@ func resourceDocumentAIProcessorRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceDocumentAIProcessorDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -210,7 +213,7 @@ func resourceDocumentAIProcessorDelete(d *schema.ResourceData, meta interface{})
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{DocumentAIBasePath}}projects/{{project}}/locations/{{location}}/processors/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DocumentAIBasePath}}projects/{{project}}/locations/{{location}}/processors/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -223,9 +226,9 @@ func resourceDocumentAIProcessorDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Processor")
+		return transport_tpg.HandleNotFoundError(err, d, "Processor")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Processor %q: %#v", d.Id(), res)
@@ -233,8 +236,8 @@ func resourceDocumentAIProcessorDelete(d *schema.ResourceData, meta interface{})
 }
 
 func resourceDocumentAIProcessorImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/processors/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -243,7 +246,7 @@ func resourceDocumentAIProcessorImport(d *schema.ResourceData, meta interface{})
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{location}}/processors/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{location}}/processors/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -252,33 +255,33 @@ func resourceDocumentAIProcessorImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDocumentAIProcessorName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDocumentAIProcessorName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenDocumentAIProcessorType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDocumentAIProcessorType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDocumentAIProcessorDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDocumentAIProcessorDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDocumentAIProcessorKmsKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDocumentAIProcessorKmsKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDocumentAIProcessorType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDocumentAIProcessorType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDocumentAIProcessorDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDocumentAIProcessorDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDocumentAIProcessorKmsKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDocumentAIProcessorKmsKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

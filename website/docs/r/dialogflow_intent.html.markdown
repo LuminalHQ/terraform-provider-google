@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Dialogflow"
-page_title: "Google: google_dialogflow_intent"
 description: |-
   Represents a Dialogflow intent.
 ---
@@ -50,8 +49,8 @@ resource "google_dialogflow_intent" "basic_intent" {
 
 ```hcl
 resource "google_project" "agent_project" {
-  project_id = "tf-test-dialogflow-%{random_suffix}"
-  name = "tf-test-dialogflow-%{random_suffix}"
+  project_id = "my-project"
+  name = "my-project"
   org_id = "123456789"
 }
 
@@ -62,7 +61,7 @@ resource "google_project_service" "agent_project" {
 }
 
 resource "google_service_account" "dialogflow_service_account" {
-  account_id = "tf-test-dialogflow-%{random_suffix}"
+  account_id = "my-account"
 }
 
 resource "google_project_iam_member" "agent_create" {
@@ -113,7 +112,7 @@ The following arguments are supported:
   * WEBHOOK_STATE_ENABLED: Webhook is enabled in the agent and in the intent.
   * WEBHOOK_STATE_ENABLED_FOR_SLOT_FILLING: Webhook is enabled in the agent and in the intent. Also, each slot
   filling prompt is forwarded to the webhook.
-  Possible values are `WEBHOOK_STATE_ENABLED` and `WEBHOOK_STATE_ENABLED_FOR_SLOT_FILLING`.
+  Possible values are: `WEBHOOK_STATE_ENABLED`, `WEBHOOK_STATE_ENABLED_FOR_SLOT_FILLING`.
 
 * `priority` -
   (Optional)
@@ -140,7 +139,7 @@ The following arguments are supported:
 * `events` -
   (Optional)
   The collection of event names that trigger the intent. If the collection of input contexts is not empty, all of
-  the contexts must be present in the active user session for an event to trigger this intent. See the 
+  the contexts must be present in the active user session for an event to trigger this intent. See the
   [events reference](https://cloud.google.com/dialogflow/docs/events-overview) for more details.
 
 * `action` -
@@ -156,7 +155,7 @@ The following arguments are supported:
   (Optional)
   The list of platforms for which the first responses will be copied from the messages in PLATFORM_UNSPECIFIED
   (i.e. default platform).
-  Each value may be one of `FACEBOOK`, `SLACK`, `TELEGRAM`, `KIK`, `SKYPE`, `LINE`, `VIBER`, `ACTIONS_ON_GOOGLE`, and `GOOGLE_HANGOUTS`.
+  Each value may be one of: `FACEBOOK`, `SLACK`, `TELEGRAM`, `KIK`, `SKYPE`, `LINE`, `VIBER`, `ACTIONS_ON_GOOGLE`, `GOOGLE_HANGOUTS`.
 
 * `parent_followup_intent_name` -
   (Optional)
@@ -174,7 +173,7 @@ In addition to the arguments listed above, the following computed attributes are
 * `id` - an identifier for the resource with format `{{name}}`
 
 * `name` -
-  The unique identifier of this intent. 
+  The unique identifier of this intent.
   Format: projects/<Project ID>/agent/intents/<Intent ID>.
 
 * `root_followup_intent_name` -
@@ -203,7 +202,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -220,4 +219,4 @@ $ terraform import google_dialogflow_intent.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

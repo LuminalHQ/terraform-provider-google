@@ -22,9 +22,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceOSConfigPatchDeployment() *schema.Resource {
+func ResourceOSConfigPatchDeployment() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceOSConfigPatchDeploymentCreate,
 		Read:   resourceOSConfigPatchDeploymentRead,
@@ -113,7 +116,7 @@ VMs when targeting configs, for example prefix="prod-".`,
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRegexp(`(?:(?:[-a-z0-9]{1,63}\.)*(?:[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?):)?(?:[0-9]{1,19}|(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?))`),
+				ValidateFunc: verify.ValidateRegexp(`(?:(?:[-a-z0-9]{1,63}\.)*(?:[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?):)?(?:[0-9]{1,19}|(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?))`),
 				Description: `A name for the patch deployment in the project. When creating a name the following rules apply:
 * Must contain only lowercase letters, numbers, and hyphens.
 * Must start with a letter.
@@ -195,7 +198,7 @@ any other patch configuration fields.`,
 										Type:         schema.TypeString,
 										Optional:     true,
 										ForceNew:     true,
-										ValidateFunc: validateEnum([]string{"DIST", "UPGRADE", ""}),
+										ValidateFunc: verify.ValidateEnum([]string{"DIST", "UPGRADE", ""}),
 										Description:  `By changing the type to DIST, the patching is performed using apt-get dist-upgrade instead. Possible values: ["DIST", "UPGRADE"]`,
 										AtLeastOneOf: []string{"patch_config.0.apt.0.type", "patch_config.0.apt.0.excludes", "patch_config.0.apt.0.exclusive_packages"},
 									},
@@ -286,7 +289,7 @@ any other patch configuration fields.`,
 													Type:         schema.TypeString,
 													Optional:     true,
 													ForceNew:     true,
-													ValidateFunc: validateEnum([]string{"SHELL", "POWERSHELL", ""}),
+													ValidateFunc: verify.ValidateEnum([]string{"SHELL", "POWERSHELL", ""}),
 													Description: `The script interpreter to use to run the script. If no interpreter is specified the script will
 be executed directly, which will likely only succeed for scripts with shebang lines. Possible values: ["SHELL", "POWERSHELL"]`,
 												},
@@ -352,7 +355,7 @@ be executed directly, which will likely only succeed for scripts with shebang li
 													Type:         schema.TypeString,
 													Optional:     true,
 													ForceNew:     true,
-													ValidateFunc: validateEnum([]string{"SHELL", "POWERSHELL", ""}),
+													ValidateFunc: verify.ValidateEnum([]string{"SHELL", "POWERSHELL", ""}),
 													Description: `The script interpreter to use to run the script. If no interpreter is specified the script will
 be executed directly, which will likely only succeed for scripts with shebang lines. Possible values: ["SHELL", "POWERSHELL"]`,
 												},
@@ -430,7 +433,7 @@ be executed directly, which will likely only succeed for scripts with shebang li
 													Type:         schema.TypeString,
 													Optional:     true,
 													ForceNew:     true,
-													ValidateFunc: validateEnum([]string{"SHELL", "POWERSHELL", ""}),
+													ValidateFunc: verify.ValidateEnum([]string{"SHELL", "POWERSHELL", ""}),
 													Description: `The script interpreter to use to run the script. If no interpreter is specified the script will
 be executed directly, which will likely only succeed for scripts with shebang lines. Possible values: ["SHELL", "POWERSHELL"]`,
 												},
@@ -496,7 +499,7 @@ be executed directly, which will likely only succeed for scripts with shebang li
 													Type:         schema.TypeString,
 													Optional:     true,
 													ForceNew:     true,
-													ValidateFunc: validateEnum([]string{"SHELL", "POWERSHELL", ""}),
+													ValidateFunc: verify.ValidateEnum([]string{"SHELL", "POWERSHELL", ""}),
 													Description: `The script interpreter to use to run the script. If no interpreter is specified the script will
 be executed directly, which will likely only succeed for scripts with shebang lines. Possible values: ["SHELL", "POWERSHELL"]`,
 												},
@@ -519,7 +522,7 @@ be executed directly, which will likely only succeed for scripts with shebang li
 							Type:         schema.TypeString,
 							Optional:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"DEFAULT", "ALWAYS", "NEVER", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"DEFAULT", "ALWAYS", "NEVER", ""}),
 							Description:  `Post-patch reboot settings. Possible values: ["DEFAULT", "ALWAYS", "NEVER"]`,
 							AtLeastOneOf: []string{"patch_config.0.reboot_config", "patch_config.0.apt", "patch_config.0.yum", "patch_config.0.goo", "patch_config.0.zypper", "patch_config.0.windows_update", "patch_config.0.pre_step", "patch_config.0.post_step"},
 						},
@@ -538,7 +541,7 @@ be executed directly, which will likely only succeed for scripts with shebang li
 										Description: `Only apply updates of these windows update classifications. If empty, all updates are applied. Possible values: ["CRITICAL", "SECURITY", "DEFINITION", "DRIVER", "FEATURE_PACK", "SERVICE_PACK", "TOOL", "UPDATE_ROLLUP", "UPDATE"]`,
 										Elem: &schema.Schema{
 											Type:         schema.TypeString,
-											ValidateFunc: validateEnum([]string{"CRITICAL", "SECURITY", "DEFINITION", "DRIVER", "FEATURE_PACK", "SERVICE_PACK", "TOOL", "UPDATE_ROLLUP", "UPDATE"}),
+											ValidateFunc: verify.ValidateEnum([]string{"CRITICAL", "SECURITY", "DEFINITION", "DRIVER", "FEATURE_PACK", "SERVICE_PACK", "TOOL", "UPDATE_ROLLUP", "UPDATE"}),
 										},
 										ExactlyOneOf: []string{"patch_config.0.windows_update.0.classifications", "patch_config.0.windows_update.0.excludes", "patch_config.0.windows_update.0.exclusive_patches"},
 									},
@@ -798,7 +801,7 @@ will not run in February, April, June, etc.`,
 													Type:         schema.TypeString,
 													Required:     true,
 													ForceNew:     true,
-													ValidateFunc: validateEnum([]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
+													ValidateFunc: verify.ValidateEnum([]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
 													Description:  `A day of the week. Possible values: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]`,
 												},
 												"week_ordinal": {
@@ -834,7 +837,7 @@ A timestamp in RFC3339 UTC "Zulu" format, accurate to nanoseconds. Example: "201
 										Type:         schema.TypeString,
 										Required:     true,
 										ForceNew:     true,
-										ValidateFunc: validateEnum([]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
+										ValidateFunc: verify.ValidateEnum([]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
 										Description:  `IANA Time Zone Database time zone, e.g. "America/New_York". Possible values: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]`,
 									},
 								},
@@ -899,7 +902,7 @@ For example, if the disruption budget has a fixed value of 10, and 8 VMs fail to
 							Type:         schema.TypeString,
 							Required:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"ZONE_BY_ZONE", "CONCURRENT_ZONES"}),
+							ValidateFunc: verify.ValidateEnum([]string{"ZONE_BY_ZONE", "CONCURRENT_ZONES"}),
 							Description:  `Mode of the patch rollout. Possible values: ["ZONE_BY_ZONE", "CONCURRENT_ZONES"]`,
 						},
 					},
@@ -941,8 +944,8 @@ A timestamp in RFC3339 UTC "Zulu" format, accurate to nanoseconds. Example: "201
 }
 
 func resourceOSConfigPatchDeploymentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -996,7 +999,7 @@ func resourceOSConfigPatchDeploymentCreate(d *schema.ResourceData, meta interfac
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{OSConfigBasePath}}projects/{{project}}/patchDeployments?patchDeploymentId={{patch_deployment_id}}")
+	url, err := ReplaceVars(d, config, "{{OSConfigBasePath}}projects/{{project}}/patchDeployments?patchDeploymentId={{patch_deployment_id}}")
 	if err != nil {
 		return err
 	}
@@ -1015,7 +1018,7 @@ func resourceOSConfigPatchDeploymentCreate(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating PatchDeployment: %s", err)
 	}
@@ -1024,7 +1027,7 @@ func resourceOSConfigPatchDeploymentCreate(d *schema.ResourceData, meta interfac
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -1054,13 +1057,13 @@ func resourceOSConfigPatchDeploymentCreate(d *schema.ResourceData, meta interfac
 }
 
 func resourceOSConfigPatchDeploymentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{OSConfigBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{OSConfigBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1078,9 +1081,9 @@ func resourceOSConfigPatchDeploymentRead(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("OSConfigPatchDeployment %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("OSConfigPatchDeployment %q", d.Id()))
 	}
 
 	res, err = resourceOSConfigPatchDeploymentDecoder(d, meta, res)
@@ -1137,8 +1140,8 @@ func resourceOSConfigPatchDeploymentRead(d *schema.ResourceData, meta interface{
 }
 
 func resourceOSConfigPatchDeploymentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1151,7 +1154,7 @@ func resourceOSConfigPatchDeploymentDelete(d *schema.ResourceData, meta interfac
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{OSConfigBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{OSConfigBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1164,9 +1167,9 @@ func resourceOSConfigPatchDeploymentDelete(d *schema.ResourceData, meta interfac
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "PatchDeployment")
+		return transport_tpg.HandleNotFoundError(err, d, "PatchDeployment")
 	}
 
 	log.Printf("[DEBUG] Finished deleting PatchDeployment %q: %#v", d.Id(), res)
@@ -1175,25 +1178,25 @@ func resourceOSConfigPatchDeploymentDelete(d *schema.ResourceData, meta interfac
 
 func resourceOSConfigPatchDeploymentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenOSConfigPatchDeploymentName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentInstanceFilter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1214,11 +1217,11 @@ func flattenOSConfigPatchDeploymentInstanceFilter(v interface{}, d *schema.Resou
 		flattenOSConfigPatchDeploymentInstanceFilterInstanceNamePrefixes(original["instanceNamePrefixes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentInstanceFilterAll(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilterAll(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentInstanceFilterGroupLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilterGroupLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1236,23 +1239,23 @@ func flattenOSConfigPatchDeploymentInstanceFilterGroupLabels(v interface{}, d *s
 	}
 	return transformed
 }
-func flattenOSConfigPatchDeploymentInstanceFilterGroupLabelsLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilterGroupLabelsLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentInstanceFilterZones(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilterZones(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentInstanceFilterInstances(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilterInstances(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentInstanceFilterInstanceNamePrefixes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentInstanceFilterInstanceNamePrefixes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1281,15 +1284,15 @@ func flattenOSConfigPatchDeploymentPatchConfig(v interface{}, d *schema.Resource
 		flattenOSConfigPatchDeploymentPatchConfigPostStep(original["postStep"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigMigInstancesAllowed(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigMigInstancesAllowed(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigRebootConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigRebootConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigApt(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigApt(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1306,19 +1309,19 @@ func flattenOSConfigPatchDeploymentPatchConfigApt(v interface{}, d *schema.Resou
 		flattenOSConfigPatchDeploymentPatchConfigAptExclusivePackages(original["exclusivePackages"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigAptType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigAptType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigAptExcludes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigAptExcludes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigAptExclusivePackages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigAptExclusivePackages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigYum(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigYum(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1337,23 +1340,23 @@ func flattenOSConfigPatchDeploymentPatchConfigYum(v interface{}, d *schema.Resou
 		flattenOSConfigPatchDeploymentPatchConfigYumExclusivePackages(original["exclusivePackages"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigYumSecurity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigYumSecurity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigYumMinimal(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigYumMinimal(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigYumExcludes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigYumExcludes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigYumExclusivePackages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigYumExclusivePackages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigGoo(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigGoo(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1366,11 +1369,11 @@ func flattenOSConfigPatchDeploymentPatchConfigGoo(v interface{}, d *schema.Resou
 		flattenOSConfigPatchDeploymentPatchConfigGooEnabled(original["enabled"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigGooEnabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigGooEnabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigZypper(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypper(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1393,31 +1396,31 @@ func flattenOSConfigPatchDeploymentPatchConfigZypper(v interface{}, d *schema.Re
 		flattenOSConfigPatchDeploymentPatchConfigZypperExclusivePatches(original["exclusivePatches"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigZypperWithOptional(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypperWithOptional(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigZypperWithUpdate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypperWithUpdate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigZypperCategories(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypperCategories(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigZypperSeverities(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypperSeverities(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigZypperExcludes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypperExcludes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigZypperExclusivePatches(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigZypperExclusivePatches(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1434,19 +1437,19 @@ func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdate(v interface{}, d *sc
 		flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateExclusivePatches(original["exclusivePatches"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateClassifications(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateClassifications(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateExcludes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateExcludes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateExclusivePatches(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigWindowsUpdateExclusivePatches(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStep(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStep(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1461,7 +1464,7 @@ func flattenOSConfigPatchDeploymentPatchConfigPreStep(v interface{}, d *schema.R
 		flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(original["windowsExecStepConfig"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1480,19 +1483,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfig(v inter
 		flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObject(original["gcsObject"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1509,19 +1512,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjec
 		flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectGenerationNumber(original["generationNumber"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1540,19 +1543,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(v int
 		flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObject(original["gcsObject"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1569,19 +1572,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObj
 		flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectGenerationNumber(original["generationNumber"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStep(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStep(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1596,7 +1599,7 @@ func flattenOSConfigPatchDeploymentPatchConfigPostStep(v interface{}, d *schema.
 		flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(original["windowsExecStepConfig"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1615,19 +1618,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfig(v inte
 		flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObject(original["gcsObject"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1644,19 +1647,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObje
 		flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectGenerationNumber(original["generationNumber"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1675,19 +1678,19 @@ func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(v in
 		flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObject(original["gcsObject"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigInterpreter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigLocalPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1704,35 +1707,35 @@ func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsOb
 		flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectGenerationNumber(original["generationNumber"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentDuration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentDuration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentLastExecuteTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentLastExecuteTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentOneTimeSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentOneTimeSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1745,11 +1748,11 @@ func flattenOSConfigPatchDeploymentOneTimeSchedule(v interface{}, d *schema.Reso
 		flattenOSConfigPatchDeploymentOneTimeScheduleExecuteTime(original["executeTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentOneTimeScheduleExecuteTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentOneTimeScheduleExecuteTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1776,7 +1779,7 @@ func flattenOSConfigPatchDeploymentRecurringSchedule(v interface{}, d *schema.Re
 		flattenOSConfigPatchDeploymentRecurringScheduleMonthly(original["monthly"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1791,23 +1794,23 @@ func flattenOSConfigPatchDeploymentRecurringScheduleTimeZone(v interface{}, d *s
 		flattenOSConfigPatchDeploymentRecurringScheduleTimeZoneVersion(original["version"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeZoneId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeZoneId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeZoneVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeZoneVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleEndTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleEndTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDay(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDay(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1824,10 +1827,10 @@ func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDay(v interface{}, d *
 	return []interface{}{transformed}
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayHours(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayHours(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1841,10 +1844,10 @@ func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayHours(v interface{}
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayMinutes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayMinutes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1858,10 +1861,10 @@ func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayMinutes(v interface
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDaySeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDaySeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1875,10 +1878,10 @@ func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDaySeconds(v interface
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayNanos(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayNanos(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1892,15 +1895,15 @@ func flattenOSConfigPatchDeploymentRecurringScheduleTimeOfDayNanos(v interface{}
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleLastExecuteTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleLastExecuteTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleNextExecuteTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleNextExecuteTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleWeekly(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleWeekly(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1913,11 +1916,11 @@ func flattenOSConfigPatchDeploymentRecurringScheduleWeekly(v interface{}, d *sch
 		flattenOSConfigPatchDeploymentRecurringScheduleWeeklyDayOfWeek(original["dayOfWeek"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRecurringScheduleWeeklyDayOfWeek(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleWeeklyDayOfWeek(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleMonthly(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleMonthly(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1932,7 +1935,7 @@ func flattenOSConfigPatchDeploymentRecurringScheduleMonthly(v interface{}, d *sc
 		flattenOSConfigPatchDeploymentRecurringScheduleMonthlyMonthDay(original["monthDay"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonth(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonth(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1947,10 +1950,10 @@ func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonth(v inte
 		flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthDayOfWeek(original["dayOfWeek"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthWeekOrdinal(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthWeekOrdinal(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1964,14 +1967,14 @@ func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthWeekOrd
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthDayOfWeek(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthDayOfWeek(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyMonthDay(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyMonthDay(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1985,7 +1988,7 @@ func flattenOSConfigPatchDeploymentRecurringScheduleMonthlyMonthDay(v interface{
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRollout(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRollout(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2000,11 +2003,11 @@ func flattenOSConfigPatchDeploymentRollout(v interface{}, d *schema.ResourceData
 		flattenOSConfigPatchDeploymentRolloutDisruptionBudget(original["disruptionBudget"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRolloutMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRolloutMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenOSConfigPatchDeploymentRolloutDisruptionBudget(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRolloutDisruptionBudget(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -2019,10 +2022,10 @@ func flattenOSConfigPatchDeploymentRolloutDisruptionBudget(v interface{}, d *sch
 		flattenOSConfigPatchDeploymentRolloutDisruptionBudgetPercentage(original["percent"], d, config)
 	return []interface{}{transformed}
 }
-func flattenOSConfigPatchDeploymentRolloutDisruptionBudgetFixed(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRolloutDisruptionBudgetFixed(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2036,10 +2039,10 @@ func flattenOSConfigPatchDeploymentRolloutDisruptionBudgetFixed(v interface{}, d
 	return v // let terraform core handle it otherwise
 }
 
-func flattenOSConfigPatchDeploymentRolloutDisruptionBudgetPercentage(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenOSConfigPatchDeploymentRolloutDisruptionBudgetPercentage(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -2053,11 +2056,11 @@ func flattenOSConfigPatchDeploymentRolloutDisruptionBudgetPercentage(v interface
 	return v // let terraform core handle it otherwise
 }
 
-func expandOSConfigPatchDeploymentDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentInstanceFilter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2104,11 +2107,11 @@ func expandOSConfigPatchDeploymentInstanceFilter(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilterAll(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentInstanceFilterAll(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilterGroupLabels(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentInstanceFilterGroupLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2130,7 +2133,7 @@ func expandOSConfigPatchDeploymentInstanceFilterGroupLabels(v interface{}, d Ter
 	return req, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilterGroupLabelsLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandOSConfigPatchDeploymentInstanceFilterGroupLabelsLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -2141,19 +2144,19 @@ func expandOSConfigPatchDeploymentInstanceFilterGroupLabelsLabels(v interface{},
 	return m, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilterZones(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentInstanceFilterZones(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilterInstances(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentInstanceFilterInstances(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentInstanceFilterInstanceNamePrefixes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentInstanceFilterInstanceNamePrefixes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2228,15 +2231,15 @@ func expandOSConfigPatchDeploymentPatchConfig(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigMigInstancesAllowed(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigMigInstancesAllowed(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigRebootConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigRebootConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigApt(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigApt(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2269,19 +2272,19 @@ func expandOSConfigPatchDeploymentPatchConfigApt(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigAptType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigAptType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigAptExcludes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigAptExcludes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigAptExclusivePackages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigAptExclusivePackages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigYum(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigYum(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2321,23 +2324,23 @@ func expandOSConfigPatchDeploymentPatchConfigYum(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigYumSecurity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigYumSecurity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigYumMinimal(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigYumMinimal(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigYumExcludes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigYumExcludes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigYumExclusivePackages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigYumExclusivePackages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigGoo(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigGoo(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2356,11 +2359,11 @@ func expandOSConfigPatchDeploymentPatchConfigGoo(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigGooEnabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigGooEnabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypper(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypper(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2414,31 +2417,31 @@ func expandOSConfigPatchDeploymentPatchConfigZypper(v interface{}, d TerraformRe
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypperWithOptional(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypperWithOptional(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypperWithUpdate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypperWithUpdate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypperCategories(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypperCategories(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypperSeverities(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypperSeverities(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypperExcludes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypperExcludes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigZypperExclusivePatches(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigZypperExclusivePatches(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigWindowsUpdate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigWindowsUpdate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2471,19 +2474,19 @@ func expandOSConfigPatchDeploymentPatchConfigWindowsUpdate(v interface{}, d Terr
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigWindowsUpdateClassifications(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigWindowsUpdateClassifications(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigWindowsUpdateExcludes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigWindowsUpdateExcludes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigWindowsUpdateExclusivePatches(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigWindowsUpdateExclusivePatches(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStep(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStep(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2509,7 +2512,7 @@ func expandOSConfigPatchDeploymentPatchConfigPreStep(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2549,19 +2552,19 @@ func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfig(v interf
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2594,19 +2597,19 @@ func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObject
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2646,19 +2649,19 @@ func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfig(v inte
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2691,19 +2694,19 @@ func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObje
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPreStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStep(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStep(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2729,7 +2732,7 @@ func expandOSConfigPatchDeploymentPatchConfigPostStep(v interface{}, d Terraform
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2769,19 +2772,19 @@ func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfig(v inter
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2814,19 +2817,19 @@ func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjec
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepLinuxExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2866,19 +2869,19 @@ func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfig(v int
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigAllowedSuccessCodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigInterpreter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigLocalPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2911,23 +2914,23 @@ func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObj
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectBucket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentPatchConfigPostStepWindowsExecStepConfigGcsObjectGenerationNumber(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentDuration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentDuration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentOneTimeSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentOneTimeSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2946,11 +2949,11 @@ func expandOSConfigPatchDeploymentOneTimeSchedule(v interface{}, d TerraformReso
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentOneTimeScheduleExecuteTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentOneTimeScheduleExecuteTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3018,7 +3021,7 @@ func expandOSConfigPatchDeploymentRecurringSchedule(v interface{}, d TerraformRe
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3044,23 +3047,23 @@ func expandOSConfigPatchDeploymentRecurringScheduleTimeZone(v interface{}, d Ter
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeZoneId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeZoneId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeZoneVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeZoneVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleEndTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleEndTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDay(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDay(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3100,31 +3103,31 @@ func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDay(v interface{}, d Te
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDayHours(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDayHours(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDayMinutes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDayMinutes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDaySeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDaySeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDayNanos(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleTimeOfDayNanos(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleLastExecuteTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleLastExecuteTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleNextExecuteTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleNextExecuteTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleWeekly(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleWeekly(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3143,11 +3146,11 @@ func expandOSConfigPatchDeploymentRecurringScheduleWeekly(v interface{}, d Terra
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleWeeklyDayOfWeek(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleWeeklyDayOfWeek(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleMonthly(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleMonthly(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3173,7 +3176,7 @@ func expandOSConfigPatchDeploymentRecurringScheduleMonthly(v interface{}, d Terr
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonth(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonth(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3199,19 +3202,19 @@ func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonth(v inter
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthWeekOrdinal(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthWeekOrdinal(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthDayOfWeek(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleMonthlyWeekDayOfMonthDayOfWeek(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRecurringScheduleMonthlyMonthDay(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRecurringScheduleMonthlyMonthDay(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRollout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRollout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3237,11 +3240,11 @@ func expandOSConfigPatchDeploymentRollout(v interface{}, d TerraformResourceData
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRolloutMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRolloutMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRolloutDisruptionBudget(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRolloutDisruptionBudget(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -3267,11 +3270,11 @@ func expandOSConfigPatchDeploymentRolloutDisruptionBudget(v interface{}, d Terra
 	return transformed, nil
 }
 
-func expandOSConfigPatchDeploymentRolloutDisruptionBudgetFixed(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRolloutDisruptionBudgetFixed(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandOSConfigPatchDeploymentRolloutDisruptionBudgetPercentage(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandOSConfigPatchDeploymentRolloutDisruptionBudgetPercentage(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

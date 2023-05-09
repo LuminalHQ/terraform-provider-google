@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceHealthcareDicomStore() *schema.Resource {
+func ResourceHealthcareDicomStore() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceHealthcareDicomStoreCreate,
 		Read:   resourceHealthcareDicomStoreRead,
@@ -106,8 +108,8 @@ Cloud Pub/Sub topic. Not having adequate permissions will cause the calls that s
 }
 
 func resourceHealthcareDicomStoreCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -132,7 +134,7 @@ func resourceHealthcareDicomStoreCreate(d *schema.ResourceData, meta interface{}
 		obj["notificationConfig"] = notificationConfigProp
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores?dicomStoreId={{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores?dicomStoreId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -145,13 +147,13 @@ func resourceHealthcareDicomStoreCreate(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating DicomStore: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{dataset}}/dicomStores/{{name}}")
+	id, err := ReplaceVars(d, config, "{{dataset}}/dicomStores/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -163,13 +165,13 @@ func resourceHealthcareDicomStoreCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceHealthcareDicomStoreRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -181,9 +183,9 @@ func resourceHealthcareDicomStoreRead(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("HealthcareDicomStore %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("HealthcareDicomStore %q", d.Id()))
 	}
 
 	res, err = resourceHealthcareDicomStoreDecoder(d, meta, res)
@@ -212,8 +214,8 @@ func resourceHealthcareDicomStoreRead(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceHealthcareDicomStoreUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -234,7 +236,7 @@ func resourceHealthcareDicomStoreUpdate(d *schema.ResourceData, meta interface{}
 		obj["notificationConfig"] = notificationConfigProp
 	}
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -249,9 +251,9 @@ func resourceHealthcareDicomStoreUpdate(d *schema.ResourceData, meta interface{}
 	if d.HasChange("notification_config") {
 		updateMask = append(updateMask, "notificationConfig")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -261,7 +263,7 @@ func resourceHealthcareDicomStoreUpdate(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating DicomStore %q: %s", d.Id(), err)
@@ -273,15 +275,15 @@ func resourceHealthcareDicomStoreUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceHealthcareDicomStoreDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores/{{name}}")
+	url, err := ReplaceVars(d, config, "{{HealthcareBasePath}}{{dataset}}/dicomStores/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -294,9 +296,9 @@ func resourceHealthcareDicomStoreDelete(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "DicomStore")
+		return transport_tpg.HandleNotFoundError(err, d, "DicomStore")
 	}
 
 	log.Printf("[DEBUG] Finished deleting DicomStore %q: %#v", d.Id(), res)
@@ -305,14 +307,14 @@ func resourceHealthcareDicomStoreDelete(d *schema.ResourceData, meta interface{}
 
 func resourceHealthcareDicomStoreImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	dicomStoreId, err := parseHealthcareDicomStoreId(d.Id(), config)
+	dicomStoreId, err := ParseHealthcareDicomStoreId(d.Id(), config)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := d.Set("dataset", dicomStoreId.DatasetId.datasetId()); err != nil {
+	if err := d.Set("dataset", dicomStoreId.DatasetId.DatasetId()); err != nil {
 		return nil, fmt.Errorf("Error setting dataset: %s", err)
 	}
 	if err := d.Set("name", dicomStoreId.Name); err != nil {
@@ -322,15 +324,15 @@ func resourceHealthcareDicomStoreImport(d *schema.ResourceData, meta interface{}
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenHealthcareDicomStoreName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareDicomStoreName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareDicomStoreLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareDicomStoreLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenHealthcareDicomStoreNotificationConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareDicomStoreNotificationConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -343,15 +345,15 @@ func flattenHealthcareDicomStoreNotificationConfig(v interface{}, d *schema.Reso
 		flattenHealthcareDicomStoreNotificationConfigPubsubTopic(original["pubsubTopic"], d, config)
 	return []interface{}{transformed}
 }
-func flattenHealthcareDicomStoreNotificationConfigPubsubTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenHealthcareDicomStoreNotificationConfigPubsubTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandHealthcareDicomStoreName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareDicomStoreName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandHealthcareDicomStoreLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandHealthcareDicomStoreLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -362,7 +364,7 @@ func expandHealthcareDicomStoreLabels(v interface{}, d TerraformResourceData, co
 	return m, nil
 }
 
-func expandHealthcareDicomStoreNotificationConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareDicomStoreNotificationConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -381,7 +383,7 @@ func expandHealthcareDicomStoreNotificationConfig(v interface{}, d TerraformReso
 	return transformed, nil
 }
 
-func expandHealthcareDicomStoreNotificationConfigPubsubTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandHealthcareDicomStoreNotificationConfigPubsubTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_region_disk_iam"
 description: |-
   Collection of resources to manage IAM policy for Compute Engine RegionDisk
 ---
@@ -149,4 +148,4 @@ $ terraform import google_compute_region_disk_iam_policy.editor projects/{{proje
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

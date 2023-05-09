@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	dataplex "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/dataplex"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceDataplexAsset() *schema.Resource {
+func ResourceDataplexAsset() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataplexAssetCreate,
 		Read:   resourceDataplexAssetRead,
@@ -75,10 +77,9 @@ func resourceDataplexAsset() *schema.Resource {
 			},
 
 			"name": {
-				Type:             schema.TypeString,
-				Required:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
-				Description:      "The name of the asset.",
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "The name of the asset.",
 			},
 
 			"resource_spec": {
@@ -177,6 +178,7 @@ func DataplexAssetDiscoverySpecSchema() *schema.Resource {
 
 			"csv_options": {
 				Type:        schema.TypeList,
+				Computed:    true,
 				Optional:    true,
 				Description: "Optional. Configuration for CSV data.",
 				MaxItems:    1,
@@ -199,6 +201,7 @@ func DataplexAssetDiscoverySpecSchema() *schema.Resource {
 
 			"json_options": {
 				Type:        schema.TypeList,
+				Computed:    true,
 				Optional:    true,
 				Description: "Optional. Configuration for Json data.",
 				MaxItems:    1,
@@ -404,7 +407,7 @@ func DataplexAssetSecurityStatusSchema() *schema.Resource {
 }
 
 func resourceDataplexAssetCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -429,7 +432,7 @@ func resourceDataplexAssetCreate(d *schema.ResourceData, meta interface{}) error
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -438,8 +441,8 @@ func resourceDataplexAssetCreate(d *schema.ResourceData, meta interface{}) error
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -461,7 +464,7 @@ func resourceDataplexAssetCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceDataplexAssetRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -480,7 +483,7 @@ func resourceDataplexAssetRead(d *schema.ResourceData, meta interface{}) error {
 		Project:       dcl.String(project),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -489,8 +492,8 @@ func resourceDataplexAssetRead(d *schema.ResourceData, meta interface{}) error {
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -557,7 +560,7 @@ func resourceDataplexAssetRead(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 func resourceDataplexAssetUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -576,7 +579,7 @@ func resourceDataplexAssetUpdate(d *schema.ResourceData, meta interface{}) error
 		Project:       dcl.String(project),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -586,8 +589,8 @@ func resourceDataplexAssetUpdate(d *schema.ResourceData, meta interface{}) error
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -609,7 +612,7 @@ func resourceDataplexAssetUpdate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceDataplexAssetDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -629,7 +632,7 @@ func resourceDataplexAssetDelete(d *schema.ResourceData, meta interface{}) error
 	}
 
 	log.Printf("[DEBUG] Deleting Asset %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -638,8 +641,8 @@ func resourceDataplexAssetDelete(d *schema.ResourceData, meta interface{}) error
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLDataplexClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -654,9 +657,9 @@ func resourceDataplexAssetDelete(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceDataplexAssetImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/lakes/(?P<lake>[^/]+)/zones/(?P<dataplex_zone>[^/]+)/assets/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<lake>[^/]+)/(?P<dataplex_zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<lake>[^/]+)/(?P<dataplex_zone>[^/]+)/(?P<name>[^/]+)",
@@ -712,11 +715,11 @@ func flattenDataplexAssetDiscoverySpec(obj *dataplex.AssetDiscoverySpec) interfa
 
 func expandDataplexAssetDiscoverySpecCsvOptions(o interface{}) *dataplex.AssetDiscoverySpecCsvOptions {
 	if o == nil {
-		return dataplex.EmptyAssetDiscoverySpecCsvOptions
+		return nil
 	}
 	objArr := o.([]interface{})
 	if len(objArr) == 0 || objArr[0] == nil {
-		return dataplex.EmptyAssetDiscoverySpecCsvOptions
+		return nil
 	}
 	obj := objArr[0].(map[string]interface{})
 	return &dataplex.AssetDiscoverySpecCsvOptions{
@@ -744,11 +747,11 @@ func flattenDataplexAssetDiscoverySpecCsvOptions(obj *dataplex.AssetDiscoverySpe
 
 func expandDataplexAssetDiscoverySpecJsonOptions(o interface{}) *dataplex.AssetDiscoverySpecJsonOptions {
 	if o == nil {
-		return dataplex.EmptyAssetDiscoverySpecJsonOptions
+		return nil
 	}
 	objArr := o.([]interface{})
 	if len(objArr) == 0 || objArr[0] == nil {
-		return dataplex.EmptyAssetDiscoverySpecJsonOptions
+		return nil
 	}
 	obj := objArr[0].(map[string]interface{})
 	return &dataplex.AssetDiscoverySpecJsonOptions{

@@ -4,11 +4,13 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"google.golang.org/api/compute/v1"
 )
 
-func dataSourceGoogleComputeRouterStatus() *schema.Resource {
-	routeElemSchema := datasourceSchemaFromResourceSchema(resourceComputeRoute().Schema)
+func DataSourceGoogleComputeRouterStatus() *schema.Resource {
+	routeElemSchema := tpgresource.DatasourceSchemaFromResourceSchema(ResourceComputeRoute().Schema)
 
 	return &schema.Resource{
 		Read: dataSourceComputeRouterStatusRead,
@@ -57,8 +59,8 @@ func dataSourceGoogleComputeRouterStatus() *schema.Resource {
 }
 
 func dataSourceComputeRouterStatusRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -97,7 +99,7 @@ func dataSourceComputeRouterStatusRead(d *schema.ResourceData, meta interface{})
 		return fmt.Errorf("Error setting best_routes_for_router: %s", err)
 	}
 
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/routers/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/routers/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}

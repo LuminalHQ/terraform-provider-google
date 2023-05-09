@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Apigee"
-page_title: "Google: google_apigee_organization"
 description: |-
   An `Organization` is the top-level container in Apigee.
 ---
@@ -163,7 +162,7 @@ The following arguments are supported:
   (Optional)
   Runtime type of the Apigee organization based on the Apigee subscription purchased.
   Default value is `CLOUD`.
-  Possible values are `CLOUD` and `HYBRID`.
+  Possible values are: `CLOUD`, `HYBRID`.
 
 * `billing_type` -
   (Optional)
@@ -176,6 +175,11 @@ The following arguments are supported:
   If not specified, a Google-Managed encryption key will be used.
   Valid only when `RuntimeType` is CLOUD. For example: `projects/foo/locations/us/keyRings/bar/cryptoKeys/baz`.
 
+* `properties` -
+  (Optional)
+  Properties defined in the Apigee organization profile.
+  Structure is [documented below](#nested_properties).
+
 * `retention` -
   (Optional)
   Optional. This setting is applicable only for organizations that are soft-deleted (i.e., BillingType
@@ -183,8 +187,26 @@ The following arguments are supported:
   operation completes. During this period, the Organization may be restored to its last known state.
   After this period, the Organization will no longer be able to be restored.
   Default value is `DELETION_RETENTION_UNSPECIFIED`.
-  Possible values are `DELETION_RETENTION_UNSPECIFIED` and `MINIMUM`.
+  Possible values are: `DELETION_RETENTION_UNSPECIFIED`, `MINIMUM`.
 
+
+<a name="nested_properties"></a>The `properties` block supports:
+
+* `property` -
+  (Optional)
+  List of all properties in the object.
+  Structure is [documented below](#nested_property).
+
+
+<a name="nested_property"></a>The `property` block supports:
+
+* `name` -
+  (Optional)
+  Name of the property.
+
+* `value` -
+  (Optional)
+  Value of the property.
 
 ## Attributes Reference
 
@@ -207,7 +229,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

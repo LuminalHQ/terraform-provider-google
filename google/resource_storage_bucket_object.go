@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 
 	"crypto/md5"
@@ -21,7 +23,7 @@ import (
 	"google.golang.org/api/storage/v1"
 )
 
-func resourceStorageBucketObject() *schema.Resource {
+func ResourceStorageBucketObject() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceStorageBucketObjectCreate,
 		Read:   resourceStorageBucketObjectRead,
@@ -266,8 +268,8 @@ func compareCryptoKeyVersions(_, old, new string, _ *schema.ResourceData) bool {
 }
 
 func resourceStorageBucketObjectCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -351,8 +353,8 @@ func resourceStorageBucketObjectCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceStorageBucketObjectUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -389,8 +391,8 @@ func resourceStorageBucketObjectUpdate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceStorageBucketObjectRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -409,7 +411,7 @@ func resourceStorageBucketObjectRead(d *schema.ResourceData, meta interface{}) e
 	res, err := getCall.Do()
 
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Storage Bucket Object %q", d.Get("name").(string)))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Storage Bucket Object %q", d.Get("name").(string)))
 	}
 
 	if err := d.Set("md5hash", res.Md5Hash); err != nil {
@@ -467,8 +469,8 @@ func resourceStorageBucketObjectRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceStorageBucketObjectDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}

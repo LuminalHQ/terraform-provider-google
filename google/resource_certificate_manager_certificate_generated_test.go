@@ -21,34 +21,37 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func TestAccCertificateManagerCertificate_certificateManagerCertificateBasicExample(t *testing.T) {
+func TestAccCertificateManagerCertificate_certificateManagerGoogleManagedCertificateExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckCertificateManagerCertificateDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCertificateManagerCertificateDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccCertificateManagerCertificate_certificateManagerCertificateBasicExample(context),
+				Config: testAccCertificateManagerCertificate_certificateManagerGoogleManagedCertificateExample(context),
 			},
 			{
 				ResourceName:            "google_certificate_manager_certificate.default",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"name", "managed.0.dns_authorizations"},
+				ImportStateVerifyIgnore: []string{"self_managed", "name", "location"},
 			},
 		},
 	})
 }
 
-func testAccCertificateManagerCertificate_certificateManagerCertificateBasicExample(context map[string]interface{}) string {
+func testAccCertificateManagerCertificate_certificateManagerGoogleManagedCertificateExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_certificate_manager_certificate" "default" {
   name        = "tf-test-dns-cert%{random_suffix}"
@@ -81,6 +84,84 @@ resource "google_certificate_manager_dns_authorization" "instance2" {
 `, context)
 }
 
+func TestAccCertificateManagerCertificate_certificateManagerSelfManagedCertificateExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCertificateManagerCertificateDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCertificateManagerCertificate_certificateManagerSelfManagedCertificateExample(context),
+			},
+			{
+				ResourceName:            "google_certificate_manager_certificate.default",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"self_managed", "name", "location"},
+			},
+		},
+	})
+}
+
+func testAccCertificateManagerCertificate_certificateManagerSelfManagedCertificateExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_certificate_manager_certificate" "default" {
+  name        = "tf-test-self-managed-cert%{random_suffix}"
+  description = "Global cert"
+  scope       = "EDGE_CACHE"
+  self_managed {
+    pem_certificate = file("test-fixtures/certificatemanager/cert.pem")
+    pem_private_key = file("test-fixtures/certificatemanager/private-key.pem")
+  }
+}
+`, context)
+}
+
+func TestAccCertificateManagerCertificate_certificateManagerSelfManagedCertificateRegionalExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckCertificateManagerCertificateDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCertificateManagerCertificate_certificateManagerSelfManagedCertificateRegionalExample(context),
+			},
+			{
+				ResourceName:            "google_certificate_manager_certificate.default",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"self_managed", "name", "location"},
+			},
+		},
+	})
+}
+
+func testAccCertificateManagerCertificate_certificateManagerSelfManagedCertificateRegionalExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_certificate_manager_certificate" "default" {
+  name        = "tf-test-self-managed-cert%{random_suffix}"
+  description = "Regional cert"
+  location    = "us-central1"
+  self_managed {
+    pem_certificate = file("test-fixtures/certificatemanager/cert.pem")
+    pem_private_key = file("test-fixtures/certificatemanager/private-key.pem")
+  }
+}
+`, context)
+}
+
 func testAccCheckCertificateManagerCertificateDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -91,9 +172,9 @@ func testAccCheckCertificateManagerCertificateDestroyProducer(t *testing.T) func
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/certificates/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{CertificateManagerBasePath}}projects/{{project}}/locations/{{location}}/certificates/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -104,7 +185,7 @@ func testAccCheckCertificateManagerCertificateDestroyProducer(t *testing.T) func
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("CertificateManagerCertificate still exists at %s", url)
 			}

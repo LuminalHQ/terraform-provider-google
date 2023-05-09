@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceStorageDefaultObjectAccessControl() *schema.Resource {
+func ResourceStorageDefaultObjectAccessControl() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceStorageDefaultObjectAccessControlCreate,
 		Read:   resourceStorageDefaultObjectAccessControlRead,
@@ -63,7 +66,7 @@ func resourceStorageDefaultObjectAccessControl() *schema.Resource {
 			"role": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ValidateFunc: validateEnum([]string{"OWNER", "READER"}),
+				ValidateFunc: verify.ValidateEnum([]string{"OWNER", "READER"}),
 				Description:  `The access permission for the entity. Possible values: ["OWNER", "READER"]`,
 			},
 			"object": {
@@ -105,7 +108,7 @@ func resourceStorageDefaultObjectAccessControl() *schema.Resource {
 						"team": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"editors", "owners", "viewers", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"editors", "owners", "viewers", ""}),
 							Description:  `The team. Possible values: ["editors", "owners", "viewers"]`,
 						},
 					},
@@ -117,8 +120,8 @@ func resourceStorageDefaultObjectAccessControl() *schema.Resource {
 }
 
 func resourceStorageDefaultObjectAccessControlCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -149,14 +152,14 @@ func resourceStorageDefaultObjectAccessControlCreate(d *schema.ResourceData, met
 		obj["role"] = roleProp
 	}
 
-	lockName, err := replaceVars(d, config, "storage/buckets/{{bucket}}")
+	lockName, err := ReplaceVars(d, config, "storage/buckets/{{bucket}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl")
 	if err != nil {
 		return err
 	}
@@ -169,13 +172,13 @@ func resourceStorageDefaultObjectAccessControlCreate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating DefaultObjectAccessControl: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{bucket}}/{{entity}}")
+	id, err := ReplaceVars(d, config, "{{bucket}}/{{entity}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -187,13 +190,13 @@ func resourceStorageDefaultObjectAccessControlCreate(d *schema.ResourceData, met
 }
 
 func resourceStorageDefaultObjectAccessControlRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl/{{entity}}")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl/{{entity}}")
 	if err != nil {
 		return err
 	}
@@ -205,9 +208,9 @@ func resourceStorageDefaultObjectAccessControlRead(d *schema.ResourceData, meta 
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("StorageDefaultObjectAccessControl %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("StorageDefaultObjectAccessControl %q", d.Id()))
 	}
 
 	if err := d.Set("domain", flattenStorageDefaultObjectAccessControlDomain(res["domain"], d, config)); err != nil {
@@ -239,8 +242,8 @@ func resourceStorageDefaultObjectAccessControlRead(d *schema.ResourceData, meta 
 }
 
 func resourceStorageDefaultObjectAccessControlUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -273,14 +276,14 @@ func resourceStorageDefaultObjectAccessControlUpdate(d *schema.ResourceData, met
 		obj["role"] = roleProp
 	}
 
-	lockName, err := replaceVars(d, config, "storage/buckets/{{bucket}}")
+	lockName, err := ReplaceVars(d, config, "storage/buckets/{{bucket}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl/{{entity}}")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl/{{entity}}")
 	if err != nil {
 		return err
 	}
@@ -292,7 +295,7 @@ func resourceStorageDefaultObjectAccessControlUpdate(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating DefaultObjectAccessControl %q: %s", d.Id(), err)
@@ -304,22 +307,22 @@ func resourceStorageDefaultObjectAccessControlUpdate(d *schema.ResourceData, met
 }
 
 func resourceStorageDefaultObjectAccessControlDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	lockName, err := replaceVars(d, config, "storage/buckets/{{bucket}}")
+	lockName, err := ReplaceVars(d, config, "storage/buckets/{{bucket}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl/{{entity}}")
+	url, err := ReplaceVars(d, config, "{{StorageBasePath}}b/{{bucket}}/defaultObjectAcl/{{entity}}")
 	if err != nil {
 		return err
 	}
@@ -332,9 +335,9 @@ func resourceStorageDefaultObjectAccessControlDelete(d *schema.ResourceData, met
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "DefaultObjectAccessControl")
+		return transport_tpg.HandleNotFoundError(err, d, "DefaultObjectAccessControl")
 	}
 
 	log.Printf("[DEBUG] Finished deleting DefaultObjectAccessControl %q: %#v", d.Id(), res)
@@ -342,15 +345,15 @@ func resourceStorageDefaultObjectAccessControlDelete(d *schema.ResourceData, met
 }
 
 func resourceStorageDefaultObjectAccessControlImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<bucket>[^/]+)/(?P<entity>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{bucket}}/{{entity}}")
+	id, err := ReplaceVars(d, config, "{{bucket}}/{{entity}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -359,26 +362,26 @@ func resourceStorageDefaultObjectAccessControlImport(d *schema.ResourceData, met
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenStorageDefaultObjectAccessControlDomain(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlDomain(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlEntity(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlEntity(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlEntityId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlEntityId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -392,11 +395,11 @@ func flattenStorageDefaultObjectAccessControlGeneration(v interface{}, d *schema
 	return v // let terraform core handle it otherwise
 }
 
-func flattenStorageDefaultObjectAccessControlObject(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlObject(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlProjectTeam(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlProjectTeam(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -411,30 +414,30 @@ func flattenStorageDefaultObjectAccessControlProjectTeam(v interface{}, d *schem
 		flattenStorageDefaultObjectAccessControlProjectTeamTeam(original["team"], d, config)
 	return []interface{}{transformed}
 }
-func flattenStorageDefaultObjectAccessControlProjectTeamProjectNumber(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlProjectTeamProjectNumber(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlProjectTeamTeam(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlProjectTeamTeam(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenStorageDefaultObjectAccessControlRole(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenStorageDefaultObjectAccessControlRole(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandStorageDefaultObjectAccessControlBucket(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandStorageDefaultObjectAccessControlBucket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandStorageDefaultObjectAccessControlEntity(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandStorageDefaultObjectAccessControlEntity(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandStorageDefaultObjectAccessControlObject(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandStorageDefaultObjectAccessControlObject(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandStorageDefaultObjectAccessControlRole(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandStorageDefaultObjectAccessControlRole(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

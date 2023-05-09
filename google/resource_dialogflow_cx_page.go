@@ -24,9 +24,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceDialogflowCXPage() *schema.Resource {
+func ResourceDialogflowCXPage() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDialogflowCXPageCreate,
 		Read:   resourceDialogflowCXPageRead,
@@ -121,13 +124,13 @@ func resourceDialogflowCXPage() *schema.Resource {
 						"target_flow": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Description: `The target flow to transition to. 
+							Description: `The target flow to transition to.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<Flow ID>.`,
 						},
 						"target_page": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Description: `The target page to transition to. 
+							Description: `The target page to transition to.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<Flow ID>/pages/<Page ID>.`,
 						},
 						"trigger_fulfillment": {
@@ -216,7 +219,7 @@ Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<F
 									"entity_type": {
 										Type:     schema.TypeString,
 										Optional: true,
-										Description: `The entity type of the parameter. 
+										Description: `The entity type of the parameter.
 Format: projects/-/locations/-/agents/-/entityTypes/<System Entity Type ID> for system entity types (for example, projects/-/locations/-/agents/-/entityTypes/sys.date), or projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/entityTypes/<Entity Type ID> for developer entity types.`,
 									},
 									"fill_behavior": {
@@ -294,13 +297,13 @@ Format: projects/-/locations/-/agents/-/entityTypes/<System Entity Type ID> for 
 									"redact": {
 										Type:     schema.TypeBool,
 										Optional: true,
-										Description: `Indicates whether the parameter content should be redacted in log. 
+										Description: `Indicates whether the parameter content should be redacted in log.
 If redaction is enabled, the parameter content will be replaced by parameter name during logging. Note: the parameter content is subject to redaction if either parameter level redaction or entity type level redaction is enabled.`,
 									},
 									"required": {
 										Type:     schema.TypeBool,
 										Optional: true,
-										Description: `Indicates whether the parameter is required. Optional parameters will not trigger prompts; however, they are filled if the user specifies them. 
+										Description: `Indicates whether the parameter is required. Optional parameters will not trigger prompts; however, they are filled if the user specifies them.
 Required parameters must be filled before form filling concludes.`,
 									},
 								},
@@ -331,7 +334,7 @@ If not specified, the agent's default language is used. Many languages are suppo
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
-				Description: `The flow to create a page for. 
+				Description: `The flow to create a page for.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<Flow ID>.`,
 			},
 			"transition_route_groups": {
@@ -367,19 +370,19 @@ At least one of intent or condition must be specified. When both intent and cond
 						"intent": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Description: `The unique identifier of an Intent. 
+							Description: `The unique identifier of an Intent.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/intents/<Intent ID>. Indicates that the transition can only happen when the given intent is matched. At least one of intent or condition must be specified. When both intent and condition are specified, the transition can only happen when both are fulfilled.`,
 						},
 						"target_flow": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Description: `The target flow to transition to. 
+							Description: `The target flow to transition to.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<Flow ID>.`,
 						},
 						"target_page": {
 							Type:     schema.TypeString,
 							Optional: true,
-							Description: `The target page to transition to. 
+							Description: `The target page to transition to.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<Flow ID>/pages/<Page ID>.`,
 						},
 						"trigger_fulfillment": {
@@ -450,7 +453,7 @@ Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<F
 			"name": {
 				Type:     schema.TypeString,
 				Computed: true,
-				Description: `The unique identifier of the page. 
+				Description: `The unique identifier of the page.
 Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<Flow ID>/pages/<Page ID>.`,
 			},
 		},
@@ -459,8 +462,8 @@ Format: projects/<Project ID>/locations/<Location ID>/agents/<Agent ID>/flows/<F
 }
 
 func resourceDialogflowCXPageCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -509,7 +512,7 @@ func resourceDialogflowCXPageCreate(d *schema.ResourceData, meta interface{}) er
 		obj["languageCode"] = languageCodeProp
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages")
+	url, err := ReplaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages")
 	if err != nil {
 		return err
 	}
@@ -536,7 +539,7 @@ func resourceDialogflowCXPageCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	url = strings.Replace(url, "-dialogflow", fmt.Sprintf("%s-dialogflow", location), 1)
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Page: %s", err)
 	}
@@ -545,7 +548,7 @@ func resourceDialogflowCXPageCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{parent}}/pages/{{name}}")
+	id, err := ReplaceVars(d, config, "{{parent}}/pages/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -557,13 +560,13 @@ func resourceDialogflowCXPageCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceDialogflowCXPageRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -589,9 +592,9 @@ func resourceDialogflowCXPageRead(d *schema.ResourceData, meta interface{}) erro
 	}
 
 	url = strings.Replace(url, "-dialogflow", fmt.Sprintf("%s-dialogflow", location), 1)
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DialogflowCXPage %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DialogflowCXPage %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenDialogflowCXPageName(res["name"], d, config)); err != nil {
@@ -623,8 +626,8 @@ func resourceDialogflowCXPageRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceDialogflowCXPageUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -669,7 +672,7 @@ func resourceDialogflowCXPageUpdate(d *schema.ResourceData, meta interface{}) er
 		obj["eventHandlers"] = eventHandlersProp
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -700,9 +703,9 @@ func resourceDialogflowCXPageUpdate(d *schema.ResourceData, meta interface{}) er
 	if d.HasChange("event_handlers") {
 		updateMask = append(updateMask, "eventHandlers")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -727,7 +730,7 @@ func resourceDialogflowCXPageUpdate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Page %q: %s", d.Id(), err)
@@ -739,15 +742,15 @@ func resourceDialogflowCXPageUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceDialogflowCXPageDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages/{{name}}")
+	url, err := ReplaceVars(d, config, "{{DialogflowCXBasePath}}{{parent}}/pages/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -775,9 +778,9 @@ func resourceDialogflowCXPageDelete(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Page")
+		return transport_tpg.HandleNotFoundError(err, d, "Page")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Page %q: %#v", d.Id(), res)
@@ -785,10 +788,10 @@ func resourceDialogflowCXPageDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceDialogflowCXPageImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value and parent contains slashes
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"(?P<parent>.+)/pages/(?P<name>[^/]+)",
 		"(?P<parent>.+)/(?P<name>[^/]+)",
 	}, d, config); err != nil {
@@ -796,7 +799,7 @@ func resourceDialogflowCXPageImport(d *schema.ResourceData, meta interface{}) ([
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{parent}}/pages/{{name}}")
+	id, err := ReplaceVars(d, config, "{{parent}}/pages/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -805,18 +808,18 @@ func resourceDialogflowCXPageImport(d *schema.ResourceData, meta interface{}) ([
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDialogflowCXPageName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenDialogflowCXPageDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEntryFulfillment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -835,7 +838,7 @@ func flattenDialogflowCXPageEntryFulfillment(v interface{}, d *schema.ResourceDa
 		flattenDialogflowCXPageEntryFulfillmentTag(original["tag"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageEntryFulfillmentMessages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentMessages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -853,7 +856,7 @@ func flattenDialogflowCXPageEntryFulfillmentMessages(v interface{}, d *schema.Re
 	}
 	return transformed
 }
-func flattenDialogflowCXPageEntryFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -868,27 +871,27 @@ func flattenDialogflowCXPageEntryFulfillmentMessagesText(v interface{}, d *schem
 		flattenDialogflowCXPageEntryFulfillmentMessagesTextAllowPlaybackInterruption(original["allowPlaybackInterruption"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageEntryFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEntryFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEntryFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEntryFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEntryFulfillmentTag(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEntryFulfillmentTag(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageForm(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageForm(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -901,7 +904,7 @@ func flattenDialogflowCXPageForm(v interface{}, d *schema.ResourceData, config *
 		flattenDialogflowCXPageFormParameters(original["parameters"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageFormParameters(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParameters(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -924,23 +927,23 @@ func flattenDialogflowCXPageFormParameters(v interface{}, d *schema.ResourceData
 	}
 	return transformed
 }
-func flattenDialogflowCXPageFormParametersDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersRequired(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersRequired(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersEntityType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersEntityType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersIsList(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersIsList(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersFillBehavior(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehavior(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -953,7 +956,7 @@ func flattenDialogflowCXPageFormParametersFillBehavior(v interface{}, d *schema.
 		flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(original["initialPromptFulfillment"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -972,7 +975,7 @@ func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(v
 		flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentTag(original["tag"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -990,7 +993,7 @@ func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMe
 	}
 	return transformed
 }
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1005,35 +1008,35 @@ func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMe
 		flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextAllowPlaybackInterruption(original["allowPlaybackInterruption"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentTag(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentTag(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageFormParametersRedact(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageFormParametersRedact(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRouteGroups(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRouteGroups(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1056,19 +1059,19 @@ func flattenDialogflowCXPageTransitionRoutes(v interface{}, d *schema.ResourceDa
 	}
 	return transformed
 }
-func flattenDialogflowCXPageTransitionRoutesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesIntent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesIntent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesCondition(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesCondition(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1087,7 +1090,7 @@ func flattenDialogflowCXPageTransitionRoutesTriggerFulfillment(v interface{}, d 
 		flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentTag(original["tag"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1105,7 +1108,7 @@ func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessages(v interfa
 	}
 	return transformed
 }
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1120,35 +1123,35 @@ func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesText(v int
 		flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextAllowPlaybackInterruption(original["allowPlaybackInterruption"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentTag(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTriggerFulfillmentTag(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTargetPage(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTargetPage(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageTransitionRoutesTargetFlow(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageTransitionRoutesTargetFlow(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1170,15 +1173,15 @@ func flattenDialogflowCXPageEventHandlers(v interface{}, d *schema.ResourceData,
 	}
 	return transformed
 }
-func flattenDialogflowCXPageEventHandlersName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersEvent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersEvent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTriggerFulfillment(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillment(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1197,7 +1200,7 @@ func flattenDialogflowCXPageEventHandlersTriggerFulfillment(v interface{}, d *sc
 		flattenDialogflowCXPageEventHandlersTriggerFulfillmentTag(original["tag"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1215,7 +1218,7 @@ func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessages(v interface{
 	}
 	return transformed
 }
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1230,43 +1233,43 @@ func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesText(v interf
 		flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextAllowPlaybackInterruption(original["allowPlaybackInterruption"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextText(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentWebhook(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentReturnPartialResponses(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTriggerFulfillmentTag(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTriggerFulfillmentTag(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTargetPage(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTargetPage(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageEventHandlersTargetFlow(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageEventHandlersTargetFlow(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowCXPageLanguageCode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowCXPageLanguageCode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDialogflowCXPageDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEntryFulfillment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1306,7 +1309,7 @@ func expandDialogflowCXPageEntryFulfillment(v interface{}, d TerraformResourceDa
 	return transformed, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentMessages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentMessages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1328,7 +1331,7 @@ func expandDialogflowCXPageEntryFulfillmentMessages(v interface{}, d TerraformRe
 	return req, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1354,27 +1357,27 @@ func expandDialogflowCXPageEntryFulfillmentMessagesText(v interface{}, d Terrafo
 	return transformed, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentWebhook(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentWebhook(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEntryFulfillmentTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEntryFulfillmentTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageForm(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageForm(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1393,7 +1396,7 @@ func expandDialogflowCXPageForm(v interface{}, d TerraformResourceData, config *
 	return transformed, nil
 }
 
-func expandDialogflowCXPageFormParameters(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParameters(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1450,23 +1453,23 @@ func expandDialogflowCXPageFormParameters(v interface{}, d TerraformResourceData
 	return req, nil
 }
 
-func expandDialogflowCXPageFormParametersDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersRequired(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersRequired(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersEntityType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersEntityType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersIsList(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersIsList(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehavior(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehavior(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1485,7 +1488,7 @@ func expandDialogflowCXPageFormParametersFillBehavior(v interface{}, d Terraform
 	return transformed, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1525,7 +1528,7 @@ func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillment(v 
 	return transformed, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1547,7 +1550,7 @@ func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMes
 	return req, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1573,35 +1576,35 @@ func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMes
 	return transformed, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentWebhook(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentWebhook(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersFillBehaviorInitialPromptFulfillmentTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageFormParametersRedact(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageFormParametersRedact(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRouteGroups(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRouteGroups(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1658,19 +1661,19 @@ func expandDialogflowCXPageTransitionRoutes(v interface{}, d TerraformResourceDa
 	return req, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesIntent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesIntent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesCondition(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesCondition(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1710,7 +1713,7 @@ func expandDialogflowCXPageTransitionRoutesTriggerFulfillment(v interface{}, d T
 	return transformed, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1732,7 +1735,7 @@ func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessages(v interfac
 	return req, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1758,35 +1761,35 @@ func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesText(v inte
 	return transformed, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentWebhook(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentWebhook(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTriggerFulfillmentTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTargetPage(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTargetPage(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageTransitionRoutesTargetFlow(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageTransitionRoutesTargetFlow(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlers(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlers(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1836,15 +1839,15 @@ func expandDialogflowCXPageEventHandlers(v interface{}, d TerraformResourceData,
 	return req, nil
 }
 
-func expandDialogflowCXPageEventHandlersName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersEvent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersEvent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillment(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillment(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1884,7 +1887,7 @@ func expandDialogflowCXPageEventHandlersTriggerFulfillment(v interface{}, d Terr
 	return transformed, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -1906,7 +1909,7 @@ func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessages(v interface{}
 	return req, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1932,34 +1935,34 @@ func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesText(v interfa
 	return transformed, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextText(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentMessagesTextAllowPlaybackInterruption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentWebhook(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentWebhook(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentReturnPartialResponses(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTriggerFulfillmentTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTriggerFulfillmentTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTargetPage(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTargetPage(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageEventHandlersTargetFlow(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageEventHandlersTargetFlow(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowCXPageLanguageCode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowCXPageLanguageCode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

@@ -23,9 +23,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourcePubsubLiteSubscription() *schema.Resource {
+func ResourcePubsubLiteSubscription() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePubsubLiteSubscriptionCreate,
 		Read:   resourcePubsubLiteSubscriptionRead,
@@ -47,14 +51,14 @@ func resourcePubsubLiteSubscription() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `Name of the subscription.`,
 			},
 			"topic": {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `A reference to a Topic resource.`,
 			},
 			"delivery_config": {
@@ -67,7 +71,7 @@ func resourcePubsubLiteSubscription() *schema.Resource {
 						"delivery_requirement": {
 							Type:         schema.TypeString,
 							Required:     true,
-							ValidateFunc: validateEnum([]string{"DELIVER_IMMEDIATELY", "DELIVER_AFTER_STORED", "DELIVERY_REQUIREMENT_UNSPECIFIED"}),
+							ValidateFunc: verify.ValidateEnum([]string{"DELIVER_IMMEDIATELY", "DELIVER_AFTER_STORED", "DELIVERY_REQUIREMENT_UNSPECIFIED"}),
 							Description:  `When this subscription should send messages to subscribers relative to messages persistence in storage. Possible values: ["DELIVER_IMMEDIATELY", "DELIVER_AFTER_STORED", "DELIVERY_REQUIREMENT_UNSPECIFIED"]`,
 						},
 					},
@@ -95,8 +99,8 @@ func resourcePubsubLiteSubscription() *schema.Resource {
 }
 
 func resourcePubsubLiteSubscriptionCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -120,7 +124,7 @@ func resourcePubsubLiteSubscriptionCreate(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions?subscriptionId={{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions?subscriptionId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -139,13 +143,13 @@ func resourcePubsubLiteSubscriptionCreate(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Subscription: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -157,13 +161,13 @@ func resourcePubsubLiteSubscriptionCreate(d *schema.ResourceData, meta interface
 }
 
 func resourcePubsubLiteSubscriptionRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -181,9 +185,9 @@ func resourcePubsubLiteSubscriptionRead(d *schema.ResourceData, meta interface{}
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("PubsubLiteSubscription %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("PubsubLiteSubscription %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -201,8 +205,8 @@ func resourcePubsubLiteSubscriptionRead(d *schema.ResourceData, meta interface{}
 }
 
 func resourcePubsubLiteSubscriptionUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -228,7 +232,7 @@ func resourcePubsubLiteSubscriptionUpdate(d *schema.ResourceData, meta interface
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -239,9 +243,9 @@ func resourcePubsubLiteSubscriptionUpdate(d *schema.ResourceData, meta interface
 	if d.HasChange("delivery_config") {
 		updateMask = append(updateMask, "deliveryConfig")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -251,7 +255,7 @@ func resourcePubsubLiteSubscriptionUpdate(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Subscription %q: %s", d.Id(), err)
@@ -263,8 +267,8 @@ func resourcePubsubLiteSubscriptionUpdate(d *schema.ResourceData, meta interface
 }
 
 func resourcePubsubLiteSubscriptionDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -277,7 +281,7 @@ func resourcePubsubLiteSubscriptionDelete(d *schema.ResourceData, meta interface
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubLiteBasePath}}projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -290,9 +294,9 @@ func resourcePubsubLiteSubscriptionDelete(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Subscription")
+		return transport_tpg.HandleNotFoundError(err, d, "Subscription")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Subscription %q: %#v", d.Id(), res)
@@ -300,8 +304,8 @@ func resourcePubsubLiteSubscriptionDelete(d *schema.ResourceData, meta interface
 }
 
 func resourcePubsubLiteSubscriptionImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<zone>[^/]+)/subscriptions/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<zone>[^/]+)/(?P<name>[^/]+)",
@@ -311,7 +315,7 @@ func resourcePubsubLiteSubscriptionImport(d *schema.ResourceData, meta interface
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/{{zone}}/subscriptions/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -320,14 +324,14 @@ func resourcePubsubLiteSubscriptionImport(d *schema.ResourceData, meta interface
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenPubsubLiteSubscriptionTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubLiteSubscriptionTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenPubsubLiteSubscriptionDeliveryConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubLiteSubscriptionDeliveryConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -340,11 +344,11 @@ func flattenPubsubLiteSubscriptionDeliveryConfig(v interface{}, d *schema.Resour
 		flattenPubsubLiteSubscriptionDeliveryConfigDeliveryRequirement(original["deliveryRequirement"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubLiteSubscriptionDeliveryConfigDeliveryRequirement(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubLiteSubscriptionDeliveryConfigDeliveryRequirement(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandPubsubLiteSubscriptionTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubLiteSubscriptionTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	project, err := getProject(d, config)
 	if err != nil {
 		return "", err
@@ -375,7 +379,7 @@ func expandPubsubLiteSubscriptionTopic(v interface{}, d TerraformResourceData, c
 	}
 }
 
-func expandPubsubLiteSubscriptionDeliveryConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubLiteSubscriptionDeliveryConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -394,12 +398,12 @@ func expandPubsubLiteSubscriptionDeliveryConfig(v interface{}, d TerraformResour
 	return transformed, nil
 }
 
-func expandPubsubLiteSubscriptionDeliveryConfigDeliveryRequirement(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubLiteSubscriptionDeliveryConfigDeliveryRequirement(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 func resourcePubsubLiteSubscriptionEncoder(d *schema.ResourceData, meta interface{}, obj map[string]interface{}) (map[string]interface{}, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	zone, err := getZone(d, config)
 	if err != nil {

@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceIdentityPlatformTenantOauthIdpConfig() *schema.Resource {
+func ResourceIdentityPlatformTenantOauthIdpConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceIdentityPlatformTenantOauthIdpConfigCreate,
 		Read:   resourceIdentityPlatformTenantOauthIdpConfigRead,
@@ -91,8 +94,8 @@ func resourceIdentityPlatformTenantOauthIdpConfig() *schema.Resource {
 }
 
 func resourceIdentityPlatformTenantOauthIdpConfigCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -135,7 +138,7 @@ func resourceIdentityPlatformTenantOauthIdpConfigCreate(d *schema.ResourceData, 
 		obj["clientSecret"] = clientSecretProp
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs?oauthIdpConfigId={{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs?oauthIdpConfigId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -154,13 +157,13 @@ func resourceIdentityPlatformTenantOauthIdpConfigCreate(d *schema.ResourceData, 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating TenantOauthIdpConfig: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -172,13 +175,13 @@ func resourceIdentityPlatformTenantOauthIdpConfigCreate(d *schema.ResourceData, 
 }
 
 func resourceIdentityPlatformTenantOauthIdpConfigRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -196,9 +199,9 @@ func resourceIdentityPlatformTenantOauthIdpConfigRead(d *schema.ResourceData, me
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("IdentityPlatformTenantOauthIdpConfig %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("IdentityPlatformTenantOauthIdpConfig %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -228,8 +231,8 @@ func resourceIdentityPlatformTenantOauthIdpConfigRead(d *schema.ResourceData, me
 }
 
 func resourceIdentityPlatformTenantOauthIdpConfigUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -274,7 +277,7 @@ func resourceIdentityPlatformTenantOauthIdpConfigUpdate(d *schema.ResourceData, 
 		obj["clientSecret"] = clientSecretProp
 	}
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -301,9 +304,9 @@ func resourceIdentityPlatformTenantOauthIdpConfigUpdate(d *schema.ResourceData, 
 	if d.HasChange("client_secret") {
 		updateMask = append(updateMask, "clientSecret")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -313,7 +316,7 @@ func resourceIdentityPlatformTenantOauthIdpConfigUpdate(d *schema.ResourceData, 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating TenantOauthIdpConfig %q: %s", d.Id(), err)
@@ -325,8 +328,8 @@ func resourceIdentityPlatformTenantOauthIdpConfigUpdate(d *schema.ResourceData, 
 }
 
 func resourceIdentityPlatformTenantOauthIdpConfigDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -339,7 +342,7 @@ func resourceIdentityPlatformTenantOauthIdpConfigDelete(d *schema.ResourceData, 
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
+	url, err := ReplaceVars(d, config, "{{IdentityPlatformBasePath}}projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -352,9 +355,9 @@ func resourceIdentityPlatformTenantOauthIdpConfigDelete(d *schema.ResourceData, 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "TenantOauthIdpConfig")
+		return transport_tpg.HandleNotFoundError(err, d, "TenantOauthIdpConfig")
 	}
 
 	log.Printf("[DEBUG] Finished deleting TenantOauthIdpConfig %q: %#v", d.Id(), res)
@@ -362,8 +365,8 @@ func resourceIdentityPlatformTenantOauthIdpConfigDelete(d *schema.ResourceData, 
 }
 
 func resourceIdentityPlatformTenantOauthIdpConfigImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/tenants/(?P<tenant>[^/]+)/oauthIdpConfigs/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<tenant>[^/]+)/(?P<name>[^/]+)",
 		"(?P<tenant>[^/]+)/(?P<name>[^/]+)",
@@ -372,7 +375,7 @@ func resourceIdentityPlatformTenantOauthIdpConfigImport(d *schema.ResourceData, 
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/tenants/{{tenant}}/oauthIdpConfigs/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -381,53 +384,53 @@ func resourceIdentityPlatformTenantOauthIdpConfigImport(d *schema.ResourceData, 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenIdentityPlatformTenantOauthIdpConfigName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantOauthIdpConfigName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenIdentityPlatformTenantOauthIdpConfigDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantOauthIdpConfigDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantOauthIdpConfigEnabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantOauthIdpConfigEnabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantOauthIdpConfigIssuer(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantOauthIdpConfigIssuer(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantOauthIdpConfigClientId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantOauthIdpConfigClientId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenIdentityPlatformTenantOauthIdpConfigClientSecret(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenIdentityPlatformTenantOauthIdpConfigClientSecret(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandIdentityPlatformTenantOauthIdpConfigName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantOauthIdpConfigName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantOauthIdpConfigDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantOauthIdpConfigDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantOauthIdpConfigEnabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantOauthIdpConfigEnabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantOauthIdpConfigIssuer(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantOauthIdpConfigIssuer(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantOauthIdpConfigClientId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantOauthIdpConfigClientId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandIdentityPlatformTenantOauthIdpConfigClientSecret(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandIdentityPlatformTenantOauthIdpConfigClientSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

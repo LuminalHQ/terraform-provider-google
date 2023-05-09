@@ -26,9 +26,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceDataCatalogEntry() *schema.Resource {
+func ResourceDataCatalogEntry() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataCatalogEntryCreate,
 		Read:   resourceDataCatalogEntryRead,
@@ -142,7 +145,7 @@ for what fields this schema can contain.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"FILESET", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"FILESET", ""}),
 				Description: `The type of the entry. Only used for Entries with types in the EntryType enum.
 Currently, only FILESET enum value is allowed. All other entries created through Data Catalog must use userSpecifiedType. Possible values: ["FILESET"]`,
 				ExactlyOneOf: []string{"type", "user_specified_type"},
@@ -150,7 +153,7 @@ Currently, only FILESET enum value is allowed. All other entries created through
 			"user_specified_system": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateRegexp(`^[A-z_][A-z0-9_]{0,63}$`),
+				ValidateFunc: verify.ValidateRegexp(`^[A-z_][A-z0-9_]{0,63}$`),
 				Description: `This field indicates the entry's source system that Data Catalog does not integrate with.
 userSpecifiedSystem strings must begin with a letter or underscore and can only contain letters, numbers,
 and underscores; are case insensitive; must be at least 1 character and at most 64 characters long.`,
@@ -158,7 +161,7 @@ and underscores; are case insensitive; must be at least 1 character and at most 
 			"user_specified_type": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateRegexp(`^[A-z_][A-z0-9_]{0,63}$`),
+				ValidateFunc: verify.ValidateRegexp(`^[A-z_][A-z0-9_]{0,63}$`),
 				Description: `Entry type if it does not fit any of the input-allowed values listed in EntryType enum above.
 When creating an entry, users should check the enum values first, if nothing matches the entry
 to be created, then provide a custom value, for example "my_special_type".
@@ -256,8 +259,8 @@ Note that this Entry and its child resources may not actually be stored in the l
 }
 
 func resourceDataCatalogEntryCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -312,7 +315,7 @@ func resourceDataCatalogEntryCreate(d *schema.ResourceData, meta interface{}) er
 		obj["gcsFilesetSpec"] = gcsFilesetSpecProp
 	}
 
-	url, err := replaceVars(d, config, "{{DataCatalogBasePath}}{{entry_group}}/entries?entryId={{entry_id}}")
+	url, err := ReplaceVars(d, config, "{{DataCatalogBasePath}}{{entry_group}}/entries?entryId={{entry_id}}")
 	if err != nil {
 		return err
 	}
@@ -329,7 +332,7 @@ func resourceDataCatalogEntryCreate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Entry: %s", err)
 	}
@@ -338,7 +341,7 @@ func resourceDataCatalogEntryCreate(d *schema.ResourceData, meta interface{}) er
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -350,13 +353,13 @@ func resourceDataCatalogEntryCreate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceDataCatalogEntryRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DataCatalogBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{DataCatalogBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -372,9 +375,9 @@ func resourceDataCatalogEntryRead(d *schema.ResourceData, meta interface{}) erro
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DataCatalogEntry %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DataCatalogEntry %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenDataCatalogEntryName(res["name"], d, config)); err != nil {
@@ -418,8 +421,8 @@ func resourceDataCatalogEntryRead(d *schema.ResourceData, meta interface{}) erro
 }
 
 func resourceDataCatalogEntryUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -470,7 +473,7 @@ func resourceDataCatalogEntryUpdate(d *schema.ResourceData, meta interface{}) er
 		obj["gcsFilesetSpec"] = gcsFilesetSpecProp
 	}
 
-	url, err := replaceVars(d, config, "{{DataCatalogBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{DataCatalogBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -505,9 +508,9 @@ func resourceDataCatalogEntryUpdate(d *schema.ResourceData, meta interface{}) er
 	if d.HasChange("gcs_fileset_spec") {
 		updateMask = append(updateMask, "gcsFilesetSpec")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -520,7 +523,7 @@ func resourceDataCatalogEntryUpdate(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Entry %q: %s", d.Id(), err)
@@ -532,15 +535,15 @@ func resourceDataCatalogEntryUpdate(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceDataCatalogEntryDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{DataCatalogBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{DataCatalogBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -558,9 +561,9 @@ func resourceDataCatalogEntryDelete(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Entry")
+		return transport_tpg.HandleNotFoundError(err, d, "Entry")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Entry %q: %#v", d.Id(), res)
@@ -568,10 +571,10 @@ func resourceDataCatalogEntryDelete(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourceDataCatalogEntryImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -591,23 +594,23 @@ func resourceDataCatalogEntryImport(d *schema.ResourceData, meta interface{}) ([
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDataCatalogEntryName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryLinkedResource(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryLinkedResource(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntrySchema(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntrySchema(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -619,23 +622,23 @@ func flattenDataCatalogEntrySchema(v interface{}, d *schema.ResourceData, config
 	return string(b)
 }
 
-func flattenDataCatalogEntryType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryUserSpecifiedType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryUserSpecifiedType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryIntegratedSystem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryIntegratedSystem(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryUserSpecifiedSystem(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryUserSpecifiedSystem(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryGcsFilesetSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryGcsFilesetSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -650,11 +653,11 @@ func flattenDataCatalogEntryGcsFilesetSpec(v interface{}, d *schema.ResourceData
 		flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(original["sampleGcsFileSpecs"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataCatalogEntryGcsFilesetSpecFilePatterns(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryGcsFilesetSpecFilePatterns(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -673,14 +676,14 @@ func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(v interface{}, d *s
 	}
 	return transformed
 }
-func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsFilePath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsFilePath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsSizeBytes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsSizeBytes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -694,7 +697,7 @@ func flattenDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsSizeBytes(v interfac
 	return v // let terraform core handle it otherwise
 }
 
-func flattenDataCatalogEntryBigqueryTableSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryTableSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -711,11 +714,11 @@ func flattenDataCatalogEntryBigqueryTableSpec(v interface{}, d *schema.ResourceD
 		flattenDataCatalogEntryBigqueryTableSpecTableSpec(original["tableSpec"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataCatalogEntryBigqueryTableSpecTableSourceType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryTableSpecTableSourceType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryBigqueryTableSpecViewSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryTableSpecViewSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -728,11 +731,11 @@ func flattenDataCatalogEntryBigqueryTableSpecViewSpec(v interface{}, d *schema.R
 		flattenDataCatalogEntryBigqueryTableSpecViewSpecViewQuery(original["viewQuery"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataCatalogEntryBigqueryTableSpecViewSpecViewQuery(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryTableSpecViewSpecViewQuery(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryBigqueryTableSpecTableSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryTableSpecTableSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -745,11 +748,11 @@ func flattenDataCatalogEntryBigqueryTableSpecTableSpec(v interface{}, d *schema.
 		flattenDataCatalogEntryBigqueryTableSpecTableSpecGroupedEntry(original["groupedEntry"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataCatalogEntryBigqueryTableSpecTableSpecGroupedEntry(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryTableSpecTableSpecGroupedEntry(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryBigqueryDateShardedSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryDateShardedSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -766,18 +769,18 @@ func flattenDataCatalogEntryBigqueryDateShardedSpec(v interface{}, d *schema.Res
 		flattenDataCatalogEntryBigqueryDateShardedSpecShardCount(original["shardCount"], d, config)
 	return []interface{}{transformed}
 }
-func flattenDataCatalogEntryBigqueryDateShardedSpecDataset(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryDateShardedSpecDataset(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryBigqueryDateShardedSpecTablePrefix(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryDateShardedSpecTablePrefix(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDataCatalogEntryBigqueryDateShardedSpecShardCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDataCatalogEntryBigqueryDateShardedSpecShardCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -791,19 +794,19 @@ func flattenDataCatalogEntryBigqueryDateShardedSpecShardCount(v interface{}, d *
 	return v // let terraform core handle it otherwise
 }
 
-func expandDataCatalogEntryLinkedResource(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryLinkedResource(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntrySchema(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntrySchema(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	b := []byte(v.(string))
 	if len(b) == 0 {
 		return nil, nil
@@ -815,19 +818,19 @@ func expandDataCatalogEntrySchema(v interface{}, d TerraformResourceData, config
 	return m, nil
 }
 
-func expandDataCatalogEntryType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryUserSpecifiedType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryUserSpecifiedType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryUserSpecifiedSystem(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryUserSpecifiedSystem(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryGcsFilesetSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryGcsFilesetSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -853,11 +856,11 @@ func expandDataCatalogEntryGcsFilesetSpec(v interface{}, d TerraformResourceData
 	return transformed, nil
 }
 
-func expandDataCatalogEntryGcsFilesetSpecFilePatterns(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryGcsFilesetSpecFilePatterns(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -886,10 +889,10 @@ func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecs(v interface{}, d Ter
 	return req, nil
 }
 
-func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsFilePath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsFilePath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsSizeBytes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDataCatalogEntryGcsFilesetSpecSampleGcsFileSpecsSizeBytes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

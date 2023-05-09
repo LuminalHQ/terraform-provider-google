@@ -24,21 +24,24 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccClouddeployDeliveryPipeline_DeliveryPipeline(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"project_name":  getTestProjectFromEnv(),
-		"region":        getTestRegionFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"region":        acctest.GetTestRegionFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckClouddeployDeliveryPipelineDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckClouddeployDeliveryPipelineDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccClouddeployDeliveryPipeline_DeliveryPipeline(context),
@@ -150,7 +153,7 @@ func testAccCheckClouddeployDeliveryPipelineDestroyProducer(t *testing.T) func(s
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
 			billingProject := ""
 			if config.BillingProject != "" {
@@ -169,7 +172,7 @@ func testAccCheckClouddeployDeliveryPipelineDestroyProducer(t *testing.T) func(s
 				UpdateTime:  dcl.StringOrNil(rs.Primary.Attributes["update_time"]),
 			}
 
-			client := NewDCLClouddeployClient(config, config.userAgent, billingProject, 0)
+			client := transport_tpg.NewDCLClouddeployClient(config, config.UserAgent, billingProject, 0)
 			_, err := client.GetDeliveryPipeline(context.Background(), obj)
 			if err == nil {
 				return fmt.Errorf("google_clouddeploy_delivery_pipeline still exists %v", obj)

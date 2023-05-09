@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceMonitoringService() *schema.Resource {
+func ResourceMonitoringService() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceMonitoringServiceCreate,
 		Read:   resourceMonitoringServiceRead,
@@ -52,7 +56,7 @@ func resourceMonitoringService() *schema.Resource {
 				Computed:     true,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRegexp(`^[a-z0-9\-]+$`),
+				ValidateFunc: verify.ValidateRegexp(`^[a-z0-9\-]+$`),
 				Description: `An optional service ID to use. If not given, the server will generate a
 service ID.`,
 			},
@@ -102,8 +106,8 @@ projects/[PROJECT_ID]/services/[SERVICE_ID].`,
 }
 
 func resourceMonitoringServiceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -139,7 +143,7 @@ func resourceMonitoringServiceCreate(d *schema.ResourceData, meta interface{}) e
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/projects/{{project}}/services?serviceId={{service_id}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/projects/{{project}}/services?serviceId={{service_id}}")
 	if err != nil {
 		return err
 	}
@@ -158,7 +162,7 @@ func resourceMonitoringServiceCreate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsMonitoringConcurrentEditError)
 	if err != nil {
 		return fmt.Errorf("Error creating Service: %s", err)
 	}
@@ -167,7 +171,7 @@ func resourceMonitoringServiceCreate(d *schema.ResourceData, meta interface{}) e
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -179,13 +183,13 @@ func resourceMonitoringServiceCreate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceMonitoringServiceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -203,9 +207,9 @@ func resourceMonitoringServiceRead(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsMonitoringConcurrentEditError)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("MonitoringService %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("MonitoringService %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -232,8 +236,8 @@ func resourceMonitoringServiceRead(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceMonitoringServiceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -271,7 +275,7 @@ func resourceMonitoringServiceUpdate(d *schema.ResourceData, meta interface{}) e
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -290,9 +294,9 @@ func resourceMonitoringServiceUpdate(d *schema.ResourceData, meta interface{}) e
 	if d.HasChange("telemetry") {
 		updateMask = append(updateMask, "telemetry")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -302,7 +306,7 @@ func resourceMonitoringServiceUpdate(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.IsMonitoringConcurrentEditError)
 
 	if err != nil {
 		return fmt.Errorf("Error updating Service %q: %s", d.Id(), err)
@@ -314,8 +318,8 @@ func resourceMonitoringServiceUpdate(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceMonitoringServiceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -328,7 +332,7 @@ func resourceMonitoringServiceDelete(d *schema.ResourceData, meta interface{}) e
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -341,9 +345,9 @@ func resourceMonitoringServiceDelete(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsMonitoringConcurrentEditError)
 	if err != nil {
-		return handleNotFoundError(err, d, "Service")
+		return transport_tpg.HandleNotFoundError(err, d, "Service")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Service %q: %#v", d.Id(), res)
@@ -352,29 +356,29 @@ func resourceMonitoringServiceDelete(d *schema.ResourceData, meta interface{}) e
 
 func resourceMonitoringServiceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenMonitoringServiceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringServiceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringServiceDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringServiceDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringServiceUserLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringServiceUserLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringServiceTelemetry(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringServiceTelemetry(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -387,22 +391,22 @@ func flattenMonitoringServiceTelemetry(v interface{}, d *schema.ResourceData, co
 		flattenMonitoringServiceTelemetryResourceName(original["resourceName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenMonitoringServiceTelemetryResourceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringServiceTelemetryResourceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringServiceServiceId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringServiceServiceId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func expandMonitoringServiceDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringServiceDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMonitoringServiceUserLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandMonitoringServiceUserLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -413,7 +417,7 @@ func expandMonitoringServiceUserLabels(v interface{}, d TerraformResourceData, c
 	return m, nil
 }
 
-func expandMonitoringServiceTelemetry(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringServiceTelemetry(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -432,11 +436,11 @@ func expandMonitoringServiceTelemetry(v interface{}, d TerraformResourceData, co
 	return transformed, nil
 }
 
-func expandMonitoringServiceTelemetryResourceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringServiceTelemetryResourceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMonitoringServiceServiceId(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringServiceServiceId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

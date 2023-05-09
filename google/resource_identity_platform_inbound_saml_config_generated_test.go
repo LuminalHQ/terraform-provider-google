@@ -21,20 +21,23 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccIdentityPlatformInboundSamlConfig_identityPlatformInboundSamlConfigBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"name":          "saml.tf-config-" + randString(t, 10),
-		"random_suffix": randString(t, 10),
+		"name":          "saml.tf-config-" + RandString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckIdentityPlatformInboundSamlConfigDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckIdentityPlatformInboundSamlConfigDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccIdentityPlatformInboundSamlConfig_identityPlatformInboundSamlConfigBasicExample(context),
@@ -80,9 +83,9 @@ func testAccCheckIdentityPlatformInboundSamlConfigDestroyProducer(t *testing.T) 
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{IdentityPlatformBasePath}}projects/{{project}}/inboundSamlConfigs/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{IdentityPlatformBasePath}}projects/{{project}}/inboundSamlConfigs/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -93,7 +96,7 @@ func testAccCheckIdentityPlatformInboundSamlConfigDestroyProducer(t *testing.T) 
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("IdentityPlatformInboundSamlConfig still exists at %s", url)
 			}

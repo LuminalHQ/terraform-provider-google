@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceLoggingOrganizationSink() *schema.Resource {
+func ResourceLoggingOrganizationSink() *schema.Resource {
 	schm := &schema.Resource{
 		Create: resourceLoggingOrganizationSinkCreate,
 		Read:   resourceLoggingOrganizationSinkRead,
@@ -39,8 +40,8 @@ func resourceLoggingOrganizationSink() *schema.Resource {
 }
 
 func resourceLoggingOrganizationSinkCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -61,15 +62,15 @@ func resourceLoggingOrganizationSinkCreate(d *schema.ResourceData, meta interfac
 }
 
 func resourceLoggingOrganizationSinkRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	sink, err := config.NewLoggingClient(userAgent).Organizations.Sinks.Get(d.Id()).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Organization Logging Sink %s", d.Get("name").(string)))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Organization Logging Sink %s", d.Get("name").(string)))
 	}
 
 	if err := flattenResourceLoggingSink(d, sink); err != nil {
@@ -84,8 +85,8 @@ func resourceLoggingOrganizationSinkRead(d *schema.ResourceData, meta interface{
 }
 
 func resourceLoggingOrganizationSinkUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -107,8 +108,8 @@ func resourceLoggingOrganizationSinkUpdate(d *schema.ResourceData, meta interfac
 }
 
 func resourceLoggingOrganizationSinkDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}

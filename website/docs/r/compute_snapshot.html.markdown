@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_snapshot"
 description: |-
   Represents a Persistent Disk Snapshot resource.
 ---
@@ -40,8 +39,9 @@ To get more information about Snapshot, see:
 * How-to Guides
     * [Official Documentation](https://cloud.google.com/compute/docs/disks/create-snapshots)
 
-~> **Warning:** All arguments including `snapshot_encryption_key.raw_key` and `source_disk_encryption_key.raw_key` will be stored in the raw
-state as plain-text. [Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `snapshot_encryption_key.raw_key`, `source_disk_encryption_key.raw_key`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=snapshot_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
@@ -56,6 +56,39 @@ resource "google_compute_snapshot" "snapshot" {
   name        = "my-snapshot"
   source_disk = google_compute_disk.persistent.id
   zone        = "us-central1-a"
+  labels = {
+    my_label = "value"
+  }
+  storage_locations = ["us-central1"]
+}
+
+data "google_compute_image" "debian" {
+  family  = "debian-11"
+  project = "debian-cloud"
+}
+
+resource "google_compute_disk" "persistent" {
+  name  = "debian-disk"
+  image = data.google_compute_image.debian.self_link
+  size  = 10
+  type  = "pd-ssd"
+  zone  = "us-central1-a"
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=snapshot_chainname&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Snapshot Chainname
+
+
+```hcl
+resource "google_compute_snapshot" "snapshot" {
+  name        = "my-snapshot"
+  source_disk = google_compute_disk.persistent.id
+  zone        = "us-central1-a"
+  chain_name  = "snapshot-chain"
   labels = {
     my_label = "value"
   }
@@ -99,6 +132,15 @@ The following arguments are supported:
 - - -
 
 
+* `chain_name` -
+  (Optional)
+  Creates the new snapshot in the snapshot chain labeled with the
+  specified name. The chain name must be 1-63 characters long and
+  comply with RFC1035. This is an uncommon option only for advanced
+  service owners who needs to create separate snapshot chains, for
+  example, for chargeback tracking.  When you describe your snapshot
+  resource, this field is visible only if it has a non-empty value.
+
 * `description` -
   (Optional)
   An optional description of this resource.
@@ -117,8 +159,16 @@ The following arguments are supported:
 
 * `snapshot_encryption_key` -
   (Optional)
-  The customer-supplied encryption key of the snapshot. Required if the
-  source snapshot is protected by a customer-supplied encryption key.
+  Encrypts the snapshot using a customer-supplied encryption key.
+  After you encrypt a snapshot using a customer-supplied key, you must
+  provide the same key if you use the snapshot later. For example, you
+  must provide the encryption key when you create a disk from the
+  encrypted snapshot in a future request.
+  Customer-supplied encryption keys do not protect access to metadata of
+  the snapshot.
+  If you do not provide an encryption key when creating the snapshot,
+  then the snapshot will be encrypted using an automatically generated
+  key and you do not need to provide a key to use the snapshot later.
   Structure is [documented below](#nested_snapshot_encryption_key).
 
 * `source_disk_encryption_key` -
@@ -141,6 +191,7 @@ The following arguments are supported:
   **Note**: This property is sensitive and will not be displayed in the plan.
 
 * `sha256` -
+  (Output)
   The RFC 4648 base64 encoded SHA-256 hash of the customer-supplied
   encryption key that protects this resource.
 
@@ -201,7 +252,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -220,4 +271,4 @@ $ terraform import google_compute_snapshot.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

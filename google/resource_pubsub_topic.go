@@ -22,9 +22,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourcePubsubTopic() *schema.Resource {
+func ResourcePubsubTopic() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePubsubTopicCreate,
 		Read:   resourcePubsubTopicRead,
@@ -46,7 +50,7 @@ func resourcePubsubTopic() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `Name of the topic.`,
 			},
 			"kms_key_name": {
@@ -112,6 +116,7 @@ and is not a valid configuration.`,
 						"schema": {
 							Type:     schema.TypeString,
 							Required: true,
+							ForceNew: true,
 							Description: `The name of the schema that messages published should be
 validated against. Format is projects/{project}/schemas/{schema}.
 The value of this field will be _deleted-schema_
@@ -120,7 +125,8 @@ if the schema has been deleted.`,
 						"encoding": {
 							Type:         schema.TypeString,
 							Optional:     true,
-							ValidateFunc: validateEnum([]string{"ENCODING_UNSPECIFIED", "JSON", "BINARY", ""}),
+							ForceNew:     true,
+							ValidateFunc: verify.ValidateEnum([]string{"ENCODING_UNSPECIFIED", "JSON", "BINARY", ""}),
 							Description:  `The encoding of messages validated against schema. Default value: "ENCODING_UNSPECIFIED" Possible values: ["ENCODING_UNSPECIFIED", "JSON", "BINARY"]`,
 							Default:      "ENCODING_UNSPECIFIED",
 						},
@@ -139,8 +145,8 @@ if the schema has been deleted.`,
 }
 
 func resourcePubsubTopicCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -188,7 +194,7 @@ func resourcePubsubTopicCreate(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -207,13 +213,13 @@ func resourcePubsubTopicCreate(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), pubsubTopicProjectNotReady)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.PubsubTopicProjectNotReady)
 	if err != nil {
 		return fmt.Errorf("Error creating Topic: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/topics/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/topics/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -231,9 +237,9 @@ func resourcePubsubTopicCreate(d *schema.ResourceData, meta interface{}) error {
 
 func resourcePubsubTopicPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
+		url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -251,12 +257,12 @@ func resourcePubsubTopicPollRead(d *schema.ResourceData, meta interface{}) PollR
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, pubsubTopicProjectNotReady)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.PubsubTopicProjectNotReady)
 		if err != nil {
 			return res, err
 		}
@@ -265,13 +271,13 @@ func resourcePubsubTopicPollRead(d *schema.ResourceData, meta interface{}) PollR
 }
 
 func resourcePubsubTopicRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -289,9 +295,9 @@ func resourcePubsubTopicRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, pubsubTopicProjectNotReady)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.PubsubTopicProjectNotReady)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("PubsubTopic %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("PubsubTopic %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -321,8 +327,8 @@ func resourcePubsubTopicRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourcePubsubTopicUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -372,7 +378,7 @@ func resourcePubsubTopicUpdate(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -399,9 +405,9 @@ func resourcePubsubTopicUpdate(d *schema.ResourceData, meta interface{}) error {
 	if d.HasChange("message_retention_duration") {
 		updateMask = append(updateMask, "messageRetentionDuration")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -411,7 +417,7 @@ func resourcePubsubTopicUpdate(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), pubsubTopicProjectNotReady)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.PubsubTopicProjectNotReady)
 
 	if err != nil {
 		return fmt.Errorf("Error updating Topic %q: %s", d.Id(), err)
@@ -423,8 +429,8 @@ func resourcePubsubTopicUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourcePubsubTopicDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -437,7 +443,7 @@ func resourcePubsubTopicDelete(d *schema.ResourceData, meta interface{}) error {
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/topics/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -450,9 +456,9 @@ func resourcePubsubTopicDelete(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), pubsubTopicProjectNotReady)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.PubsubTopicProjectNotReady)
 	if err != nil {
-		return handleNotFoundError(err, d, "Topic")
+		return transport_tpg.HandleNotFoundError(err, d, "Topic")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Topic %q: %#v", d.Id(), res)
@@ -460,8 +466,8 @@ func resourcePubsubTopicDelete(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourcePubsubTopicImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/topics/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -470,7 +476,7 @@ func resourcePubsubTopicImport(d *schema.ResourceData, meta interface{}) ([]*sch
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/topics/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/topics/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -479,22 +485,22 @@ func resourcePubsubTopicImport(d *schema.ResourceData, meta interface{}) ([]*sch
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenPubsubTopicName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenPubsubTopicKmsKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicKmsKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubTopicLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubTopicMessageStoragePolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicMessageStoragePolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -507,11 +513,11 @@ func flattenPubsubTopicMessageStoragePolicy(v interface{}, d *schema.ResourceDat
 		flattenPubsubTopicMessageStoragePolicyAllowedPersistenceRegions(original["allowedPersistenceRegions"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubTopicMessageStoragePolicyAllowedPersistenceRegions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicMessageStoragePolicyAllowedPersistenceRegions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubTopicSchemaSettings(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicSchemaSettings(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -526,27 +532,27 @@ func flattenPubsubTopicSchemaSettings(v interface{}, d *schema.ResourceData, con
 		flattenPubsubTopicSchemaSettingsEncoding(original["encoding"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubTopicSchemaSettingsSchema(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicSchemaSettingsSchema(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubTopicSchemaSettingsEncoding(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicSchemaSettingsEncoding(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubTopicMessageRetentionDuration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubTopicMessageRetentionDuration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandPubsubTopicName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return GetResourceNameFromSelfLink(v.(string)), nil
+func expandPubsubTopicName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return tpgresource.GetResourceNameFromSelfLink(v.(string)), nil
 }
 
-func expandPubsubTopicKmsKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicKmsKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubTopicLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandPubsubTopicLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -557,7 +563,7 @@ func expandPubsubTopicLabels(v interface{}, d TerraformResourceData, config *Con
 	return m, nil
 }
 
-func expandPubsubTopicMessageStoragePolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicMessageStoragePolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -576,11 +582,11 @@ func expandPubsubTopicMessageStoragePolicy(v interface{}, d TerraformResourceDat
 	return transformed, nil
 }
 
-func expandPubsubTopicMessageStoragePolicyAllowedPersistenceRegions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicMessageStoragePolicyAllowedPersistenceRegions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubTopicSchemaSettings(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicSchemaSettings(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -606,15 +612,15 @@ func expandPubsubTopicSchemaSettings(v interface{}, d TerraformResourceData, con
 	return transformed, nil
 }
 
-func expandPubsubTopicSchemaSettingsSchema(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicSchemaSettingsSchema(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubTopicSchemaSettingsEncoding(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicSchemaSettingsEncoding(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubTopicMessageRetentionDuration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubTopicMessageRetentionDuration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

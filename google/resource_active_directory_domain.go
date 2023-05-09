@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceActiveDirectoryDomain() *schema.Resource {
+func ResourceActiveDirectoryDomain() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceActiveDirectoryDomainCreate,
 		Read:   resourceActiveDirectoryDomainRead,
@@ -46,14 +49,14 @@ func resourceActiveDirectoryDomain() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateADDomainName(),
-				Description: `The fully qualified domain name. e.g. mydomain.myorganization.com, with the restrictions, 
+				ValidateFunc: verify.ValidateADDomainName(),
+				Description: `The fully qualified domain name. e.g. mydomain.myorganization.com, with the restrictions,
 https://cloud.google.com/managed-microsoft-ad/reference/rest/v1/projects.locations.global.domains.`,
 			},
 			"locations": {
 				Type:     schema.TypeList,
 				Required: true,
-				Description: `Locations where domain needs to be provisioned. [regions][compute/docs/regions-zones/] 
+				Description: `Locations where domain needs to be provisioned. [regions][compute/docs/regions-zones/]
 e.g. us-west1 or us-east4 Service supports up to 4 locations at once. Each location will use a /26 block.`,
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
@@ -63,14 +66,14 @@ e.g. us-west1 or us-east4 Service supports up to 4 locations at once. Each locat
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
-				Description: `The CIDR range of internal addresses that are reserved for this domain. Reserved networks must be /24 or larger. 
+				Description: `The CIDR range of internal addresses that are reserved for this domain. Reserved networks must be /24 or larger.
 Ranges must be unique and non-overlapping with existing subnets in authorizedNetworks`,
 			},
 			"admin": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
-				Description: `The name of delegated administrator account used to perform Active Directory operations. 
+				Description: `The name of delegated administrator account used to perform Active Directory operations.
 If not specified, setupadmin will be used.`,
 				Default: "setupadmin",
 			},
@@ -93,7 +96,7 @@ If CIDR subnets overlap between networks, domain creation will fail.`,
 			"fqdn": {
 				Type:     schema.TypeString,
 				Computed: true,
-				Description: `The fully-qualified domain name of the exposed domain used by clients to connect to the service. 
+				Description: `The fully-qualified domain name of the exposed domain used by clients to connect to the service.
 Similar to what would be chosen for an Active Directory set up on an internal network.`,
 			},
 			"name": {
@@ -113,8 +116,8 @@ Similar to what would be chosen for an Active Directory set up on an internal ne
 }
 
 func resourceActiveDirectoryDomainCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -151,7 +154,7 @@ func resourceActiveDirectoryDomainCreate(d *schema.ResourceData, meta interface{
 		obj["admin"] = adminProp
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains?domainName={{domain_name}}")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains?domainName={{domain_name}}")
 	if err != nil {
 		return err
 	}
@@ -170,13 +173,13 @@ func resourceActiveDirectoryDomainCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Domain: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -185,12 +188,13 @@ func resourceActiveDirectoryDomainCreate(d *schema.ResourceData, meta interface{
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = activeDirectoryOperationWaitTimeWithResponse(
+	err = ActiveDirectoryOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Domain", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Domain: %s", err)
 	}
 
@@ -199,7 +203,7 @@ func resourceActiveDirectoryDomainCreate(d *schema.ResourceData, meta interface{
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{name}}")
+	id, err = ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -211,13 +215,13 @@ func resourceActiveDirectoryDomainCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceActiveDirectoryDomainRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -235,9 +239,9 @@ func resourceActiveDirectoryDomainRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ActiveDirectoryDomain %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ActiveDirectoryDomain %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -270,8 +274,8 @@ func resourceActiveDirectoryDomainRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceActiveDirectoryDomainUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -304,7 +308,7 @@ func resourceActiveDirectoryDomainUpdate(d *schema.ResourceData, meta interface{
 		obj["locations"] = locationsProp
 	}
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -323,9 +327,9 @@ func resourceActiveDirectoryDomainUpdate(d *schema.ResourceData, meta interface{
 	if d.HasChange("locations") {
 		updateMask = append(updateMask, "locations")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -335,7 +339,7 @@ func resourceActiveDirectoryDomainUpdate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Domain %q: %s", d.Id(), err)
@@ -343,7 +347,7 @@ func resourceActiveDirectoryDomainUpdate(d *schema.ResourceData, meta interface{
 		log.Printf("[DEBUG] Finished updating Domain %q: %#v", d.Id(), res)
 	}
 
-	err = activeDirectoryOperationWaitTime(
+	err = ActiveDirectoryOperationWaitTime(
 		config, res, project, "Updating Domain", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -355,8 +359,8 @@ func resourceActiveDirectoryDomainUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourceActiveDirectoryDomainDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -369,7 +373,7 @@ func resourceActiveDirectoryDomainDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain_name}}")
+	url, err := ReplaceVars(d, config, "{{ActiveDirectoryBasePath}}projects/{{project}}/locations/global/domains/{{domain_name}}")
 	if err != nil {
 		return err
 	}
@@ -382,12 +386,12 @@ func resourceActiveDirectoryDomainDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Domain")
+		return transport_tpg.HandleNotFoundError(err, d, "Domain")
 	}
 
-	err = activeDirectoryOperationWaitTime(
+	err = ActiveDirectoryOperationWaitTime(
 		config, res, project, "Deleting Domain", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -401,48 +405,48 @@ func resourceActiveDirectoryDomainDelete(d *schema.ResourceData, meta interface{
 
 func resourceActiveDirectoryDomainImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenActiveDirectoryDomainName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenActiveDirectoryDomainLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenActiveDirectoryDomainAuthorizedNetworks(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainAuthorizedNetworks(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenActiveDirectoryDomainReservedIpRange(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainReservedIpRange(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenActiveDirectoryDomainLocations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainLocations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenActiveDirectoryDomainAdmin(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainAdmin(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenActiveDirectoryDomainFqdn(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenActiveDirectoryDomainFqdn(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandActiveDirectoryDomainLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandActiveDirectoryDomainLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -453,19 +457,19 @@ func expandActiveDirectoryDomainLabels(v interface{}, d TerraformResourceData, c
 	return m, nil
 }
 
-func expandActiveDirectoryDomainAuthorizedNetworks(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandActiveDirectoryDomainAuthorizedNetworks(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandActiveDirectoryDomainReservedIpRange(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandActiveDirectoryDomainReservedIpRange(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandActiveDirectoryDomainLocations(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandActiveDirectoryDomainLocations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandActiveDirectoryDomainAdmin(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandActiveDirectoryDomainAdmin(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

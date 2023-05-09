@@ -21,19 +21,22 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccComputeResourcePolicy_resourcePolicyBasicExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeResourcePolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeResourcePolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeResourcePolicy_resourcePolicyBasicExample(context),
@@ -51,7 +54,7 @@ func TestAccComputeResourcePolicy_resourcePolicyBasicExample(t *testing.T) {
 func testAccComputeResourcePolicy_resourcePolicyBasicExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_compute_resource_policy" "foo" {
-  name   = "policy%{random_suffix}"
+  name   = "tf-test-gce-policy%{random_suffix}"
   region = "us-central1"
   snapshot_schedule_policy {
     schedule {
@@ -69,13 +72,13 @@ func TestAccComputeResourcePolicy_resourcePolicyFullExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeResourcePolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeResourcePolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeResourcePolicy_resourcePolicyFullExample(context),
@@ -93,7 +96,7 @@ func TestAccComputeResourcePolicy_resourcePolicyFullExample(t *testing.T) {
 func testAccComputeResourcePolicy_resourcePolicyFullExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_compute_resource_policy" "bar" {
-  name   = "policy%{random_suffix}"
+  name   = "tf-test-gce-policy%{random_suffix}"
   region = "us-central1"
   snapshot_schedule_policy {
     schedule {
@@ -122,13 +125,13 @@ func TestAccComputeResourcePolicy_resourcePolicyPlacementPolicyExample(t *testin
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeResourcePolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeResourcePolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeResourcePolicy_resourcePolicyPlacementPolicyExample(context),
@@ -146,7 +149,7 @@ func TestAccComputeResourcePolicy_resourcePolicyPlacementPolicyExample(t *testin
 func testAccComputeResourcePolicy_resourcePolicyPlacementPolicyExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_compute_resource_policy" "baz" {
-  name   = "policy%{random_suffix}"
+  name   = "tf-test-gce-policy%{random_suffix}"
   region = "us-central1"
   group_placement_policy {
     vm_count = 2
@@ -160,13 +163,13 @@ func TestAccComputeResourcePolicy_resourcePolicyInstanceSchedulePolicyExample(t 
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckComputeResourcePolicyDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeResourcePolicyDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccComputeResourcePolicy_resourcePolicyInstanceSchedulePolicyExample(context),
@@ -184,7 +187,7 @@ func TestAccComputeResourcePolicy_resourcePolicyInstanceSchedulePolicyExample(t 
 func testAccComputeResourcePolicy_resourcePolicyInstanceSchedulePolicyExample(context map[string]interface{}) string {
 	return Nprintf(`
 resource "google_compute_resource_policy" "hourly" {
-  name   = "policy%{random_suffix}"
+  name   = "tf-test-gce-policy%{random_suffix}"
   region = "us-central1"
   description = "Start and stop instances"
   instance_schedule_policy {
@@ -200,6 +203,61 @@ resource "google_compute_resource_policy" "hourly" {
 `, context)
 }
 
+func TestAccComputeResourcePolicy_resourcePolicySnapshotScheduleChainNameExample(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"random_suffix": RandString(t, 10),
+	}
+
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckComputeResourcePolicyDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeResourcePolicy_resourcePolicySnapshotScheduleChainNameExample(context),
+			},
+			{
+				ResourceName:            "google_compute_resource_policy.hourly",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"region"},
+			},
+		},
+	})
+}
+
+func testAccComputeResourcePolicy_resourcePolicySnapshotScheduleChainNameExample(context map[string]interface{}) string {
+	return Nprintf(`
+resource "google_compute_resource_policy" "hourly" {
+  name   = "tf-test-gce-policy%{random_suffix}"
+  region = "us-central1"
+  description = "chain name snapshot"
+  snapshot_schedule_policy {
+    schedule {
+      hourly_schedule {
+        hours_in_cycle = 20
+        start_time     = "23:00"
+      }
+    }
+    retention_policy {
+      max_retention_days    = 14
+      on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
+    }
+    snapshot_properties {
+      labels = {
+        my_label = "value"
+      }
+      storage_locations = ["us"]
+      guest_flush       = true
+      chain_name = "test-schedule-chain-name"
+    }
+  }
+}
+`, context)
+}
+
 func testAccCheckComputeResourcePolicyDestroyProducer(t *testing.T) func(s *terraform.State) error {
 	return func(s *terraform.State) error {
 		for name, rs := range s.RootModule().Resources {
@@ -210,9 +268,9 @@ func testAccCheckComputeResourcePolicyDestroyProducer(t *testing.T) func(s *terr
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
-			url, err := replaceVarsForTest(config, rs, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
+			url, err := acctest.ReplaceVarsForTest(config, rs, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
 			if err != nil {
 				return err
 			}
@@ -223,7 +281,7 @@ func testAccCheckComputeResourcePolicyDestroyProducer(t *testing.T) func(s *terr
 				billingProject = config.BillingProject
 			}
 
-			_, err = sendRequest(config, "GET", billingProject, url, config.userAgent, nil)
+			_, err = transport_tpg.SendRequest(config, "GET", billingProject, url, config.UserAgent, nil)
 			if err == nil {
 				return fmt.Errorf("ComputeResourcePolicy still exists at %s", url)
 			}

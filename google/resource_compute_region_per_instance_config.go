@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeRegionPerInstanceConfig() *schema.Resource {
+func ResourceComputeRegionPerInstanceConfig() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeRegionPerInstanceConfigCreate,
 		Read:   resourceComputeRegionPerInstanceConfigRead,
@@ -89,16 +93,31 @@ func resourceComputeRegionPerInstanceConfig() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "NONE",
+				Description: `The minimal action to perform on the instance during an update.
+Default is 'NONE'. Possible values are:
+* REPLACE
+* RESTART
+* REFRESH
+* NONE`,
 			},
 			"most_disruptive_allowed_action": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  "REPLACE",
+				Description: `The most disruptive action to perform on the instance during an update.
+Default is 'REPLACE'. Possible values are:
+* REPLACE
+* RESTART
+* REFRESH
+* NONE`,
 			},
 			"remove_instance_state_on_destroy": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
+				Description: `When true, deleting this config will immediately remove any specified state from the underlying instance.
+When false, deleting this config will *not* immediately remove any state from the underlying instance.
+State will be removed on the next instance recreation or update.`,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -128,7 +147,7 @@ func computeRegionPerInstanceConfigPreservedStateDiskSchema() *schema.Resource {
 			"delete_rule": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"NEVER", "ON_PERMANENT_INSTANCE_DELETION", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"NEVER", "ON_PERMANENT_INSTANCE_DELETION", ""}),
 				Description: `A value that prescribes what should happen to the stateful disk when the VM instance is deleted.
 The available options are 'NEVER' and 'ON_PERMANENT_INSTANCE_DELETION'.
 'NEVER' - detach the disk when the VM is deleted, but do not delete the disk.
@@ -139,7 +158,7 @@ deleted from the instance group. Default value: "NEVER" Possible values: ["NEVER
 			"mode": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"READ_ONLY", "READ_WRITE", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"READ_ONLY", "READ_WRITE", ""}),
 				Description:  `The mode of the disk. Default value: "READ_WRITE" Possible values: ["READ_ONLY", "READ_WRITE"]`,
 				Default:      "READ_WRITE",
 			},
@@ -148,8 +167,8 @@ deleted from the instance group. Default value: "NEVER" Possible values: ["NEVER
 }
 
 func resourceComputeRegionPerInstanceConfigCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -173,14 +192,14 @@ func resourceComputeRegionPerInstanceConfigCreate(d *schema.ResourceData, meta i
 		return err
 	}
 
-	lockName, err := replaceVars(d, config, "instanceGroupManager/{{project}}/{{region}}/{{region_instance_group_manager}}")
+	lockName, err := ReplaceVars(d, config, "instanceGroupManager/{{project}}/{{region}}/{{region_instance_group_manager}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/createInstances")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/createInstances")
 	if err != nil {
 		return err
 	}
@@ -199,19 +218,19 @@ func resourceComputeRegionPerInstanceConfigCreate(d *schema.ResourceData, meta i
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating RegionPerInstanceConfig: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{project}}/{{region}}/{{region_instance_group_manager}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{region}}/{{region_instance_group_manager}}/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating RegionPerInstanceConfig", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -227,13 +246,13 @@ func resourceComputeRegionPerInstanceConfigCreate(d *schema.ResourceData, meta i
 }
 
 func resourceComputeRegionPerInstanceConfigRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/listPerInstanceConfigs")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/listPerInstanceConfigs")
 	if err != nil {
 		return err
 	}
@@ -251,9 +270,9 @@ func resourceComputeRegionPerInstanceConfigRead(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "POST", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "POST", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeRegionPerInstanceConfig %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeRegionPerInstanceConfig %q", d.Id()))
 	}
 
 	res, err = flattenNestedComputeRegionPerInstanceConfig(d, meta, res)
@@ -307,8 +326,8 @@ func resourceComputeRegionPerInstanceConfigRead(d *schema.ResourceData, meta int
 }
 
 func resourceComputeRegionPerInstanceConfigUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -340,14 +359,14 @@ func resourceComputeRegionPerInstanceConfigUpdate(d *schema.ResourceData, meta i
 		return err
 	}
 
-	lockName, err := replaceVars(d, config, "instanceGroupManager/{{project}}/{{region}}/{{region_instance_group_manager}}")
+	lockName, err := ReplaceVars(d, config, "instanceGroupManager/{{project}}/{{region}}/{{region_instance_group_manager}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/updatePerInstanceConfigs")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/updatePerInstanceConfigs")
 	if err != nil {
 		return err
 	}
@@ -359,7 +378,7 @@ func resourceComputeRegionPerInstanceConfigUpdate(d *schema.ResourceData, meta i
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating RegionPerInstanceConfig %q: %s", d.Id(), err)
@@ -367,7 +386,7 @@ func resourceComputeRegionPerInstanceConfigUpdate(d *schema.ResourceData, meta i
 		log.Printf("[DEBUG] Finished updating RegionPerInstanceConfig %q: %#v", d.Id(), res)
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Updating RegionPerInstanceConfig", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -390,25 +409,25 @@ func resourceComputeRegionPerInstanceConfigUpdate(d *schema.ResourceData, meta i
 	}
 	obj["minimalAction"] = minAction
 
-	mostDisruptiveAction := d.Get("most_disruptive_action_allowed")
-	if mostDisruptiveAction != "" {
+	mostDisruptiveAction := d.Get("most_disruptive_allowed_action")
+	if isEmptyValue(reflect.ValueOf(mostDisruptiveAction)) {
 		mostDisruptiveAction = "REPLACE"
 	}
-	obj["mostDisruptiveActionAllowed"] = mostDisruptiveAction
+	obj["mostDisruptiveAllowedAction"] = mostDisruptiveAction
 
-	url, err = replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/applyUpdatesToInstances")
+	url, err = ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/applyUpdatesToInstances")
 	if err != nil {
 		return err
 	}
 
 	log.Printf("[DEBUG] Applying updates to PerInstanceConfig %q: %#v", d.Id(), obj)
-	res, err = sendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err = transport_tpg.SendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating PerInstanceConfig %q: %s", d.Id(), err)
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Applying update to PerInstanceConfig", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -419,8 +438,8 @@ func resourceComputeRegionPerInstanceConfigUpdate(d *schema.ResourceData, meta i
 }
 
 func resourceComputeRegionPerInstanceConfigDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -430,14 +449,14 @@ func resourceComputeRegionPerInstanceConfigDelete(d *schema.ResourceData, meta i
 		return err
 	}
 
-	lockName, err := replaceVars(d, config, "instanceGroupManager/{{project}}/{{region}}/{{region_instance_group_manager}}")
+	lockName, err := ReplaceVars(d, config, "instanceGroupManager/{{project}}/{{region}}/{{region_instance_group_manager}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/deletePerInstanceConfigs")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/deletePerInstanceConfigs")
 	if err != nil {
 		return err
 	}
@@ -448,12 +467,12 @@ func resourceComputeRegionPerInstanceConfigDelete(d *schema.ResourceData, meta i
 	}
 	log.Printf("[DEBUG] Deleting RegionPerInstanceConfig %q", d.Id())
 
-	res, err := sendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "RegionPerInstanceConfig")
+		return transport_tpg.HandleNotFoundError(err, d, "RegionPerInstanceConfig")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting RegionPerInstanceConfig", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -473,19 +492,19 @@ func resourceComputeRegionPerInstanceConfigDelete(d *schema.ResourceData, meta i
 		obj["instances"] = []string{instanceName}
 
 		// Updates must be applied to the instance after deleting the PerInstanceConfig
-		url, err = replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/applyUpdatesToInstances")
+		url, err = ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/instanceGroupManagers/{{region_instance_group_manager}}/applyUpdatesToInstances")
 		if err != nil {
 			return err
 		}
 
 		log.Printf("[DEBUG] Applying updates to PerInstanceConfig %q: %#v", d.Id(), obj)
-		res, err = sendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+		res, err = transport_tpg.SendRequestWithTimeout(config, "POST", project, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 		if err != nil {
 			return fmt.Errorf("Error updating PerInstanceConfig %q: %s", d.Id(), err)
 		}
 
-		err = computeOperationWaitTime(
+		err = ComputeOperationWaitTime(
 			config, res, project, "Applying update to PerInstanceConfig", userAgent,
 			d.Timeout(schema.TimeoutUpdate))
 
@@ -505,8 +524,8 @@ func resourceComputeRegionPerInstanceConfigDelete(d *schema.ResourceData, meta i
 }
 
 func resourceComputeRegionPerInstanceConfigImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/instanceGroupManagers/(?P<region_instance_group_manager>[^/]+)/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<region_instance_group_manager>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<region_instance_group_manager>[^/]+)/(?P<name>[^/]+)",
@@ -516,7 +535,7 @@ func resourceComputeRegionPerInstanceConfigImport(d *schema.ResourceData, meta i
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{project}}/{{region}}/{{region_instance_group_manager}}/{{name}}")
+	id, err := ReplaceVars(d, config, "{{project}}/{{region}}/{{region_instance_group_manager}}/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -536,11 +555,11 @@ func resourceComputeRegionPerInstanceConfigImport(d *schema.ResourceData, meta i
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNestedComputeRegionPerInstanceConfigName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedComputeRegionPerInstanceConfigName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedComputeRegionPerInstanceConfigPreservedState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedComputeRegionPerInstanceConfigPreservedState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -555,11 +574,11 @@ func flattenNestedComputeRegionPerInstanceConfigPreservedState(v interface{}, d 
 		flattenNestedComputeRegionPerInstanceConfigPreservedStateDisk(original["disks"], d, config)
 	return []interface{}{transformed}
 }
-func flattenNestedComputeRegionPerInstanceConfigPreservedStateMetadata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedComputeRegionPerInstanceConfigPreservedStateMetadata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedComputeRegionPerInstanceConfigPreservedStateDisk(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedComputeRegionPerInstanceConfigPreservedStateDisk(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -567,7 +586,7 @@ func flattenNestedComputeRegionPerInstanceConfigPreservedStateDisk(v interface{}
 	transformed := make([]interface{}, 0, len(disks))
 	for devName, deleteRuleRaw := range disks {
 		diskObj := deleteRuleRaw.(map[string]interface{})
-		source, err := getRelativePath(diskObj["source"].(string))
+		source, err := tpgresource.GetRelativePath(diskObj["source"].(string))
 		if err != nil {
 			source = diskObj["source"].(string)
 		}
@@ -581,11 +600,11 @@ func flattenNestedComputeRegionPerInstanceConfigPreservedStateDisk(v interface{}
 	return transformed
 }
 
-func expandNestedComputeRegionPerInstanceConfigName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedComputeRegionPerInstanceConfigName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedComputeRegionPerInstanceConfigPreservedState(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedComputeRegionPerInstanceConfigPreservedState(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -611,7 +630,7 @@ func expandNestedComputeRegionPerInstanceConfigPreservedState(v interface{}, d T
 	return transformed, nil
 }
 
-func expandNestedComputeRegionPerInstanceConfigPreservedStateMetadata(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandNestedComputeRegionPerInstanceConfigPreservedStateMetadata(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -622,7 +641,7 @@ func expandNestedComputeRegionPerInstanceConfigPreservedStateMetadata(v interfac
 	return m, nil
 }
 
-func expandNestedComputeRegionPerInstanceConfigPreservedStateDisk(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedComputeRegionPerInstanceConfigPreservedStateDisk(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil {
 		return map[string]interface{}{}, nil
 	}
@@ -694,11 +713,11 @@ func flattenNestedComputeRegionPerInstanceConfig(d *schema.ResourceData, meta in
 }
 
 func resourceComputeRegionPerInstanceConfigFindNestedObjectInList(d *schema.ResourceData, meta interface{}, items []interface{}) (index int, item map[string]interface{}, err error) {
-	expectedName, err := expandNestedComputeRegionPerInstanceConfigName(d.Get("name"), d, meta.(*Config))
+	expectedName, err := expandNestedComputeRegionPerInstanceConfigName(d.Get("name"), d, meta.(*transport_tpg.Config))
 	if err != nil {
 		return -1, nil, err
 	}
-	expectedFlattenedName := flattenNestedComputeRegionPerInstanceConfigName(expectedName, d, meta.(*Config))
+	expectedFlattenedName := flattenNestedComputeRegionPerInstanceConfigName(expectedName, d, meta.(*transport_tpg.Config))
 
 	// Search list for this resource.
 	for idx, itemRaw := range items {
@@ -707,7 +726,7 @@ func resourceComputeRegionPerInstanceConfigFindNestedObjectInList(d *schema.Reso
 		}
 		item := itemRaw.(map[string]interface{})
 
-		itemName := flattenNestedComputeRegionPerInstanceConfigName(item["name"], d, meta.(*Config))
+		itemName := flattenNestedComputeRegionPerInstanceConfigName(item["name"], d, meta.(*transport_tpg.Config))
 		// isEmptyValue check so that if one is nil and the other is "", that's considered a match
 		if !(isEmptyValue(reflect.ValueOf(itemName)) && isEmptyValue(reflect.ValueOf(expectedFlattenedName))) && !reflect.DeepEqual(itemName, expectedFlattenedName) {
 			log.Printf("[DEBUG] Skipping item with name= %#v, looking for %#v)", itemName, expectedFlattenedName)

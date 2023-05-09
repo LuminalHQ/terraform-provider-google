@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceDocumentAIProcessorDefaultVersion() *schema.Resource {
+func ResourceDocumentAIProcessorDefaultVersion() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDocumentAIProcessorDefaultVersionCreate,
 		Read:   resourceDocumentAIProcessorDefaultVersionRead,
@@ -50,8 +53,9 @@ func resourceDocumentAIProcessorDefaultVersion() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: projectNumberDiffSuppress,
-				Description:      `The version to set`,
+				DiffSuppressFunc: tpgresource.ProjectNumberDiffSuppress,
+				Description: `The version to set. Using 'stable' or 'rc' will cause the API to return the latest version in that release channel.
+Apply 'lifecycle.ignore_changes' to the 'version' field to suppress this diff.`,
 			},
 		},
 		UseJSONNumber: true,
@@ -59,8 +63,8 @@ func resourceDocumentAIProcessorDefaultVersion() *schema.Resource {
 }
 
 func resourceDocumentAIProcessorDefaultVersionCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -79,7 +83,7 @@ func resourceDocumentAIProcessorDefaultVersionCreate(d *schema.ResourceData, met
 		obj["processor"] = processorProp
 	}
 
-	url, err := replaceVars(d, config, "{{DocumentAIBasePath}}{{processor}}:setDefaultProcessorVersion")
+	url, err := ReplaceVars(d, config, "{{DocumentAIBasePath}}{{processor}}:setDefaultProcessorVersion")
 	if err != nil {
 		return err
 	}
@@ -93,17 +97,17 @@ func resourceDocumentAIProcessorDefaultVersionCreate(d *schema.ResourceData, met
 	}
 
 	if strings.Contains(url, "https://-") {
-		location := GetRegionFromRegionalSelfLink(url)
+		location := tpgresource.GetRegionFromRegionalSelfLink(url)
 		url = strings.TrimPrefix(url, "https://")
 		url = "https://" + location + url
 	}
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating ProcessorDefaultVersion: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{processor}}")
+	id, err := ReplaceVars(d, config, "{{processor}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -115,13 +119,13 @@ func resourceDocumentAIProcessorDefaultVersionCreate(d *schema.ResourceData, met
 }
 
 func resourceDocumentAIProcessorDefaultVersionRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DocumentAIBasePath}}{{processor}}")
+	url, err := ReplaceVars(d, config, "{{DocumentAIBasePath}}{{processor}}")
 	if err != nil {
 		return err
 	}
@@ -134,13 +138,13 @@ func resourceDocumentAIProcessorDefaultVersionRead(d *schema.ResourceData, meta 
 	}
 
 	if strings.Contains(url, "https://-") {
-		location := GetRegionFromRegionalSelfLink(url)
+		location := tpgresource.GetRegionFromRegionalSelfLink(url)
 		url = strings.TrimPrefix(url, "https://")
 		url = "https://" + location + url
 	}
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DocumentAIProcessorDefaultVersion %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DocumentAIProcessorDefaultVersion %q", d.Id()))
 	}
 
 	if err := d.Set("version", flattenDocumentAIProcessorDefaultVersionVersion(res["defaultProcessorVersion"], d, config)); err != nil {
@@ -160,15 +164,15 @@ func resourceDocumentAIProcessorDefaultVersionDelete(d *schema.ResourceData, met
 }
 
 func resourceDocumentAIProcessorDefaultVersionImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<processor>.+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{processor}}")
+	id, err := ReplaceVars(d, config, "{{processor}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -177,14 +181,14 @@ func resourceDocumentAIProcessorDefaultVersionImport(d *schema.ResourceData, met
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDocumentAIProcessorDefaultVersionVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDocumentAIProcessorDefaultVersionVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDocumentAIProcessorDefaultVersionVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDocumentAIProcessorDefaultVersionVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDocumentAIProcessorDefaultVersionProcessor(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDocumentAIProcessorDefaultVersionProcessor(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

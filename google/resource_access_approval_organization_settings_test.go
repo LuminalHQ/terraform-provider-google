@@ -1,6 +1,7 @@
 package google
 
 import (
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"log"
 	"strings"
 	"testing"
@@ -32,16 +33,16 @@ func TestAccAccessApprovalSettings(t *testing.T) {
 
 func testAccAccessApprovalOrganizationSettings(t *testing.T) {
 	context := map[string]interface{}{
-		"project":       getTestProjectFromEnv(),
-		"org_id":        getTestOrgFromEnv(t),
-		"location":      getTestRegionFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project":       acctest.GetTestProjectFromEnv(),
+		"org_id":        acctest.GetTestOrgFromEnv(t),
+		"location":      acctest.GetTestRegionFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckAccessApprovalOrganizationSettingsDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckAccessApprovalOrganizationSettingsDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAccessApprovalOrganizationSettings_full(context),

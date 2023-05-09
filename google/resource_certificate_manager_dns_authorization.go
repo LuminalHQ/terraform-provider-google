@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceCertificateManagerDnsAuthorization() *schema.Resource {
+func ResourceCertificateManagerDnsAuthorization() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCertificateManagerDnsAuthorizationCreate,
 		Read:   resourceCertificateManagerDnsAuthorizationRead,
@@ -108,8 +110,8 @@ E.g. '_acme-challenge.example.com'.`,
 }
 
 func resourceCertificateManagerDnsAuthorizationCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -134,7 +136,7 @@ func resourceCertificateManagerDnsAuthorizationCreate(d *schema.ResourceData, me
 		obj["domain"] = domainProp
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations?dnsAuthorizationId={{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations?dnsAuthorizationId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -153,19 +155,19 @@ func resourceCertificateManagerDnsAuthorizationCreate(d *schema.ResourceData, me
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating DnsAuthorization: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Creating DnsAuthorization", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -181,13 +183,13 @@ func resourceCertificateManagerDnsAuthorizationCreate(d *schema.ResourceData, me
 }
 
 func resourceCertificateManagerDnsAuthorizationRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -205,9 +207,9 @@ func resourceCertificateManagerDnsAuthorizationRead(d *schema.ResourceData, meta
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CertificateManagerDnsAuthorization %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CertificateManagerDnsAuthorization %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -231,8 +233,8 @@ func resourceCertificateManagerDnsAuthorizationRead(d *schema.ResourceData, meta
 }
 
 func resourceCertificateManagerDnsAuthorizationUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -259,7 +261,7 @@ func resourceCertificateManagerDnsAuthorizationUpdate(d *schema.ResourceData, me
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -274,9 +276,9 @@ func resourceCertificateManagerDnsAuthorizationUpdate(d *schema.ResourceData, me
 	if d.HasChange("labels") {
 		updateMask = append(updateMask, "labels")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -286,7 +288,7 @@ func resourceCertificateManagerDnsAuthorizationUpdate(d *schema.ResourceData, me
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating DnsAuthorization %q: %s", d.Id(), err)
@@ -294,7 +296,7 @@ func resourceCertificateManagerDnsAuthorizationUpdate(d *schema.ResourceData, me
 		log.Printf("[DEBUG] Finished updating DnsAuthorization %q: %#v", d.Id(), res)
 	}
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Updating DnsAuthorization", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -306,8 +308,8 @@ func resourceCertificateManagerDnsAuthorizationUpdate(d *schema.ResourceData, me
 }
 
 func resourceCertificateManagerDnsAuthorizationDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -320,7 +322,7 @@ func resourceCertificateManagerDnsAuthorizationDelete(d *schema.ResourceData, me
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CertificateManagerBasePath}}projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -333,12 +335,12 @@ func resourceCertificateManagerDnsAuthorizationDelete(d *schema.ResourceData, me
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "DnsAuthorization")
+		return transport_tpg.HandleNotFoundError(err, d, "DnsAuthorization")
 	}
 
-	err = certificateManagerOperationWaitTime(
+	err = CertificateManagerOperationWaitTime(
 		config, res, project, "Deleting DnsAuthorization", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -351,8 +353,8 @@ func resourceCertificateManagerDnsAuthorizationDelete(d *schema.ResourceData, me
 }
 
 func resourceCertificateManagerDnsAuthorizationImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/dnsAuthorizations/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -361,7 +363,7 @@ func resourceCertificateManagerDnsAuthorizationImport(d *schema.ResourceData, me
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/dnsAuthorizations/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -370,19 +372,19 @@ func resourceCertificateManagerDnsAuthorizationImport(d *schema.ResourceData, me
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCertificateManagerDnsAuthorizationDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerDnsAuthorizationLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerDnsAuthorizationDomain(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationDomain(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerDnsAuthorizationDnsResourceRecord(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationDnsResourceRecord(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -399,23 +401,23 @@ func flattenCertificateManagerDnsAuthorizationDnsResourceRecord(v interface{}, d
 		flattenCertificateManagerDnsAuthorizationDnsResourceRecordData(original["data"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCertificateManagerDnsAuthorizationDnsResourceRecordName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationDnsResourceRecordName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerDnsAuthorizationDnsResourceRecordType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationDnsResourceRecordType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCertificateManagerDnsAuthorizationDnsResourceRecordData(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCertificateManagerDnsAuthorizationDnsResourceRecordData(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCertificateManagerDnsAuthorizationDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerDnsAuthorizationDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCertificateManagerDnsAuthorizationLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCertificateManagerDnsAuthorizationLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -426,6 +428,6 @@ func expandCertificateManagerDnsAuthorizationLabels(v interface{}, d TerraformRe
 	return m, nil
 }
 
-func expandCertificateManagerDnsAuthorizationDomain(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCertificateManagerDnsAuthorizationDomain(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

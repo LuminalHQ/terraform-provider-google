@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Identity-Aware Proxy"
-page_title: "Google: google_iap_brand"
 description: |-
   OAuth brand data.
 ---
@@ -25,9 +24,9 @@ programmatically via API. To convert it into an external brands
 please use the GCP Console.
 
 
-~> **Note:** Brands can only be created once for a Google Cloud 
-project and the underlying Google API doesn't not support DELETE or PATCH methods. 
-Destroying a Terraform-managed Brand will remove it from state 
+~> **Note:** Brands can only be created once for a Google Cloud
+project and the underlying Google API doesn't not support DELETE or PATCH methods.
+Destroying a Terraform-managed Brand will remove it from state
 but *will not delete it from Google Cloud.*
 
 
@@ -42,8 +41,8 @@ To get more information about Brand, see:
 
 ```hcl
 resource "google_project" "project" {
-  project_id = "tf-test%{random_suffix}"
-  name       = "tf-test%{random_suffix}"
+  project_id = "my-project"
+  name       = "my-project"
   org_id     = "123456789"
 }
 
@@ -94,16 +93,16 @@ In addition to the arguments listed above, the following computed attributes are
   Whether the brand is only intended for usage inside the GSuite organization only.
 
 * `name` -
-  Output only. Identifier of the brand, in the format
-  `projects/{project_number}/brands/{brand_id}`. NOTE: The brand
-  identification corresponds to the project number as only one
-  brand per project can be created.
+  Output only. Identifier of the brand, in the format `projects/{project_number}/brands/{brand_id}`
+  NOTE: The name can also be expressed as `projects/{project_id}/brands/{brand_id}`, e.g. when importing.
+  NOTE: The brand identification corresponds to the project number as only one
+  brand can be created per project.
 
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `delete` - Default is 20 minutes.
@@ -114,9 +113,11 @@ This resource provides the following
 Brand can be imported using any of these accepted formats:
 
 ```
-$ terraform import google_iap_brand.default {{name}}
+$ terraform import google_iap_brand.default projects/{{project_id}}/brands/{{brand_id}}
+$ terraform import google_iap_brand.default projects/{{project_number}}/brands/{{brand_id}}
+$ terraform import google_iap_brand.default {{project_number}}/{{brand_id}}
 ```
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

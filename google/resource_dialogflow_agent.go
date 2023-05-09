@@ -22,9 +22,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceDialogflowAgent() *schema.Resource {
+func ResourceDialogflowAgent() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDialogflowAgentCreate,
 		Read:   resourceDialogflowAgentRead,
@@ -46,7 +49,7 @@ func resourceDialogflowAgent() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
-				Description: `The default language of the agent as a language tag. [See Language Support](https://cloud.google.com/dialogflow/docs/reference/language) 
+				Description: `The default language of the agent as a language tag. [See Language Support](https://cloud.google.com/dialogflow/docs/reference/language)
 for a list of the currently supported language codes. This field cannot be updated after creation.`,
 			},
 			"display_name": {
@@ -64,9 +67,9 @@ Europe/Paris.`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"API_VERSION_V1", "API_VERSION_V2", "API_VERSION_V2_BETA_1", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"API_VERSION_V1", "API_VERSION_V2", "API_VERSION_V2_BETA_1", ""}),
 				Description: `API version displayed in Dialogflow console. If not specified, V2 API is assumed. Clients are free to query
-different service endpoints for different API versions. However, bots connectors and webhook calls will follow 
+different service endpoints for different API versions. However, bots connectors and webhook calls will follow
 the specified API version.
 * API_VERSION_V1: Legacy V1 API.
 * API_VERSION_V2: V2 API.
@@ -84,8 +87,8 @@ from the API will be shown in the [avatarUriBackend] field.`,
 				Optional: true,
 				Description: `To filter out false positive results and still get variety in matched natural language inputs for your agent,
 you can tune the machine learning classification threshold. If the returned score value is less than the threshold
-value, then a fallback intent will be triggered or, if there are no fallback intents defined, no intent will be 
-triggered. The score values range from 0.0 (completely uncertain) to 1.0 (completely certain). If set to 0.0, the 
+value, then a fallback intent will be triggered or, if there are no fallback intents defined, no intent will be
+triggered. The score values range from 0.0 (completely uncertain) to 1.0 (completely certain). If set to 0.0, the
 default of 0.3 is used.`,
 			},
 			"description": {
@@ -103,7 +106,7 @@ default of 0.3 is used.`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"MATCH_MODE_HYBRID", "MATCH_MODE_ML_ONLY", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"MATCH_MODE_HYBRID", "MATCH_MODE_ML_ONLY", ""}),
 				Description: `Determines how intents are detected from user queries.
 * MATCH_MODE_HYBRID: Best for agents with a small number of examples in intents and/or wide use of templates
 syntax and composite entities.
@@ -121,12 +124,12 @@ using @sys.any or very large developer entities. Possible values: ["MATCH_MODE_H
 			"tier": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"TIER_STANDARD", "TIER_ENTERPRISE", "TIER_ENTERPRISE_PLUS", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"TIER_STANDARD", "TIER_ENTERPRISE", "TIER_ENTERPRISE_PLUS", ""}),
 				Description: `The agent tier. If not specified, TIER_STANDARD is assumed.
 * TIER_STANDARD: Standard tier.
 * TIER_ENTERPRISE: Enterprise tier (Essentials).
 * TIER_ENTERPRISE_PLUS: Enterprise tier (Plus).
-NOTE: Due to consistency issues, the provider will not read this field from the API. Drift is possible between 
+NOTE: Due to consistency issues, the provider will not read this field from the API. Drift is possible between
 the Terraform state and Dialogflow if the agent tier is changed outside of Terraform. Possible values: ["TIER_STANDARD", "TIER_ENTERPRISE", "TIER_ENTERPRISE_PLUS"]`,
 			},
 			"avatar_uri_backend": {
@@ -147,8 +150,8 @@ the [avatarUri] field can be used.`,
 }
 
 func resourceDialogflowAgentCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -221,7 +224,7 @@ func resourceDialogflowAgentCreate(d *schema.ResourceData, meta interface{}) err
 		obj["tier"] = tierProp
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
 	if err != nil {
 		return err
 	}
@@ -240,13 +243,13 @@ func resourceDialogflowAgentCreate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Agent: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{project}}")
+	id, err := ReplaceVars(d, config, "{{project}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -258,13 +261,13 @@ func resourceDialogflowAgentCreate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceDialogflowAgentRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
 	if err != nil {
 		return err
 	}
@@ -282,9 +285,9 @@ func resourceDialogflowAgentRead(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("DialogflowAgent %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("DialogflowAgent %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -326,8 +329,8 @@ func resourceDialogflowAgentRead(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceDialogflowAgentUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -408,7 +411,7 @@ func resourceDialogflowAgentUpdate(d *schema.ResourceData, meta interface{}) err
 		obj["tier"] = tierProp
 	}
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
 	if err != nil {
 		return err
 	}
@@ -420,7 +423,7 @@ func resourceDialogflowAgentUpdate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Agent %q: %s", d.Id(), err)
@@ -432,8 +435,8 @@ func resourceDialogflowAgentUpdate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceDialogflowAgentDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -446,7 +449,7 @@ func resourceDialogflowAgentDelete(d *schema.ResourceData, meta interface{}) err
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
+	url, err := ReplaceVars(d, config, "{{DialogflowBasePath}}projects/{{project}}/agent")
 	if err != nil {
 		return err
 	}
@@ -459,9 +462,9 @@ func resourceDialogflowAgentDelete(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Agent")
+		return transport_tpg.HandleNotFoundError(err, d, "Agent")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Agent %q: %#v", d.Id(), res)
@@ -469,15 +472,15 @@ func resourceDialogflowAgentDelete(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceDialogflowAgentImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<project>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{project}}")
+	id, err := ReplaceVars(d, config, "{{project}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -486,86 +489,86 @@ func resourceDialogflowAgentImport(d *schema.ResourceData, meta interface{}) ([]
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenDialogflowAgentDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentDefaultLanguageCode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentDefaultLanguageCode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentSupportedLanguageCodes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentSupportedLanguageCodes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentTimeZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentTimeZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentAvatarUriBackend(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentAvatarUriBackend(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentEnableLogging(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentEnableLogging(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentMatchMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentMatchMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentClassificationThreshold(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentClassificationThreshold(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenDialogflowAgentApiVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenDialogflowAgentApiVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandDialogflowAgentDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentDefaultLanguageCode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentDefaultLanguageCode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentSupportedLanguageCodes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentSupportedLanguageCodes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentTimeZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentTimeZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentAvatarUri(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentAvatarUri(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentEnableLogging(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentEnableLogging(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentMatchMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentMatchMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentClassificationThreshold(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentClassificationThreshold(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentApiVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentApiVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandDialogflowAgentTier(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandDialogflowAgentTier(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

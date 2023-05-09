@@ -5,12 +5,15 @@ import (
 	"strings"
 	"time"
 
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"google.golang.org/api/iam/v1"
 )
 
-func resourceGoogleServiceAccount() *schema.Resource {
+func ResourceGoogleServiceAccount() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceGoogleServiceAccountCreate,
 		Read:   resourceGoogleServiceAccountRead,
@@ -42,7 +45,7 @@ func resourceGoogleServiceAccount() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateRFC1035Name(6, 30),
+				ValidateFunc: verify.ValidateRFC1035Name(6, 30),
 				Description:  `The account id that is used to generate the service account email address and a stable unique id. It is unique within a project, must be 6-30 characters long, and match the regular expression [a-z]([-a-z0-9]*[a-z0-9]) to comply with RFC1035. Changing this forces a new service account to be created.`,
 			},
 			"display_name": {
@@ -69,14 +72,19 @@ func resourceGoogleServiceAccount() *schema.Resource {
 				ForceNew:    true,
 				Description: `The ID of the project that the service account will be created in. Defaults to the provider project configuration.`,
 			},
+			"member": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: `The Identity of the service account in the form 'serviceAccount:{email}'. This value is often used to refer to the service account in order to grant IAM permissions.`,
+			},
 		},
 		UseJSONNumber: true,
 	}
 }
 
 func resourceGoogleServiceAccountCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -106,10 +114,10 @@ func resourceGoogleServiceAccountCreate(d *schema.ResourceData, meta interface{}
 
 	d.SetId(sa.Name)
 
-	err = retryTimeDuration(func() (operr error) {
+	err = transport_tpg.RetryTimeDuration(func() (operr error) {
 		_, saerr := config.NewIamClient(userAgent).Projects.ServiceAccounts.Get(d.Id()).Do()
 		return saerr
-	}, d.Timeout(schema.TimeoutCreate), isNotFoundRetryableError("service account creation"))
+	}, d.Timeout(schema.TimeoutCreate), transport_tpg.IsNotFoundRetryableError("service account creation"))
 
 	if err != nil {
 		return fmt.Errorf("Error reading service account after creation: %s", err)
@@ -128,8 +136,8 @@ func resourceGoogleServiceAccountCreate(d *schema.ResourceData, meta interface{}
 
 func resourceServiceAccountPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		config := meta.(*transport_tpg.Config)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
@@ -145,8 +153,8 @@ func resourceServiceAccountPollRead(d *schema.ResourceData, meta interface{}) Po
 }
 
 func resourceGoogleServiceAccountRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -154,7 +162,7 @@ func resourceGoogleServiceAccountRead(d *schema.ResourceData, meta interface{}) 
 	// Confirm the service account exists
 	sa, err := config.NewIamClient(userAgent).Projects.ServiceAccounts.Get(d.Id()).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Service Account %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Service Account %q", d.Id()))
 	}
 
 	if err := d.Set("email", sa.Email); err != nil {
@@ -181,12 +189,15 @@ func resourceGoogleServiceAccountRead(d *schema.ResourceData, meta interface{}) 
 	if err := d.Set("disabled", sa.Disabled); err != nil {
 		return fmt.Errorf("Error setting disabled: %s", err)
 	}
+	if err := d.Set("member", "serviceAccount:"+sa.Email); err != nil {
+		return fmt.Errorf("Error setting member: %s", err)
+	}
 	return nil
 }
 
 func resourceGoogleServiceAccountDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -200,8 +211,8 @@ func resourceGoogleServiceAccountDelete(d *schema.ResourceData, meta interface{}
 }
 
 func resourceGoogleServiceAccountUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -262,8 +273,8 @@ func resourceGoogleServiceAccountUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceGoogleServiceAccountImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/serviceAccounts/(?P<email>[^/]+)",
 		"(?P<project>[^/]+)/(?P<email>[^/]+)",
 		"(?P<email>[^/]+)"}, d, config); err != nil {
@@ -271,7 +282,7 @@ func resourceGoogleServiceAccountImport(d *schema.ResourceData, meta interface{}
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/serviceAccounts/{{email}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/serviceAccounts/{{email}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}

@@ -5,9 +5,11 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func dataSourceGoogleSQLCaCerts() *schema.Resource {
+func DataSourceGoogleSQLCaCerts() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceGoogleSQLCaCertsRead,
 
@@ -15,7 +17,7 @@ func dataSourceGoogleSQLCaCerts() *schema.Resource {
 			"instance": {
 				Type:             schema.TypeString,
 				Required:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -60,8 +62,8 @@ func dataSourceGoogleSQLCaCerts() *schema.Resource {
 }
 
 func dataSourceGoogleSQLCaCertsRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}

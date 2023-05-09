@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_autoscaler"
 description: |-
   Represents an Autoscaler resource.
 ---
@@ -119,6 +118,7 @@ data "google_compute_image" "debian_9" {
 provider "google-beta" {
   region = "us-central1"
   zone   = "us-central1-a"
+  
 }
 ```
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
@@ -252,7 +252,7 @@ The following arguments are supported:
   (Optional)
   Defines operating mode for this policy.
   Default value is `ON`.
-  Possible values are `OFF`, `ONLY_UP`, and `ON`.
+  Possible values are: `OFF`, `ONLY_UP`, `ON`.
 
 * `scale_down_control` -
   (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
@@ -401,7 +401,7 @@ The following arguments are supported:
   (Optional)
   Defines how target utilization value is expressed for a
   Stackdriver Monitoring metric.
-  Possible values are `GAUGE`, `DELTA_PER_SECOND`, and `DELTA_PER_MINUTE`.
+  Possible values are: `GAUGE`, `DELTA_PER_SECOND`, `DELTA_PER_MINUTE`.
 
 * `filter` -
   (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
@@ -498,7 +498,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -518,4 +518,4 @@ $ terraform import google_compute_autoscaler.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

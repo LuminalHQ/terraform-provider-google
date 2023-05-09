@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceResourceManagerLien() *schema.Resource {
+func ResourceResourceManagerLien() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceResourceManagerLienCreate,
 		Read:   resourceResourceManagerLienRead,
@@ -93,8 +96,8 @@ e.g. ['resourcemanager.projects.delete']`,
 }
 
 func resourceResourceManagerLienCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -125,7 +128,7 @@ func resourceResourceManagerLienCreate(d *schema.ResourceData, meta interface{})
 		obj["restrictions"] = restrictionsProp
 	}
 
-	url, err := replaceVars(d, config, "{{ResourceManagerBasePath}}liens")
+	url, err := ReplaceVars(d, config, "{{ResourceManagerBasePath}}liens")
 	if err != nil {
 		return err
 	}
@@ -138,7 +141,7 @@ func resourceResourceManagerLienCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Lien: %s", err)
 	}
@@ -147,7 +150,7 @@ func resourceResourceManagerLienCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -171,13 +174,13 @@ func resourceResourceManagerLienCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceResourceManagerLienRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ResourceManagerBasePath}}liens?parent={{parent}}")
+	url, err := ReplaceVars(d, config, "{{ResourceManagerBasePath}}liens?parent={{parent}}")
 	if err != nil {
 		return err
 	}
@@ -189,9 +192,9 @@ func resourceResourceManagerLienRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ResourceManagerLien %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ResourceManagerLien %q", d.Id()))
 	}
 
 	res, err = flattenNestedResourceManagerLien(d, meta, res)
@@ -241,15 +244,15 @@ func resourceResourceManagerLienRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceResourceManagerLienDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{ResourceManagerBasePath}}liens?parent={{parent}}")
+	url, err := ReplaceVars(d, config, "{{ResourceManagerBasePath}}liens?parent={{parent}}")
 	if err != nil {
 		return err
 	}
@@ -259,7 +262,7 @@ func resourceResourceManagerLienDelete(d *schema.ResourceData, meta interface{})
 	// in theory, we should find a way to disable the default URL and not construct
 	// both, but that's a problem for another day. Today, we cheat.
 	log.Printf("[DEBUG] replacing URL %q with a custom delete URL", url)
-	url, err = replaceVars(d, config, "{{ResourceManagerBasePath}}liens/{{name}}")
+	url, err = ReplaceVars(d, config, "{{ResourceManagerBasePath}}liens/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -270,9 +273,9 @@ func resourceResourceManagerLienDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Lien")
+		return transport_tpg.HandleNotFoundError(err, d, "Lien")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Lien %q: %#v", d.Id(), res)
@@ -280,21 +283,21 @@ func resourceResourceManagerLienDelete(d *schema.ResourceData, meta interface{})
 }
 
 func resourceResourceManagerLienImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<parent>[^/]+)/(?P<name>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	parent, err := replaceVars(d, config, "projects/{{parent}}")
+	parent, err := ReplaceVars(d, config, "projects/{{parent}}")
 	if err != nil {
 		return nil, err
 	}
@@ -305,46 +308,46 @@ func resourceResourceManagerLienImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNestedResourceManagerLienName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedResourceManagerLienName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenNestedResourceManagerLienReason(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedResourceManagerLienReason(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedResourceManagerLienOrigin(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedResourceManagerLienOrigin(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedResourceManagerLienCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedResourceManagerLienCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedResourceManagerLienParent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedResourceManagerLienParent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNestedResourceManagerLienRestrictions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNestedResourceManagerLienRestrictions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandNestedResourceManagerLienReason(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedResourceManagerLienReason(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedResourceManagerLienOrigin(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedResourceManagerLienOrigin(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedResourceManagerLienParent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedResourceManagerLienParent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNestedResourceManagerLienRestrictions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNestedResourceManagerLienRestrictions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
@@ -376,7 +379,7 @@ func flattenNestedResourceManagerLien(d *schema.ResourceData, meta interface{}, 
 
 func resourceResourceManagerLienFindNestedObjectInList(d *schema.ResourceData, meta interface{}, items []interface{}) (index int, item map[string]interface{}, err error) {
 	expectedName := d.Get("name")
-	expectedFlattenedName := flattenNestedResourceManagerLienName(expectedName, d, meta.(*Config))
+	expectedFlattenedName := flattenNestedResourceManagerLienName(expectedName, d, meta.(*transport_tpg.Config))
 
 	// Search list for this resource.
 	for idx, itemRaw := range items {
@@ -391,7 +394,7 @@ func resourceResourceManagerLienFindNestedObjectInList(d *schema.ResourceData, m
 			return -1, nil, err
 		}
 
-		itemName := flattenNestedResourceManagerLienName(item["name"], d, meta.(*Config))
+		itemName := flattenNestedResourceManagerLienName(item["name"], d, meta.(*transport_tpg.Config))
 		// isEmptyValue check so that if one is nil and the other is "", that's considered a match
 		if !(isEmptyValue(reflect.ValueOf(itemName)) && isEmptyValue(reflect.ValueOf(expectedFlattenedName))) && !reflect.DeepEqual(itemName, expectedFlattenedName) {
 			log.Printf("[DEBUG] Skipping item with name= %#v, looking for %#v)", itemName, expectedFlattenedName)
@@ -415,9 +418,9 @@ func resourceResourceManagerLienDecoder(d *schema.ResourceData, meta interface{}
 	// 1) if the new or old values contain '/', the prefix of that is 'projects'.
 	// 2) if either is non-numeric, a project with that ID exists.
 	// 3) the project IDs represented by both the new and old values are the same.
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +442,7 @@ func resourceResourceManagerLienDecoder(d *schema.ResourceData, meta interface{}
 	// If it's a project ID
 	var oldProjId int64
 	var newProjId int64
-	if oldVal, err := stringToFixed64(old); err == nil {
+	if oldVal, err := StringToFixed64(old); err == nil {
 		log.Printf("[DEBUG] The old value was a real number: %d", oldVal)
 		oldProjId = oldVal
 	} else {
@@ -449,7 +452,7 @@ func resourceResourceManagerLienDecoder(d *schema.ResourceData, meta interface{}
 		}
 		oldProjId = pOld.ProjectNumber
 	}
-	if newVal, err := stringToFixed64(new); err == nil {
+	if newVal, err := StringToFixed64(new); err == nil {
 		log.Printf("[DEBUG] The new value was a real number: %d", newVal)
 		newProjId = newVal
 	} else {

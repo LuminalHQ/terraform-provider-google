@@ -1,7 +1,6 @@
 package google
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -157,9 +156,9 @@ func TestIamMergeBindings(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		got := mergeBindings(tc.input)
+		got := MergeBindings(tc.input)
 		if !compareBindings(got, tc.expect) {
-			t.Errorf("Unexpected value for mergeBindings(%s).\nActual: %s\nExpected: %s\n",
+			t.Errorf("Unexpected value for MergeBindings(%s).\nActual: %s\nExpected: %s\n",
 				debugPrintBindings(tc.input), debugPrintBindings(got), debugPrintBindings(tc.expect))
 		}
 	}
@@ -1104,16 +1103,4 @@ func TestIamListFromIamAuditConfigsMap(t *testing.T) {
 				tc.input, debugPrintAuditConfigs(got), debugPrintAuditConfigs(tc.expect))
 		}
 	}
-}
-
-// Util to deref and print auditConfigs
-func debugPrintAuditConfigs(bs []*cloudresourcemanager.AuditConfig) string {
-	v, _ := json.MarshalIndent(bs, "", "\t")
-	return string(v)
-}
-
-// Util to deref and print bindings
-func debugPrintBindings(bs []*cloudresourcemanager.Binding) string {
-	v, _ := json.MarshalIndent(bs, "", "\t")
-	return string(v)
 }

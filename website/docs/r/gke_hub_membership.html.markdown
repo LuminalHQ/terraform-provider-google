@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "GKEHub"
-page_title: "Google: google_gke_hub_membership"
 description: |-
   Membership contains information about a member cluster.
 ---
@@ -138,7 +137,7 @@ The following arguments are supported:
 
 * `issuer` -
   (Required)
-  A JSON Web Token (JWT) issuer URI. `issuer` must start with `https://` and // be a valid 
+  A JSON Web Token (JWT) issuer URI. `issuer` must start with `https://` and // be a valid
   with length <2000 characters. For example: `https://container.googleapis.com/v1/projects/my-project/locations/us-west1/clusters/my-cluster` (must be `locations` rather than `zones`). If the cluster is provisioned with Terraform, this is `"https://container.googleapis.com/v1/${google_container_cluster.my-cluster.id}"`.
 
 ## Attributes Reference
@@ -154,7 +153,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -173,4 +172,4 @@ $ terraform import google_gke_hub_membership.default {{membership_id}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

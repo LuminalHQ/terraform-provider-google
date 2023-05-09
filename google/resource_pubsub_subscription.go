@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func comparePubsubSubscriptionExpirationPolicy(_, old, new string, _ *schema.ResourceData) bool {
@@ -37,7 +40,7 @@ func comparePubsubSubscriptionExpirationPolicy(_, old, new string, _ *schema.Res
 	return trimmedNew == trimmedOld
 }
 
-func resourcePubsubSubscription() *schema.Resource {
+func ResourcePubsubSubscription() *schema.Resource {
 	return &schema.Resource{
 		Create: resourcePubsubSubscriptionCreate,
 		Read:   resourcePubsubSubscriptionRead,
@@ -65,7 +68,7 @@ func resourcePubsubSubscription() *schema.Resource {
 				Type:             schema.TypeString,
 				Required:         true,
 				ForceNew:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				Description:      `A reference to a Topic resource.`,
 			},
 			"ack_deadline_seconds": {
@@ -147,7 +150,7 @@ permission to Acknowledge() messages on this subscription.`,
 Format is 'projects/{project}/topics/{topic}'.
 
 The Cloud Pub/Sub service account associated with the enclosing subscription's
-parent project (i.e., 
+parent project (i.e.,
 service-{project_number}@gcp-sa-pubsub.iam.gserviceaccount.com) must have
 permission to Publish() to this topic.
 
@@ -161,7 +164,7 @@ since messages published to a topic with no subscriptions are lost.`,
 							Description: `The maximum number of delivery attempts for any message. The value must be
 between 5 and 100.
 
-The number of delivery attempts is defined as 1 + (the sum of number of 
+The number of delivery attempts is defined as 1 + (the sum of number of
 NACKs and number of times the acknowledgement deadline has been exceeded for the message).
 
 A NACK is any call to ModifyAckDeadline with a 0 deadline. Note that
@@ -177,7 +180,6 @@ If this parameter is 0, a default value of 5 is used.`,
 			"enable_exactly_once_delivery": {
 				Type:     schema.TypeBool,
 				Optional: true,
-				ForceNew: true,
 				Description: `If 'true', Pub/Sub provides the following guarantees for the delivery
 of a message with a given value of messageId on this Subscriptions':
 
@@ -216,7 +218,7 @@ is 1 day.`,
 							DiffSuppressFunc: comparePubsubSubscriptionExpirationPolicy,
 							Description: `Specifies the "time-to-live" duration for an associated resource. The
 resource expires if it is not active for a period of ttl.
-If ttl is not set, the associated resource never expires.
+If ttl is set to "", the associated resource never expires.
 A duration in seconds with up to nine fractional digits, terminated by 's'.
 Example - "3.5s".`,
 						},
@@ -227,9 +229,9 @@ Example - "3.5s".`,
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
-				Description: `The subscription only delivers the messages that match the filter. 
+				Description: `The subscription only delivers the messages that match the filter.
 Pub/Sub automatically acknowledges the messages that don't match the filter. You can filter messages
-by their attributes. The maximum length of a filter is 256 bytes. After creating the subscription, 
+by their attributes. The maximum length of a filter is 256 bytes. After creating the subscription,
 you can't modify the filter.`,
 			},
 			"labels": {
@@ -271,7 +273,7 @@ For example, a Webhook endpoint might use
 						"attributes": {
 							Type:             schema.TypeMap,
 							Optional:         true,
-							DiffSuppressFunc: ignoreMissingKeyInMap("x-goog-version"),
+							DiffSuppressFunc: tpgresource.IgnoreMissingKeyInMap("x-goog-version"),
 							Description: `Endpoint configuration attributes.
 
 Every endpoint has a set of API supported attributes that can
@@ -343,7 +345,7 @@ messageRetentionDuration window.`,
 				Optional: true,
 				Description: `A policy that specifies how Pub/Sub retries message delivery for this subscription.
 
-If not set, the default retry policy is applied. This generally implies that messages will be retried as soon as possible for healthy subscribers. 
+If not set, the default retry policy is applied. This generally implies that messages will be retried as soon as possible for healthy subscribers.
 RetryPolicy will be triggered on NACKs or acknowledgement deadline exceeded events for a given message`,
 				MaxItems: 1,
 				Elem: &schema.Resource{
@@ -352,15 +354,15 @@ RetryPolicy will be triggered on NACKs or acknowledgement deadline exceeded even
 							Type:             schema.TypeString,
 							Computed:         true,
 							Optional:         true,
-							DiffSuppressFunc: durationDiffSuppress,
-							Description: `The maximum delay between consecutive deliveries of a given message. Value should be between 0 and 600 seconds. Defaults to 600 seconds. 
+							DiffSuppressFunc: tpgresource.DurationDiffSuppress,
+							Description: `The maximum delay between consecutive deliveries of a given message. Value should be between 0 and 600 seconds. Defaults to 600 seconds.
 A duration in seconds with up to nine fractional digits, terminated by 's'. Example: "3.5s".`,
 						},
 						"minimum_backoff": {
 							Type:             schema.TypeString,
 							Computed:         true,
 							Optional:         true,
-							DiffSuppressFunc: durationDiffSuppress,
+							DiffSuppressFunc: tpgresource.DurationDiffSuppress,
 							Description: `The minimum delay between consecutive deliveries of a given message. Value should be between 0 and 600 seconds. Defaults to 10 seconds.
 A duration in seconds with up to nine fractional digits, terminated by 's'. Example: "3.5s".`,
 						},
@@ -379,8 +381,8 @@ A duration in seconds with up to nine fractional digits, terminated by 's'. Exam
 }
 
 func resourcePubsubSubscriptionCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -476,7 +478,7 @@ func resourcePubsubSubscriptionCreate(d *schema.ResourceData, meta interface{}) 
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -495,13 +497,13 @@ func resourcePubsubSubscriptionCreate(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Subscription: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/subscriptions/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/subscriptions/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -519,9 +521,9 @@ func resourcePubsubSubscriptionCreate(d *schema.ResourceData, meta interface{}) 
 
 func resourcePubsubSubscriptionPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
+		url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -539,12 +541,12 @@ func resourcePubsubSubscriptionPollRead(d *schema.ResourceData, meta interface{}
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 		if err != nil {
 			return res, err
 		}
@@ -553,13 +555,13 @@ func resourcePubsubSubscriptionPollRead(d *schema.ResourceData, meta interface{}
 }
 
 func resourcePubsubSubscriptionRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -577,9 +579,9 @@ func resourcePubsubSubscriptionRead(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("PubsubSubscription %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("PubsubSubscription %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -633,8 +635,8 @@ func resourcePubsubSubscriptionRead(d *schema.ResourceData, meta interface{}) er
 }
 
 func resourcePubsubSubscriptionUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -702,13 +704,19 @@ func resourcePubsubSubscriptionUpdate(d *schema.ResourceData, meta interface{}) 
 	} else if v, ok := d.GetOkExists("retry_policy"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, retryPolicyProp)) {
 		obj["retryPolicy"] = retryPolicyProp
 	}
+	enableExactlyOnceDeliveryProp, err := expandPubsubSubscriptionEnableExactlyOnceDelivery(d.Get("enable_exactly_once_delivery"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("enable_exactly_once_delivery"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, enableExactlyOnceDeliveryProp)) {
+		obj["enableExactlyOnceDelivery"] = enableExactlyOnceDeliveryProp
+	}
 
 	obj, err = resourcePubsubSubscriptionUpdateEncoder(d, meta, obj)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -751,9 +759,13 @@ func resourcePubsubSubscriptionUpdate(d *schema.ResourceData, meta interface{}) 
 	if d.HasChange("retry_policy") {
 		updateMask = append(updateMask, "retryPolicy")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+
+	if d.HasChange("enable_exactly_once_delivery") {
+		updateMask = append(updateMask, "enableExactlyOnceDelivery")
+	}
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -763,7 +775,7 @@ func resourcePubsubSubscriptionUpdate(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Subscription %q: %s", d.Id(), err)
@@ -775,8 +787,8 @@ func resourcePubsubSubscriptionUpdate(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourcePubsubSubscriptionDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -789,7 +801,7 @@ func resourcePubsubSubscriptionDelete(d *schema.ResourceData, meta interface{}) 
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
+	url, err := ReplaceVars(d, config, "{{PubsubBasePath}}projects/{{project}}/subscriptions/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -802,9 +814,9 @@ func resourcePubsubSubscriptionDelete(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Subscription")
+		return transport_tpg.HandleNotFoundError(err, d, "Subscription")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Subscription %q: %#v", d.Id(), res)
@@ -812,8 +824,8 @@ func resourcePubsubSubscriptionDelete(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourcePubsubSubscriptionImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/subscriptions/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -822,7 +834,7 @@ func resourcePubsubSubscriptionImport(d *schema.ResourceData, meta interface{}) 
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/subscriptions/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/subscriptions/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -831,25 +843,25 @@ func resourcePubsubSubscriptionImport(d *schema.ResourceData, meta interface{}) 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenPubsubSubscriptionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenPubsubSubscriptionTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func flattenPubsubSubscriptionLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionBigqueryConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionBigqueryConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -868,23 +880,23 @@ func flattenPubsubSubscriptionBigqueryConfig(v interface{}, d *schema.ResourceDa
 		flattenPubsubSubscriptionBigqueryConfigDropUnknownFields(original["dropUnknownFields"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubSubscriptionBigqueryConfigTable(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionBigqueryConfigTable(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionBigqueryConfigUseTopicSchema(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionBigqueryConfigUseTopicSchema(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionBigqueryConfigWriteMetadata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionBigqueryConfigWriteMetadata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionBigqueryConfigDropUnknownFields(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionBigqueryConfigDropUnknownFields(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionPushConfig(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionPushConfig(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -901,7 +913,7 @@ func flattenPubsubSubscriptionPushConfig(v interface{}, d *schema.ResourceData, 
 		flattenPubsubSubscriptionPushConfigAttributes(original["attributes"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubSubscriptionPushConfigOidcToken(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionPushConfigOidcToken(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -916,26 +928,26 @@ func flattenPubsubSubscriptionPushConfigOidcToken(v interface{}, d *schema.Resou
 		flattenPubsubSubscriptionPushConfigOidcTokenAudience(original["audience"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubSubscriptionPushConfigOidcTokenServiceAccountEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionPushConfigOidcTokenServiceAccountEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionPushConfigOidcTokenAudience(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionPushConfigOidcTokenAudience(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionPushConfigPushEndpoint(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionPushConfigPushEndpoint(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionPushConfigAttributes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionPushConfigAttributes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionAckDeadlineSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionAckDeadlineSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -949,15 +961,15 @@ func flattenPubsubSubscriptionAckDeadlineSeconds(v interface{}, d *schema.Resour
 	return v // let terraform core handle it otherwise
 }
 
-func flattenPubsubSubscriptionMessageRetentionDuration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionMessageRetentionDuration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionRetainAckedMessages(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionRetainAckedMessages(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionExpirationPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionExpirationPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -967,15 +979,15 @@ func flattenPubsubSubscriptionExpirationPolicy(v interface{}, d *schema.Resource
 		flattenPubsubSubscriptionExpirationPolicyTtl(original["ttl"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubSubscriptionExpirationPolicyTtl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionExpirationPolicyTtl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionFilter(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionFilter(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionDeadLetterPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionDeadLetterPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -990,14 +1002,14 @@ func flattenPubsubSubscriptionDeadLetterPolicy(v interface{}, d *schema.Resource
 		flattenPubsubSubscriptionDeadLetterPolicyMaxDeliveryAttempts(original["maxDeliveryAttempts"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubSubscriptionDeadLetterPolicyDeadLetterTopic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionDeadLetterPolicyDeadLetterTopic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionDeadLetterPolicyMaxDeliveryAttempts(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionDeadLetterPolicyMaxDeliveryAttempts(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1011,7 +1023,7 @@ func flattenPubsubSubscriptionDeadLetterPolicyMaxDeliveryAttempts(v interface{},
 	return v // let terraform core handle it otherwise
 }
 
-func flattenPubsubSubscriptionRetryPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionRetryPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1026,27 +1038,27 @@ func flattenPubsubSubscriptionRetryPolicy(v interface{}, d *schema.ResourceData,
 		flattenPubsubSubscriptionRetryPolicyMaximumBackoff(original["maximumBackoff"], d, config)
 	return []interface{}{transformed}
 }
-func flattenPubsubSubscriptionRetryPolicyMinimumBackoff(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionRetryPolicyMinimumBackoff(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionRetryPolicyMaximumBackoff(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionRetryPolicyMaximumBackoff(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionEnableMessageOrdering(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionEnableMessageOrdering(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenPubsubSubscriptionEnableExactlyOnceDelivery(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenPubsubSubscriptionEnableExactlyOnceDelivery(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandPubsubSubscriptionName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return replaceVars(d, config, "projects/{{project}}/subscriptions/{{name}}")
+func expandPubsubSubscriptionName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return ReplaceVars(d, config, "projects/{{project}}/subscriptions/{{name}}")
 }
 
-func expandPubsubSubscriptionTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	project, err := getProject(d, config)
 	if err != nil {
 		return "", err
@@ -1068,7 +1080,7 @@ func expandPubsubSubscriptionTopic(v interface{}, d TerraformResourceData, confi
 	}
 }
 
-func expandPubsubSubscriptionLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandPubsubSubscriptionLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1079,7 +1091,7 @@ func expandPubsubSubscriptionLabels(v interface{}, d TerraformResourceData, conf
 	return m, nil
 }
 
-func expandPubsubSubscriptionBigqueryConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionBigqueryConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1119,23 +1131,23 @@ func expandPubsubSubscriptionBigqueryConfig(v interface{}, d TerraformResourceDa
 	return transformed, nil
 }
 
-func expandPubsubSubscriptionBigqueryConfigTable(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionBigqueryConfigTable(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionBigqueryConfigUseTopicSchema(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionBigqueryConfigUseTopicSchema(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionBigqueryConfigWriteMetadata(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionBigqueryConfigWriteMetadata(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionBigqueryConfigDropUnknownFields(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionBigqueryConfigDropUnknownFields(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionPushConfig(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionPushConfig(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1168,7 +1180,7 @@ func expandPubsubSubscriptionPushConfig(v interface{}, d TerraformResourceData, 
 	return transformed, nil
 }
 
-func expandPubsubSubscriptionPushConfigOidcToken(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionPushConfigOidcToken(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1194,19 +1206,19 @@ func expandPubsubSubscriptionPushConfigOidcToken(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandPubsubSubscriptionPushConfigOidcTokenServiceAccountEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionPushConfigOidcTokenServiceAccountEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionPushConfigOidcTokenAudience(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionPushConfigOidcTokenAudience(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionPushConfigPushEndpoint(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionPushConfigPushEndpoint(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionPushConfigAttributes(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandPubsubSubscriptionPushConfigAttributes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1217,19 +1229,19 @@ func expandPubsubSubscriptionPushConfigAttributes(v interface{}, d TerraformReso
 	return m, nil
 }
 
-func expandPubsubSubscriptionAckDeadlineSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionAckDeadlineSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionMessageRetentionDuration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionMessageRetentionDuration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionRetainAckedMessages(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionRetainAckedMessages(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionExpirationPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionExpirationPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 {
 		return nil, nil
@@ -1253,15 +1265,15 @@ func expandPubsubSubscriptionExpirationPolicy(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandPubsubSubscriptionExpirationPolicyTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionExpirationPolicyTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionFilter(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionFilter(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionDeadLetterPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionDeadLetterPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1287,15 +1299,15 @@ func expandPubsubSubscriptionDeadLetterPolicy(v interface{}, d TerraformResource
 	return transformed, nil
 }
 
-func expandPubsubSubscriptionDeadLetterPolicyDeadLetterTopic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionDeadLetterPolicyDeadLetterTopic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionDeadLetterPolicyMaxDeliveryAttempts(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionDeadLetterPolicyMaxDeliveryAttempts(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionRetryPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionRetryPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1321,19 +1333,19 @@ func expandPubsubSubscriptionRetryPolicy(v interface{}, d TerraformResourceData,
 	return transformed, nil
 }
 
-func expandPubsubSubscriptionRetryPolicyMinimumBackoff(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionRetryPolicyMinimumBackoff(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionRetryPolicyMaximumBackoff(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionRetryPolicyMaximumBackoff(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionEnableMessageOrdering(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionEnableMessageOrdering(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandPubsubSubscriptionEnableExactlyOnceDelivery(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandPubsubSubscriptionEnableExactlyOnceDelivery(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

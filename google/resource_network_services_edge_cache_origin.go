@@ -23,9 +23,13 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceNetworkServicesEdgeCacheOrigin() *schema.Resource {
+func ResourceNetworkServicesEdgeCacheOrigin() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceNetworkServicesEdgeCacheOriginCreate,
 		Read:   resourceNetworkServicesEdgeCacheOriginRead,
@@ -61,6 +65,33 @@ This address will be used as the origin for cache requests - e.g. FQDN: media-ba
 When providing an FQDN (hostname), it must be publicly resolvable (e.g. via Google public DNS) and IP addresses must be publicly routable.  It must not contain a protocol (e.g., https://) and it must not contain any slashes.
 If a Cloud Storage bucket is provided, it must be in the canonical "gs://bucketname" format. Other forms, such as "storage.googleapis.com", will be rejected.`,
 			},
+			"aws_v4_authentication": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: `Enable AWS Signature Version 4 origin authentication.`,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"access_key_id": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: `The access key ID your origin uses to identify the key.`,
+						},
+						"origin_region": {
+							Type:        schema.TypeString,
+							Required:    true,
+							Description: `The name of the AWS region that your origin is in.`,
+						},
+						"secret_access_key_version": {
+							Type:     schema.TypeString,
+							Required: true,
+							Description: `The Secret Manager secret version of the secret access key used by your origin.
+
+This is the resource name of the secret version in the format 'projects/*/secrets/*/versions/*' where the '*' values are replaced by the project, secret, and version you require.`,
+						},
+					},
+				},
+			},
 			"description": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -69,7 +100,7 @@ If a Cloud Storage bucket is provided, it must be in the canonical "gs://bucketn
 			"failover_origin": {
 				Type:             schema.TypeString,
 				Optional:         true,
-				DiffSuppressFunc: compareResourceNames,
+				DiffSuppressFunc: tpgresource.CompareResourceNames,
 				Description: `The Origin resource to try when the current origin cannot be reached.
 After maxAttempts is reached, the configured failoverOrigin will be used to fulfil the request.
 
@@ -99,6 +130,105 @@ If no origin returns a valid response, an HTTP 502 will be returned to the clien
 
 Defaults to 1. Must be a value greater than 0 and less than 4.`,
 			},
+			"origin_override_action": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Description: `The override actions, including url rewrites and header
+additions, for requests that use this origin.`,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"header_action": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Description: `The header actions, including adding and removing
+headers, for request handled by this origin.`,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"request_headers_to_add": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Description: `Describes a header to add.
+
+You may add a maximum of 25 request headers.`,
+										MinItems: 1,
+										MaxItems: 25,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"header_name": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: `The name of the header to add.`,
+												},
+												"header_value": {
+													Type:        schema.TypeString,
+													Required:    true,
+													Description: `The value of the header to add.`,
+												},
+												"replace": {
+													Type:     schema.TypeBool,
+													Optional: true,
+													Description: `Whether to replace all existing headers with the same name.
+
+By default, added header values are appended
+to the response or request headers with the
+same field names. The added values are
+separated by commas.
+
+To overwrite existing values, set 'replace' to 'true'.`,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						"url_rewrite": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Description: `The URL rewrite configuration for request that are
+handled by this origin.`,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"host_rewrite": {
+										Type:     schema.TypeString,
+										Optional: true,
+										Description: `Prior to forwarding the request to the selected
+origin, the request's host header is replaced with
+contents of the hostRewrite.
+
+This value must be between 1 and 255 characters.`,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			"origin_redirect": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: `Follow redirects from this origin.`,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"redirect_conditions": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Description: `The set of redirect response codes that the CDN
+follows. Values of
+[RedirectConditions](https://cloud.google.com/media-cdn/docs/reference/rest/v1/projects.locations.edgeCacheOrigins#redirectconditions)
+are accepted.`,
+							MaxItems: 5,
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+					},
+				},
+			},
 			"port": {
 				Type:     schema.TypeInt,
 				Computed: true,
@@ -110,7 +240,7 @@ Defaults to port 443 for HTTP2 and HTTPS protocols, and port 80 for HTTP.`,
 				Type:         schema.TypeString,
 				Computed:     true,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"HTTP2", "HTTPS", "HTTP", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"HTTP2", "HTTPS", "HTTP", ""}),
 				Description: `The protocol to use to connect to the configured origin. Defaults to HTTP2, and it is strongly recommended that users use HTTP2 for both security & performance.
 
 When using HTTP2 or HTTPS as the protocol, a valid, publicly-signed, unexpired TLS (SSL) certificate must be presented by the origin server. Possible values: ["HTTP2", "HTTPS", "HTTP"]`,
@@ -139,7 +269,7 @@ Valid values are:
 - FORBIDDEN: Retry if the origin returns a HTTP 403 (Forbidden). Possible values: ["CONNECT_FAILURE", "HTTP_5XX", "GATEWAY_ERROR", "RETRIABLE_4XX", "NOT_FOUND", "FORBIDDEN"]`,
 				Elem: &schema.Schema{
 					Type:         schema.TypeString,
-					ValidateFunc: validateEnum([]string{"CONNECT_FAILURE", "HTTP_5XX", "GATEWAY_ERROR", "RETRIABLE_4XX", "NOT_FOUND", "FORBIDDEN"}),
+					ValidateFunc: verify.ValidateEnum([]string{"CONNECT_FAILURE", "HTTP_5XX", "GATEWAY_ERROR", "RETRIABLE_4XX", "NOT_FOUND", "FORBIDDEN"}),
 				},
 			},
 			"timeout": {
@@ -210,8 +340,8 @@ If the response headers have already been written to the connection, the respons
 }
 
 func resourceNetworkServicesEdgeCacheOriginCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -271,8 +401,26 @@ func resourceNetworkServicesEdgeCacheOriginCreate(d *schema.ResourceData, meta i
 	} else if v, ok := d.GetOkExists("timeout"); !isEmptyValue(reflect.ValueOf(timeoutProp)) && (ok || !reflect.DeepEqual(v, timeoutProp)) {
 		obj["timeout"] = timeoutProp
 	}
+	awsV4AuthenticationProp, err := expandNetworkServicesEdgeCacheOriginAwsV4Authentication(d.Get("aws_v4_authentication"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("aws_v4_authentication"); !isEmptyValue(reflect.ValueOf(awsV4AuthenticationProp)) && (ok || !reflect.DeepEqual(v, awsV4AuthenticationProp)) {
+		obj["awsV4Authentication"] = awsV4AuthenticationProp
+	}
+	originOverrideActionProp, err := expandNetworkServicesEdgeCacheOriginOriginOverrideAction(d.Get("origin_override_action"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("origin_override_action"); !isEmptyValue(reflect.ValueOf(originOverrideActionProp)) && (ok || !reflect.DeepEqual(v, originOverrideActionProp)) {
+		obj["originOverrideAction"] = originOverrideActionProp
+	}
+	originRedirectProp, err := expandNetworkServicesEdgeCacheOriginOriginRedirect(d.Get("origin_redirect"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("origin_redirect"); !isEmptyValue(reflect.ValueOf(originRedirectProp)) && (ok || !reflect.DeepEqual(v, originRedirectProp)) {
+		obj["originRedirect"] = originRedirectProp
+	}
 
-	url, err := replaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins?edgeCacheOriginId={{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins?edgeCacheOriginId={{name}}")
 	if err != nil {
 		return err
 	}
@@ -291,19 +439,19 @@ func resourceNetworkServicesEdgeCacheOriginCreate(d *schema.ResourceData, meta i
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating EdgeCacheOrigin: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = networkServicesOperationWaitTime(
+	err = NetworkServicesOperationWaitTime(
 		config, res, project, "Creating EdgeCacheOrigin", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -319,13 +467,13 @@ func resourceNetworkServicesEdgeCacheOriginCreate(d *schema.ResourceData, meta i
 }
 
 func resourceNetworkServicesEdgeCacheOriginRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -343,9 +491,9 @@ func resourceNetworkServicesEdgeCacheOriginRead(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("NetworkServicesEdgeCacheOrigin %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("NetworkServicesEdgeCacheOrigin %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -379,13 +527,22 @@ func resourceNetworkServicesEdgeCacheOriginRead(d *schema.ResourceData, meta int
 	if err := d.Set("timeout", flattenNetworkServicesEdgeCacheOriginTimeout(res["timeout"], d, config)); err != nil {
 		return fmt.Errorf("Error reading EdgeCacheOrigin: %s", err)
 	}
+	if err := d.Set("aws_v4_authentication", flattenNetworkServicesEdgeCacheOriginAwsV4Authentication(res["awsV4Authentication"], d, config)); err != nil {
+		return fmt.Errorf("Error reading EdgeCacheOrigin: %s", err)
+	}
+	if err := d.Set("origin_override_action", flattenNetworkServicesEdgeCacheOriginOriginOverrideAction(res["originOverrideAction"], d, config)); err != nil {
+		return fmt.Errorf("Error reading EdgeCacheOrigin: %s", err)
+	}
+	if err := d.Set("origin_redirect", flattenNetworkServicesEdgeCacheOriginOriginRedirect(res["originRedirect"], d, config)); err != nil {
+		return fmt.Errorf("Error reading EdgeCacheOrigin: %s", err)
+	}
 
 	return nil
 }
 
 func resourceNetworkServicesEdgeCacheOriginUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -453,8 +610,26 @@ func resourceNetworkServicesEdgeCacheOriginUpdate(d *schema.ResourceData, meta i
 	} else if v, ok := d.GetOkExists("timeout"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, timeoutProp)) {
 		obj["timeout"] = timeoutProp
 	}
+	awsV4AuthenticationProp, err := expandNetworkServicesEdgeCacheOriginAwsV4Authentication(d.Get("aws_v4_authentication"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("aws_v4_authentication"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, awsV4AuthenticationProp)) {
+		obj["awsV4Authentication"] = awsV4AuthenticationProp
+	}
+	originOverrideActionProp, err := expandNetworkServicesEdgeCacheOriginOriginOverrideAction(d.Get("origin_override_action"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("origin_override_action"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, originOverrideActionProp)) {
+		obj["originOverrideAction"] = originOverrideActionProp
+	}
+	originRedirectProp, err := expandNetworkServicesEdgeCacheOriginOriginRedirect(d.Get("origin_redirect"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("origin_redirect"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, originRedirectProp)) {
+		obj["originRedirect"] = originRedirectProp
+	}
 
-	url, err := replaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -497,9 +672,21 @@ func resourceNetworkServicesEdgeCacheOriginUpdate(d *schema.ResourceData, meta i
 	if d.HasChange("timeout") {
 		updateMask = append(updateMask, "timeout")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+
+	if d.HasChange("aws_v4_authentication") {
+		updateMask = append(updateMask, "awsV4Authentication")
+	}
+
+	if d.HasChange("origin_override_action") {
+		updateMask = append(updateMask, "originOverrideAction")
+	}
+
+	if d.HasChange("origin_redirect") {
+		updateMask = append(updateMask, "originRedirect")
+	}
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -509,7 +696,7 @@ func resourceNetworkServicesEdgeCacheOriginUpdate(d *schema.ResourceData, meta i
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating EdgeCacheOrigin %q: %s", d.Id(), err)
@@ -517,7 +704,7 @@ func resourceNetworkServicesEdgeCacheOriginUpdate(d *schema.ResourceData, meta i
 		log.Printf("[DEBUG] Finished updating EdgeCacheOrigin %q: %#v", d.Id(), res)
 	}
 
-	err = networkServicesOperationWaitTime(
+	err = NetworkServicesOperationWaitTime(
 		config, res, project, "Updating EdgeCacheOrigin", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -529,8 +716,8 @@ func resourceNetworkServicesEdgeCacheOriginUpdate(d *schema.ResourceData, meta i
 }
 
 func resourceNetworkServicesEdgeCacheOriginDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -543,7 +730,7 @@ func resourceNetworkServicesEdgeCacheOriginDelete(d *schema.ResourceData, meta i
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
+	url, err := ReplaceVars(d, config, "{{NetworkServicesBasePath}}projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -556,12 +743,12 @@ func resourceNetworkServicesEdgeCacheOriginDelete(d *schema.ResourceData, meta i
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "EdgeCacheOrigin")
+		return transport_tpg.HandleNotFoundError(err, d, "EdgeCacheOrigin")
 	}
 
-	err = networkServicesOperationWaitTime(
+	err = NetworkServicesOperationWaitTime(
 		config, res, project, "Deleting EdgeCacheOrigin", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -574,8 +761,8 @@ func resourceNetworkServicesEdgeCacheOriginDelete(d *schema.ResourceData, meta i
 }
 
 func resourceNetworkServicesEdgeCacheOriginImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/global/edgeCacheOrigins/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -584,7 +771,7 @@ func resourceNetworkServicesEdgeCacheOriginImport(d *schema.ResourceData, meta i
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/locations/global/edgeCacheOrigins/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -593,26 +780,26 @@ func resourceNetworkServicesEdgeCacheOriginImport(d *schema.ResourceData, meta i
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenNetworkServicesEdgeCacheOriginDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkServicesEdgeCacheOriginLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkServicesEdgeCacheOriginOriginAddress(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginOriginAddress(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkServicesEdgeCacheOriginProtocol(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginProtocol(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkServicesEdgeCacheOriginPort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -626,10 +813,10 @@ func flattenNetworkServicesEdgeCacheOriginPort(v interface{}, d *schema.Resource
 	return v // let terraform core handle it otherwise
 }
 
-func flattenNetworkServicesEdgeCacheOriginMaxAttempts(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginMaxAttempts(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -643,15 +830,15 @@ func flattenNetworkServicesEdgeCacheOriginMaxAttempts(v interface{}, d *schema.R
 	return v // let terraform core handle it otherwise
 }
 
-func flattenNetworkServicesEdgeCacheOriginFailoverOrigin(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginFailoverOrigin(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkServicesEdgeCacheOriginRetryConditions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginRetryConditions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenNetworkServicesEdgeCacheOriginTimeout(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenNetworkServicesEdgeCacheOriginTimeout(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	out := make(map[string]string)
 
 	if v == nil {
@@ -675,11 +862,134 @@ func flattenNetworkServicesEdgeCacheOriginTimeout(v interface{}, d *schema.Resou
 	return []interface{}{out}
 }
 
-func expandNetworkServicesEdgeCacheOriginDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func flattenNetworkServicesEdgeCacheOriginAwsV4Authentication(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["access_key_id"] =
+		flattenNetworkServicesEdgeCacheOriginAwsV4AuthenticationAccessKeyId(original["accessKeyId"], d, config)
+	transformed["secret_access_key_version"] =
+		flattenNetworkServicesEdgeCacheOriginAwsV4AuthenticationSecretAccessKeyVersion(original["secretAccessKeyVersion"], d, config)
+	transformed["origin_region"] =
+		flattenNetworkServicesEdgeCacheOriginAwsV4AuthenticationOriginRegion(original["originRegion"], d, config)
+	return []interface{}{transformed}
+}
+func flattenNetworkServicesEdgeCacheOriginAwsV4AuthenticationAccessKeyId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginAwsV4AuthenticationSecretAccessKeyVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginAwsV4AuthenticationOriginRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideAction(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["url_rewrite"] =
+		flattenNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewrite(original["urlRewrite"], d, config)
+	transformed["header_action"] =
+		flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderAction(original["headerAction"], d, config)
+	return []interface{}{transformed}
+}
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewrite(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["host_rewrite"] =
+		flattenNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewriteHostRewrite(original["hostRewrite"], d, config)
+	return []interface{}{transformed}
+}
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewriteHostRewrite(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderAction(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["request_headers_to_add"] =
+		flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAdd(original["requestHeadersToAdd"], d, config)
+	return []interface{}{transformed}
+}
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAdd(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"header_name":  flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderName(original["headerName"], d, config),
+			"header_value": flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderValue(original["headerValue"], d, config),
+			"replace":      flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddReplace(original["replace"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddReplace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenNetworkServicesEdgeCacheOriginOriginRedirect(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["redirect_conditions"] =
+		flattenNetworkServicesEdgeCacheOriginOriginRedirectRedirectConditions(original["redirectConditions"], d, config)
+	return []interface{}{transformed}
+}
+func flattenNetworkServicesEdgeCacheOriginOriginRedirectRedirectConditions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func expandNetworkServicesEdgeCacheOriginDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandNetworkServicesEdgeCacheOriginLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -690,31 +1000,31 @@ func expandNetworkServicesEdgeCacheOriginLabels(v interface{}, d TerraformResour
 	return m, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginOriginAddress(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginOriginAddress(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginProtocol(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginProtocol(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginPort(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginMaxAttempts(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginMaxAttempts(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginFailoverOrigin(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginFailoverOrigin(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginRetryConditions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginRetryConditions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginTimeout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginTimeout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -754,18 +1064,202 @@ func expandNetworkServicesEdgeCacheOriginTimeout(v interface{}, d TerraformResou
 	return transformed, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginTimeoutConnectTimeout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginTimeoutConnectTimeout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginTimeoutMaxAttemptsTimeout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginTimeoutMaxAttemptsTimeout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginTimeoutResponseTimeout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginTimeoutResponseTimeout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandNetworkServicesEdgeCacheOriginTimeoutReadTimeout(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandNetworkServicesEdgeCacheOriginTimeoutReadTimeout(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginAwsV4Authentication(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedAccessKeyId, err := expandNetworkServicesEdgeCacheOriginAwsV4AuthenticationAccessKeyId(original["access_key_id"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedAccessKeyId); val.IsValid() && !isEmptyValue(val) {
+		transformed["accessKeyId"] = transformedAccessKeyId
+	}
+
+	transformedSecretAccessKeyVersion, err := expandNetworkServicesEdgeCacheOriginAwsV4AuthenticationSecretAccessKeyVersion(original["secret_access_key_version"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedSecretAccessKeyVersion); val.IsValid() && !isEmptyValue(val) {
+		transformed["secretAccessKeyVersion"] = transformedSecretAccessKeyVersion
+	}
+
+	transformedOriginRegion, err := expandNetworkServicesEdgeCacheOriginAwsV4AuthenticationOriginRegion(original["origin_region"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedOriginRegion); val.IsValid() && !isEmptyValue(val) {
+		transformed["originRegion"] = transformedOriginRegion
+	}
+
+	return transformed, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginAwsV4AuthenticationAccessKeyId(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginAwsV4AuthenticationSecretAccessKeyVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginAwsV4AuthenticationOriginRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideAction(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedUrlRewrite, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewrite(original["url_rewrite"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedUrlRewrite); val.IsValid() && !isEmptyValue(val) {
+		transformed["urlRewrite"] = transformedUrlRewrite
+	}
+
+	transformedHeaderAction, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderAction(original["header_action"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedHeaderAction); val.IsValid() && !isEmptyValue(val) {
+		transformed["headerAction"] = transformedHeaderAction
+	}
+
+	return transformed, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewrite(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedHostRewrite, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewriteHostRewrite(original["host_rewrite"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedHostRewrite); val.IsValid() && !isEmptyValue(val) {
+		transformed["hostRewrite"] = transformedHostRewrite
+	}
+
+	return transformed, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionUrlRewriteHostRewrite(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderAction(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedRequestHeadersToAdd, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAdd(original["request_headers_to_add"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedRequestHeadersToAdd); val.IsValid() && !isEmptyValue(val) {
+		transformed["requestHeadersToAdd"] = transformedRequestHeadersToAdd
+	}
+
+	return transformed, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAdd(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedHeaderName, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderName(original["header_name"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedHeaderName); val.IsValid() && !isEmptyValue(val) {
+			transformed["headerName"] = transformedHeaderName
+		}
+
+		transformedHeaderValue, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderValue(original["header_value"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedHeaderValue); val.IsValid() && !isEmptyValue(val) {
+			transformed["headerValue"] = transformedHeaderValue
+		}
+
+		transformedReplace, err := expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddReplace(original["replace"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedReplace); val.IsValid() && !isEmptyValue(val) {
+			transformed["replace"] = transformedReplace
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddHeaderValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginOverrideActionHeaderActionRequestHeadersToAddReplace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginRedirect(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedRedirectConditions, err := expandNetworkServicesEdgeCacheOriginOriginRedirectRedirectConditions(original["redirect_conditions"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedRedirectConditions); val.IsValid() && !isEmptyValue(val) {
+		transformed["redirectConditions"] = transformedRedirectConditions
+	}
+
+	return transformed, nil
+}
+
+func expandNetworkServicesEdgeCacheOriginOriginRedirectRedirectConditions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

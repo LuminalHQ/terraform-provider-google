@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"google.golang.org/api/googleapi"
@@ -184,7 +187,7 @@ func flattenIpv6AccessConfigs(ipv6AccessConfigs []*compute.AccessConfig) []map[s
 	return flattened
 }
 
-func flattenNetworkInterfaces(d *schema.ResourceData, config *Config, networkInterfaces []*compute.NetworkInterface) ([]map[string]interface{}, string, string, string, error) {
+func flattenNetworkInterfaces(d *schema.ResourceData, config *transport_tpg.Config, networkInterfaces []*compute.NetworkInterface) ([]map[string]interface{}, string, string, string, error) {
 	flattened := make([]map[string]interface{}, len(networkInterfaces))
 	var region, internalIP, externalIP string
 
@@ -200,8 +203,8 @@ func flattenNetworkInterfaces(d *schema.ResourceData, config *Config, networkInt
 
 		flattened[i] = map[string]interface{}{
 			"network_ip":         iface.NetworkIP,
-			"network":            ConvertSelfLinkToV1(iface.Network),
-			"subnetwork":         ConvertSelfLinkToV1(iface.Subnetwork),
+			"network":            tpgresource.ConvertSelfLinkToV1(iface.Network),
+			"subnetwork":         tpgresource.ConvertSelfLinkToV1(iface.Subnetwork),
 			"subnetwork_project": subnet.Project,
 			"access_config":      ac,
 			"alias_ip_range":     flattenAliasIpRange(iface.AliasIpRanges),
@@ -258,7 +261,7 @@ func expandIpv6AccessConfigs(configs []interface{}) []*compute.AccessConfig {
 	return iacs
 }
 
-func expandNetworkInterfaces(d TerraformResourceData, config *Config) ([]*compute.NetworkInterface, error) {
+func expandNetworkInterfaces(d TerraformResourceData, config *transport_tpg.Config) ([]*compute.NetworkInterface, error) {
 	configs := d.Get("network_interface").([]interface{})
 	ifaces := make([]*compute.NetworkInterface, len(configs))
 	for i, raw := range configs {
@@ -301,7 +304,7 @@ func flattenServiceAccounts(serviceAccounts []*compute.ServiceAccount) []map[str
 	for i, serviceAccount := range serviceAccounts {
 		result[i] = map[string]interface{}{
 			"email":  serviceAccount.Email,
-			"scopes": schema.NewSet(stringScopeHashcode, convertStringArrToInterface(serviceAccount.Scopes)),
+			"scopes": schema.NewSet(tpgresource.StringScopeHashcode, convertStringArrToInterface(serviceAccount.Scopes)),
 		}
 	}
 	return result
@@ -314,7 +317,7 @@ func expandServiceAccounts(configs []interface{}) []*compute.ServiceAccount {
 
 		accounts[i] = &compute.ServiceAccount{
 			Email:  data["email"].(string),
-			Scopes: canonicalizeServiceScopes(convertStringSet(data["scopes"].(*schema.Set))),
+			Scopes: tpgresource.CanonicalizeServiceScopes(convertStringSet(data["scopes"].(*schema.Set))),
 		}
 
 		if accounts[i].Email == "" {
@@ -396,6 +399,7 @@ func expandAdvancedMachineFeatures(d TerraformResourceData) *compute.AdvancedMac
 	return &compute.AdvancedMachineFeatures{
 		EnableNestedVirtualization: d.Get(prefix + ".enable_nested_virtualization").(bool),
 		ThreadsPerCore:             int64(d.Get(prefix + ".threads_per_core").(int)),
+		VisibleCoreCount:           int64(d.Get(prefix + ".visible_core_count").(int)),
 	}
 }
 
@@ -406,6 +410,7 @@ func flattenAdvancedMachineFeatures(AdvancedMachineFeatures *compute.AdvancedMac
 	return []map[string]interface{}{{
 		"enable_nested_virtualization": AdvancedMachineFeatures.EnableNestedVirtualization,
 		"threads_per_core":             AdvancedMachineFeatures.ThreadsPerCore,
+		"visible_core_count":           AdvancedMachineFeatures.VisibleCoreCount,
 	}}
 }
 

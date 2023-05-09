@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	clouddeploy "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/clouddeploy"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceClouddeployDeliveryPipeline() *schema.Resource {
+func ResourceClouddeployDeliveryPipeline() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceClouddeployDeliveryPipelineCreate,
 		Read:   resourceClouddeployDeliveryPipelineRead,
@@ -159,10 +161,44 @@ func ClouddeployDeliveryPipelineSerialPipelineStagesSchema() *schema.Resource {
 				Elem:        &schema.Schema{Type: schema.TypeString},
 			},
 
+			"strategy": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Optional. The strategy to use for a `Rollout` to this stage.",
+				MaxItems:    1,
+				Elem:        ClouddeployDeliveryPipelineSerialPipelineStagesStrategySchema(),
+			},
+
 			"target_id": {
 				Type:        schema.TypeString,
 				Optional:    true,
 				Description: "The target_id to which this stage points. This field refers exclusively to the last segment of a target name. For example, this field would just be `my-target` (rather than `projects/project/locations/location/targets/my-target`). The location of the `Target` is inferred to be the same as the location of the `DeliveryPipeline` that contains this `Stage`.",
+			},
+		},
+	}
+}
+
+func ClouddeployDeliveryPipelineSerialPipelineStagesStrategySchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"standard": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Standard deployment strategy executes a single deploy and allows verifying the deployment.",
+				MaxItems:    1,
+				Elem:        ClouddeployDeliveryPipelineSerialPipelineStagesStrategyStandardSchema(),
+			},
+		},
+	}
+}
+
+func ClouddeployDeliveryPipelineSerialPipelineStagesStrategyStandardSchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"verify": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Description: "Whether to verify a deployment.",
 			},
 		},
 	}
@@ -181,8 +217,15 @@ func ClouddeployDeliveryPipelineConditionSchema() *schema.Resource {
 			"targets_present_condition": {
 				Type:        schema.TypeList,
 				Computed:    true,
-				Description: "Detalis around targets enumerated in the pipeline.",
+				Description: "Details around targets enumerated in the pipeline.",
 				Elem:        ClouddeployDeliveryPipelineConditionTargetsPresentConditionSchema(),
+			},
+
+			"targets_type_condition": {
+				Type:        schema.TypeList,
+				Computed:    true,
+				Description: "Details on the whether the targets enumerated in the pipeline are of the same type.",
+				Elem:        ClouddeployDeliveryPipelineConditionTargetsTypeConditionSchema(),
 			},
 		},
 	}
@@ -231,8 +274,26 @@ func ClouddeployDeliveryPipelineConditionTargetsPresentConditionSchema() *schema
 	}
 }
 
+func ClouddeployDeliveryPipelineConditionTargetsTypeConditionSchema() *schema.Resource {
+	return &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"error_details": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Human readable error message.",
+			},
+
+			"status": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "True if the targets are all a comparable type. For example this is true if all targets are GKE clusters. This is false if some targets are Cloud Run targets and others are GKE clusters.",
+			},
+		},
+	}
+}
+
 func resourceClouddeployDeliveryPipelineCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -255,7 +316,7 @@ func resourceClouddeployDeliveryPipelineCreate(d *schema.ResourceData, meta inte
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -264,8 +325,8 @@ func resourceClouddeployDeliveryPipelineCreate(d *schema.ResourceData, meta inte
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -287,7 +348,7 @@ func resourceClouddeployDeliveryPipelineCreate(d *schema.ResourceData, meta inte
 }
 
 func resourceClouddeployDeliveryPipelineRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -304,7 +365,7 @@ func resourceClouddeployDeliveryPipelineRead(d *schema.ResourceData, meta interf
 		Suspended:      dcl.Bool(d.Get("suspended").(bool)),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -313,8 +374,8 @@ func resourceClouddeployDeliveryPipelineRead(d *schema.ResourceData, meta interf
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -369,7 +430,7 @@ func resourceClouddeployDeliveryPipelineRead(d *schema.ResourceData, meta interf
 	return nil
 }
 func resourceClouddeployDeliveryPipelineUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -386,7 +447,7 @@ func resourceClouddeployDeliveryPipelineUpdate(d *schema.ResourceData, meta inte
 		Suspended:      dcl.Bool(d.Get("suspended").(bool)),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -396,8 +457,8 @@ func resourceClouddeployDeliveryPipelineUpdate(d *schema.ResourceData, meta inte
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -419,7 +480,7 @@ func resourceClouddeployDeliveryPipelineUpdate(d *schema.ResourceData, meta inte
 }
 
 func resourceClouddeployDeliveryPipelineDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -437,7 +498,7 @@ func resourceClouddeployDeliveryPipelineDelete(d *schema.ResourceData, meta inte
 	}
 
 	log.Printf("[DEBUG] Deleting DeliveryPipeline %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -446,8 +507,8 @@ func resourceClouddeployDeliveryPipelineDelete(d *schema.ResourceData, meta inte
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLClouddeployClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -462,9 +523,9 @@ func resourceClouddeployDeliveryPipelineDelete(d *schema.ResourceData, meta inte
 }
 
 func resourceClouddeployDeliveryPipelineImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/deliveryPipelines/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -534,6 +595,7 @@ func expandClouddeployDeliveryPipelineSerialPipelineStages(o interface{}) *cloud
 	obj := o.(map[string]interface{})
 	return &clouddeploy.DeliveryPipelineSerialPipelineStages{
 		Profiles: expandStringArray(obj["profiles"]),
+		Strategy: expandClouddeployDeliveryPipelineSerialPipelineStagesStrategy(obj["strategy"]),
 		TargetId: dcl.String(obj["target_id"].(string)),
 	}
 }
@@ -558,10 +620,63 @@ func flattenClouddeployDeliveryPipelineSerialPipelineStages(obj *clouddeploy.Del
 	}
 	transformed := map[string]interface{}{
 		"profiles":  obj.Profiles,
+		"strategy":  flattenClouddeployDeliveryPipelineSerialPipelineStagesStrategy(obj.Strategy),
 		"target_id": obj.TargetId,
 	}
 
 	return transformed
+
+}
+
+func expandClouddeployDeliveryPipelineSerialPipelineStagesStrategy(o interface{}) *clouddeploy.DeliveryPipelineSerialPipelineStagesStrategy {
+	if o == nil {
+		return clouddeploy.EmptyDeliveryPipelineSerialPipelineStagesStrategy
+	}
+	objArr := o.([]interface{})
+	if len(objArr) == 0 || objArr[0] == nil {
+		return clouddeploy.EmptyDeliveryPipelineSerialPipelineStagesStrategy
+	}
+	obj := objArr[0].(map[string]interface{})
+	return &clouddeploy.DeliveryPipelineSerialPipelineStagesStrategy{
+		Standard: expandClouddeployDeliveryPipelineSerialPipelineStagesStrategyStandard(obj["standard"]),
+	}
+}
+
+func flattenClouddeployDeliveryPipelineSerialPipelineStagesStrategy(obj *clouddeploy.DeliveryPipelineSerialPipelineStagesStrategy) interface{} {
+	if obj == nil || obj.Empty() {
+		return nil
+	}
+	transformed := map[string]interface{}{
+		"standard": flattenClouddeployDeliveryPipelineSerialPipelineStagesStrategyStandard(obj.Standard),
+	}
+
+	return []interface{}{transformed}
+
+}
+
+func expandClouddeployDeliveryPipelineSerialPipelineStagesStrategyStandard(o interface{}) *clouddeploy.DeliveryPipelineSerialPipelineStagesStrategyStandard {
+	if o == nil {
+		return clouddeploy.EmptyDeliveryPipelineSerialPipelineStagesStrategyStandard
+	}
+	objArr := o.([]interface{})
+	if len(objArr) == 0 || objArr[0] == nil {
+		return clouddeploy.EmptyDeliveryPipelineSerialPipelineStagesStrategyStandard
+	}
+	obj := objArr[0].(map[string]interface{})
+	return &clouddeploy.DeliveryPipelineSerialPipelineStagesStrategyStandard{
+		Verify: dcl.Bool(obj["verify"].(bool)),
+	}
+}
+
+func flattenClouddeployDeliveryPipelineSerialPipelineStagesStrategyStandard(obj *clouddeploy.DeliveryPipelineSerialPipelineStagesStrategyStandard) interface{} {
+	if obj == nil || obj.Empty() {
+		return nil
+	}
+	transformed := map[string]interface{}{
+		"verify": obj.Verify,
+	}
+
+	return []interface{}{transformed}
 
 }
 
@@ -572,6 +687,7 @@ func flattenClouddeployDeliveryPipelineCondition(obj *clouddeploy.DeliveryPipeli
 	transformed := map[string]interface{}{
 		"pipeline_ready_condition":  flattenClouddeployDeliveryPipelineConditionPipelineReadyCondition(obj.PipelineReadyCondition),
 		"targets_present_condition": flattenClouddeployDeliveryPipelineConditionTargetsPresentCondition(obj.TargetsPresentCondition),
+		"targets_type_condition":    flattenClouddeployDeliveryPipelineConditionTargetsTypeCondition(obj.TargetsTypeCondition),
 	}
 
 	return []interface{}{transformed}
@@ -599,6 +715,19 @@ func flattenClouddeployDeliveryPipelineConditionTargetsPresentCondition(obj *clo
 		"missing_targets": obj.MissingTargets,
 		"status":          obj.Status,
 		"update_time":     obj.UpdateTime,
+	}
+
+	return []interface{}{transformed}
+
+}
+
+func flattenClouddeployDeliveryPipelineConditionTargetsTypeCondition(obj *clouddeploy.DeliveryPipelineConditionTargetsTypeCondition) interface{} {
+	if obj == nil || obj.Empty() {
+		return nil
+	}
+	transformed := map[string]interface{}{
+		"error_details": obj.ErrorDetails,
+		"status":        obj.Status,
 	}
 
 	return []interface{}{transformed}

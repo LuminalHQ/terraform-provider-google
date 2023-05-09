@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	compute "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/compute"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceComputeFirewallPolicy() *schema.Resource {
+func ResourceComputeFirewallPolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeFirewallPolicyCreate,
 		Read:   resourceComputeFirewallPolicyRead,
@@ -112,7 +114,7 @@ func resourceComputeFirewallPolicy() *schema.Resource {
 }
 
 func resourceComputeFirewallPolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	obj := &compute.FirewallPolicy{
 		Parent:      dcl.String(d.Get("parent").(string)),
@@ -126,7 +128,7 @@ func resourceComputeFirewallPolicyCreate(d *schema.ResourceData, meta interface{
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -135,8 +137,8 @@ func resourceComputeFirewallPolicyCreate(d *schema.ResourceData, meta interface{
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -169,7 +171,7 @@ func resourceComputeFirewallPolicyCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeFirewallPolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	obj := &compute.FirewallPolicy{
 		Parent:      dcl.String(d.Get("parent").(string)),
@@ -178,7 +180,7 @@ func resourceComputeFirewallPolicyRead(d *schema.ResourceData, meta interface{})
 		Name:        dcl.StringOrNil(d.Get("name").(string)),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -187,8 +189,8 @@ func resourceComputeFirewallPolicyRead(d *schema.ResourceData, meta interface{})
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -234,7 +236,7 @@ func resourceComputeFirewallPolicyRead(d *schema.ResourceData, meta interface{})
 	return nil
 }
 func resourceComputeFirewallPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	obj := &compute.FirewallPolicy{
 		Parent:      dcl.String(d.Get("parent").(string)),
@@ -243,7 +245,7 @@ func resourceComputeFirewallPolicyUpdate(d *schema.ResourceData, meta interface{
 		Name:        dcl.StringOrNil(d.Get("name").(string)),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -253,8 +255,8 @@ func resourceComputeFirewallPolicyUpdate(d *schema.ResourceData, meta interface{
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -276,7 +278,7 @@ func resourceComputeFirewallPolicyUpdate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeFirewallPolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	obj := &compute.FirewallPolicy{
 		Parent:      dcl.String(d.Get("parent").(string)),
@@ -286,7 +288,7 @@ func resourceComputeFirewallPolicyDelete(d *schema.ResourceData, meta interface{
 	}
 
 	log.Printf("[DEBUG] Deleting FirewallPolicy %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -295,8 +297,8 @@ func resourceComputeFirewallPolicyDelete(d *schema.ResourceData, meta interface{
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLComputeClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -311,9 +313,9 @@ func resourceComputeFirewallPolicyDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeFirewallPolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"locations/global/firewallPolicies/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
 	}, d, config); err != nil {
@@ -321,7 +323,7 @@ func resourceComputeFirewallPolicyImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "locations/global/firewallPolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "locations/global/firewallPolicies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}

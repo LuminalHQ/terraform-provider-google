@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceAccessContextManagerGcpUserAccessBinding() *schema.Resource {
+func ResourceAccessContextManagerGcpUserAccessBinding() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAccessContextManagerGcpUserAccessBindingCreate,
 		Read:   resourceAccessContextManagerGcpUserAccessBindingRead,
@@ -75,8 +77,8 @@ func resourceAccessContextManagerGcpUserAccessBinding() *schema.Resource {
 }
 
 func resourceAccessContextManagerGcpUserAccessBindingCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -95,7 +97,7 @@ func resourceAccessContextManagerGcpUserAccessBindingCreate(d *schema.ResourceDa
 		obj["accessLevels"] = accessLevelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}organizations/{{organization_id}}/gcpUserAccessBindings")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}organizations/{{organization_id}}/gcpUserAccessBindings")
 	if err != nil {
 		return err
 	}
@@ -108,13 +110,13 @@ func resourceAccessContextManagerGcpUserAccessBindingCreate(d *schema.ResourceDa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating GcpUserAccessBinding: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -123,12 +125,13 @@ func resourceAccessContextManagerGcpUserAccessBindingCreate(d *schema.ResourceDa
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = accessContextManagerOperationWaitTimeWithResponse(
+	err = AccessContextManagerOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating GcpUserAccessBinding", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create GcpUserAccessBinding: %s", err)
 	}
 
@@ -137,7 +140,7 @@ func resourceAccessContextManagerGcpUserAccessBindingCreate(d *schema.ResourceDa
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{name}}")
+	id, err = ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -149,13 +152,13 @@ func resourceAccessContextManagerGcpUserAccessBindingCreate(d *schema.ResourceDa
 }
 
 func resourceAccessContextManagerGcpUserAccessBindingRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -167,9 +170,9 @@ func resourceAccessContextManagerGcpUserAccessBindingRead(d *schema.ResourceData
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AccessContextManagerGcpUserAccessBinding %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AccessContextManagerGcpUserAccessBinding %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenAccessContextManagerGcpUserAccessBindingName(res["name"], d, config)); err != nil {
@@ -186,8 +189,8 @@ func resourceAccessContextManagerGcpUserAccessBindingRead(d *schema.ResourceData
 }
 
 func resourceAccessContextManagerGcpUserAccessBindingUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -202,7 +205,7 @@ func resourceAccessContextManagerGcpUserAccessBindingUpdate(d *schema.ResourceDa
 		obj["accessLevels"] = accessLevelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -213,9 +216,9 @@ func resourceAccessContextManagerGcpUserAccessBindingUpdate(d *schema.ResourceDa
 	if d.HasChange("access_levels") {
 		updateMask = append(updateMask, "accessLevels")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -225,7 +228,7 @@ func resourceAccessContextManagerGcpUserAccessBindingUpdate(d *schema.ResourceDa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating GcpUserAccessBinding %q: %s", d.Id(), err)
@@ -233,7 +236,7 @@ func resourceAccessContextManagerGcpUserAccessBindingUpdate(d *schema.ResourceDa
 		log.Printf("[DEBUG] Finished updating GcpUserAccessBinding %q: %#v", d.Id(), res)
 	}
 
-	err = accessContextManagerOperationWaitTime(
+	err = AccessContextManagerOperationWaitTime(
 		config, res, "Updating GcpUserAccessBinding", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -245,15 +248,15 @@ func resourceAccessContextManagerGcpUserAccessBindingUpdate(d *schema.ResourceDa
 }
 
 func resourceAccessContextManagerGcpUserAccessBindingDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{AccessContextManagerBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -266,12 +269,12 @@ func resourceAccessContextManagerGcpUserAccessBindingDelete(d *schema.ResourceDa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "GcpUserAccessBinding")
+		return transport_tpg.HandleNotFoundError(err, d, "GcpUserAccessBinding")
 	}
 
-	err = accessContextManagerOperationWaitTime(
+	err = AccessContextManagerOperationWaitTime(
 		config, res, "Deleting GcpUserAccessBinding", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -284,10 +287,10 @@ func resourceAccessContextManagerGcpUserAccessBindingDelete(d *schema.ResourceDa
 }
 
 func resourceAccessContextManagerGcpUserAccessBindingImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -300,22 +303,22 @@ func resourceAccessContextManagerGcpUserAccessBindingImport(d *schema.ResourceDa
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAccessContextManagerGcpUserAccessBindingName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerGcpUserAccessBindingName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerGcpUserAccessBindingGroupKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerGcpUserAccessBindingGroupKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAccessContextManagerGcpUserAccessBindingAccessLevels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAccessContextManagerGcpUserAccessBindingAccessLevels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAccessContextManagerGcpUserAccessBindingGroupKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerGcpUserAccessBindingGroupKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAccessContextManagerGcpUserAccessBindingAccessLevels(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAccessContextManagerGcpUserAccessBindingAccessLevels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

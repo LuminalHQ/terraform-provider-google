@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -15,6 +16,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/structure"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"google.golang.org/api/bigquery/v2"
 )
 
@@ -173,6 +177,23 @@ func bigQueryTableSchemaDiffSuppress(name, old, new string, _ *schema.ResourceDa
 	}
 
 	return eq
+}
+
+func bigQueryTableConnectionIdSuppress(name, old, new string, _ *schema.ResourceData) bool {
+	// API accepts connectionId in below two formats
+	// "{{project}}.{{location}}.{{connection_id}}" or
+	// "projects/{{project}}/locations/{{location}}/connections/{{connection_id}}".
+	// but always returns "{{project}}.{{location}}.{{connection_id}}"
+
+	if tpgresource.IsEmptyValue(reflect.ValueOf(old)) || tpgresource.IsEmptyValue(reflect.ValueOf(new)) {
+		return false
+	}
+
+	re := regexp.MustCompile("projects/(.+)/(?:locations|regions)/(.+)/connections/(.+)")
+	if matches := re.FindStringSubmatch(new); matches != nil {
+		return old == matches[1]+"."+matches[2]+"."+matches[3]
+	}
+	return false
 }
 
 func bigQueryTableTypeEq(old, new string) bool {
@@ -346,7 +367,7 @@ func resourceBigQueryTableSchemaCustomizeDiff(_ context.Context, d *schema.Resou
 	return resourceBigQueryTableSchemaCustomizeDiffFunc(d)
 }
 
-func resourceBigQueryTable() *schema.Resource {
+func ResourceBigQueryTable() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceBigQueryTableCreate,
 		Read:   resourceBigQueryTableRead,
@@ -590,6 +611,22 @@ func resourceBigQueryTable() *schema.Resource {
 								},
 							},
 						},
+						// AvroOptions: [Optional] Additional options if sourceFormat is set to AVRO.
+						"avro_options": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							MaxItems:    1,
+							Description: `Additional options if source_format is set to "AVRO"`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"use_avro_logical_types": {
+										Type:        schema.TypeBool,
+										Required:    true,
+										Description: `If sourceFormat is set to "AVRO", indicates whether to interpret logical types as the corresponding BigQuery data type (for example, TIMESTAMP), instead of using the raw type (for example, INTEGER).`,
+									},
+								},
+							},
+						},
 
 						// IgnoreUnknownValues: [Optional] Indicates if BigQuery should
 						// allow extra values that are not represented in the table schema.
@@ -615,9 +652,15 @@ func resourceBigQueryTable() *schema.Resource {
 						// "{{project}}.{{location}}.{{connection_id}}" or
 						// "projects/{{project}}/locations/{{location}}/connections/{{connection_id}}".
 						"connection_id": {
+							Type:             schema.TypeString,
+							Optional:         true,
+							DiffSuppressFunc: bigQueryTableConnectionIdSuppress,
+							Description:      `The connection specifying the credentials to be used to read external storage, such as Azure Blob, Cloud Storage, or S3. The connectionId can have the form "{{project}}.{{location}}.{{connection_id}}" or "projects/{{project}}/locations/{{location}}/connections/{{connection_id}}".`,
+						},
+						"reference_file_schema_uri": {
 							Type:        schema.TypeString,
 							Optional:    true,
-							Description: `The connection specifying the credentials to be used to read external storage, such as Azure Blob, Cloud Storage, or S3. The connectionId can have the form "{{project}}.{{location}}.{{connection_id}}" or "projects/{{project}}/locations/{{location}}/connections/{{connection_id}}".`,
+							Description: `When creating an external table, the user can provide a reference file with the table schema. This is enabled for the following formats: AVRO, PARQUET, ORC.`,
 						},
 					},
 				},
@@ -944,7 +987,7 @@ func resourceBigQueryTable() *schema.Resource {
 }
 
 func resourceTable(d *schema.ResourceData, meta interface{}) (*bigquery.Table, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	project, err := getProject(d, config)
 	if err != nil {
@@ -1036,8 +1079,8 @@ func resourceTable(d *schema.ResourceData, meta interface{}) (*bigquery.Table, e
 }
 
 func resourceBigQueryTableCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1093,8 +1136,8 @@ func resourceBigQueryTableCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceBigQueryTableRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1111,7 +1154,7 @@ func resourceBigQueryTableRead(d *schema.ResourceData, meta interface{}) error {
 
 	res, err := config.NewBigQueryClient(userAgent).Tables.Get(project, datasetID, tableID).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("BigQuery table %q", tableID))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("BigQuery table %q", tableID))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -1244,8 +1287,8 @@ func resourceBigQueryTableRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceBigQueryTableUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1276,8 +1319,8 @@ func resourceBigQueryTableDelete(d *schema.ResourceData, meta interface{}) error
 	if d.Get("deletion_protection").(bool) {
 		return fmt.Errorf("cannot destroy instance without setting deletion_protection=false and running `terraform apply`")
 	}
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1328,6 +1371,9 @@ func expandExternalDataConfiguration(cfg interface{}) (*bigquery.ExternalDataCon
 	if v, ok := raw["hive_partitioning_options"]; ok {
 		edc.HivePartitioningOptions = expandHivePartitioningOptions(v)
 	}
+	if v, ok := raw["avro_options"]; ok {
+		edc.AvroOptions = expandAvroOptions(v)
+	}
 	if v, ok := raw["ignore_unknown_values"]; ok {
 		edc.IgnoreUnknownValues = v.(bool)
 	}
@@ -1346,6 +1392,9 @@ func expandExternalDataConfiguration(cfg interface{}) (*bigquery.ExternalDataCon
 	}
 	if v, ok := raw["connection_id"]; ok {
 		edc.ConnectionId = v.(string)
+	}
+	if v, ok := raw["reference_file_schema_uri"]; ok {
+		edc.ReferenceFileSchemaUri = v.(string)
 	}
 
 	return edc, nil
@@ -1374,6 +1423,10 @@ func flattenExternalDataConfiguration(edc *bigquery.ExternalDataConfiguration) (
 		result["hive_partitioning_options"] = flattenHivePartitioningOptions(edc.HivePartitioningOptions)
 	}
 
+	if edc.AvroOptions != nil {
+		result["avro_options"] = flattenAvroOptions(edc.AvroOptions)
+	}
+
 	if edc.IgnoreUnknownValues {
 		result["ignore_unknown_values"] = edc.IgnoreUnknownValues
 	}
@@ -1389,6 +1442,10 @@ func flattenExternalDataConfiguration(edc *bigquery.ExternalDataConfiguration) (
 		result["connection_id"] = edc.ConnectionId
 	}
 
+	if edc.ReferenceFileSchemaUri != "" {
+		result["reference_file_schema_uri"] = edc.ReferenceFileSchemaUri
+	}
+
 	return []map[string]interface{}{result}, nil
 }
 
@@ -1402,10 +1459,12 @@ func expandCsvOptions(configured interface{}) *bigquery.CsvOptions {
 
 	if v, ok := raw["allow_jagged_rows"]; ok {
 		opts.AllowJaggedRows = v.(bool)
+		opts.ForceSendFields = append(opts.ForceSendFields, "allow_jagged_rows")
 	}
 
 	if v, ok := raw["allow_quoted_newlines"]; ok {
 		opts.AllowQuotedNewlines = v.(bool)
+		opts.ForceSendFields = append(opts.ForceSendFields, "allow_quoted_newlines")
 	}
 
 	if v, ok := raw["encoding"]; ok {
@@ -1528,6 +1587,31 @@ func flattenHivePartitioningOptions(opts *bigquery.HivePartitioningOptions) []ma
 
 	if opts.SourceUriPrefix != "" {
 		result["source_uri_prefix"] = opts.SourceUriPrefix
+	}
+
+	return []map[string]interface{}{result}
+}
+
+func expandAvroOptions(configured interface{}) *bigquery.AvroOptions {
+	if len(configured.([]interface{})) == 0 {
+		return nil
+	}
+
+	raw := configured.([]interface{})[0].(map[string]interface{})
+	opts := &bigquery.AvroOptions{}
+
+	if v, ok := raw["use_avro_logical_types"]; ok {
+		opts.UseAvroLogicalTypes = v.(bool)
+	}
+
+	return opts
+}
+
+func flattenAvroOptions(opts *bigquery.AvroOptions) []map[string]interface{} {
+	result := map[string]interface{}{}
+
+	if opts.UseAvroLogicalTypes {
+		result["use_avro_logical_types"] = opts.UseAvroLogicalTypes
 	}
 
 	return []map[string]interface{}{result}
@@ -1703,8 +1787,8 @@ func flattenMaterializedView(mvd *bigquery.MaterializedViewDefinition) []map[str
 }
 
 func resourceBigQueryTableImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/datasets/(?P<dataset_id>[^/]+)/tables/(?P<table_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<dataset_id>[^/]+)/(?P<table_id>[^/]+)",
 		"(?P<dataset_id>[^/]+)/(?P<table_id>[^/]+)",
@@ -1718,7 +1802,7 @@ func resourceBigQueryTableImport(d *schema.ResourceData, meta interface{}) ([]*s
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/datasets/{{dataset_id}}/tables/{{table_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/datasets/{{dataset_id}}/tables/{{table_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}

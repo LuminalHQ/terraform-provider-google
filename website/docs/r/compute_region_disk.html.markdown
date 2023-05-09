@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_region_disk"
 description: |-
   Persistent disks are durable storage devices that function similarly to
   the physical disks in a desktop or a server.
@@ -44,8 +43,9 @@ To get more information about RegionDisk, see:
 * How-to Guides
     * [Adding or Resizing Regional Persistent Disks](https://cloud.google.com/compute/docs/disks/regional-persistent-disk)
 
-~> **Warning:** All arguments including `disk_encryption_key.raw_key` will be stored in the raw
-state as plain-text. [Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `disk_encryption_key.raw_key`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=region_disk_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
@@ -78,6 +78,41 @@ resource "google_compute_snapshot" "snapdisk" {
   name        = "my-snapshot"
   source_disk = google_compute_disk.disk.name
   zone        = "us-central1-a"
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=region_disk_async&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Region Disk Async
+
+
+```hcl
+resource "google_compute_region_disk" "primary" {
+  provider = google-beta
+
+  name                      = "primary-region-disk"
+  type                      = "pd-ssd"
+  region                    = "us-central1"
+  physical_block_size_bytes = 4096
+
+  replica_zones = ["us-central1-a", "us-central1-f"]
+}
+
+resource "google_compute_region_disk" "secondary" {
+  provider = google-beta
+
+  name                      = "secondary-region-disk"
+  type                      = "pd-ssd"
+  region                    = "us-east1"
+  physical_block_size_bytes = 4096
+
+  async_primary_disk {
+    disk = google_compute_region_disk.primary.id
+  }
+
+  replica_zones = ["us-east1-b", "us-east1-c"]
 }
 ```
 
@@ -140,6 +175,22 @@ The following arguments are supported:
   (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
   Specifies the disk interface to use for attaching this disk, which is either SCSI or NVME. The default is SCSI.
 
+* `source_disk` -
+  (Optional)
+  The source disk used to create this disk. You can provide this as a partial or full URL to the resource.
+  For example, the following are valid values:
+  * https://www.googleapis.com/compute/v1/projects/{project}/zones/{zone}/disks/{disk}
+  * https://www.googleapis.com/compute/v1/projects/{project}/regions/{region}/disks/{disk}
+  * projects/{project}/zones/{zone}/disks/{disk}
+  * projects/{project}/regions/{region}/disks/{disk}
+  * zones/{zone}/disks/{disk}
+  * regions/{region}/disks/{disk}
+
+* `async_primary_disk` -
+  (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html))
+  A nested object resource
+  Structure is [documented below](#nested_async_primary_disk).
+
 * `region` -
   (Optional)
   A reference to the region where the disk resides.
@@ -178,6 +229,12 @@ The following arguments are supported:
     If it is not provided, the provider project is used.
 
 
+<a name="nested_async_primary_disk"></a>The `async_primary_disk` block supports:
+
+* `disk` -
+  (Required)
+  Primary disk for asynchronous disk replication.
+
 <a name="nested_disk_encryption_key"></a>The `disk_encryption_key` block supports:
 
 * `raw_key` -
@@ -187,6 +244,7 @@ The following arguments are supported:
   **Note**: This property is sensitive and will not be displayed in the plan.
 
 * `sha256` -
+  (Output)
   The RFC 4648 base64 encoded SHA-256 hash of the customer-supplied
   encryption key that protects this resource.
 
@@ -206,6 +264,7 @@ The following arguments are supported:
   The name of the encryption key that is stored in Google Cloud KMS.
 
 * `sha256` -
+  (Output)
   The RFC 4648 base64 encoded SHA-256 hash of the customer-supplied
   encryption key that protects this resource.
 
@@ -232,6 +291,11 @@ In addition to the arguments listed above, the following computed attributes are
   Links to the users of the disk (attached instances) in form:
   project/zones/zone/instances/instance
 
+* `source_disk_id` -
+  The ID value of the disk used to create this image. This value may
+  be used to determine whether the image was taken from the current
+  or a previous instance of a given disk name.
+
 * `source_snapshot_id` -
   The unique ID of the snapshot used to create this disk. This value
   identifies the exact snapshot that was used to create this persistent
@@ -245,7 +309,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -265,4 +329,4 @@ $ terraform import google_compute_region_disk.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

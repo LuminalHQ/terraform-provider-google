@@ -6,6 +6,9 @@ import (
 	"strings"
 	"time"
 
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"google.golang.org/api/dataproc/v1"
@@ -13,7 +16,7 @@ import (
 
 var jobTypes = []string{"pyspark_config", "spark_config", "hadoop_config", "hive_config", "pig_config", "sparksql_config", "presto_config"}
 
-func resourceDataprocJob() *schema.Resource {
+func ResourceDataprocJob() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDataprocJobCreate,
 		Update: resourceDataprocJobUpdate,
@@ -67,7 +70,7 @@ func resourceDataprocJob() *schema.Resource {
 							Optional:     true,
 							ForceNew:     true,
 							Computed:     true,
-							ValidateFunc: validateRegexp("^[a-zA-Z0-9_-]{1,100}$"),
+							ValidateFunc: verify.ValidateRegexp("^[a-zA-Z0-9_-]{1,100}$"),
 						},
 					},
 				},
@@ -191,8 +194,8 @@ func resourceDataprocJobUpdate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDataprocJobCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -283,8 +286,8 @@ func resourceDataprocJobCreate(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDataprocJobRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -300,7 +303,7 @@ func resourceDataprocJobRead(d *schema.ResourceData, meta interface{}) error {
 	job, err := config.NewDataprocClient(userAgent).Projects.Regions.Jobs.Get(
 		project, region, jobId).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Dataproc Job %q", jobId))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Dataproc Job %q", jobId))
 	}
 
 	if err := d.Set("force_delete", d.Get("force_delete")); err != nil {
@@ -372,8 +375,8 @@ func resourceDataprocJobRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceDataprocJobDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}

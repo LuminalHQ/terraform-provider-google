@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_backend_service"
 description: |-
   A Backend Service defines a group of virtual machines that will serve
   traffic for load balancing.
@@ -35,8 +34,9 @@ To get more information about BackendService, see:
 * How-to Guides
     * [Official Documentation](https://cloud.google.com/compute/docs/load-balancing/http/backend-service)
 
-~> **Warning:** All arguments including `iap.oauth2_client_secret` and `iap.oauth2_client_secret_sha256` will be stored in the raw
-state as plain-text. [Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
+~> **Warning:** All arguments including the following potentially sensitive
+values will be stored in the raw state as plain text: `iap.oauth2_client_secret`, `iap.oauth2_client_secret_sha256`.
+[Read more about sensitive data in state](https://www.terraform.io/language/state/sensitive-data).
 
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=backend_service_basic&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
@@ -85,6 +85,29 @@ resource "google_compute_http_health_check" "default" {
 }
 ```
 <div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=backend_service_cache_include_http_headers&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Backend Service Cache Include Http Headers
+
+
+```hcl
+resource "google_compute_backend_service" "default" {
+  name          = "backend-service"
+  enable_cdn  = true
+  cdn_policy {
+    cache_mode = "USE_ORIGIN_HEADERS"
+    cache_key_policy {
+      include_host = true
+      include_protocol = true
+      include_query_string = true
+      include_http_headers = ["X-My-Header-Field"]
+    }
+  }
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
   <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=backend_service_cache_include_named_cookies&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
     <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
   </a>
@@ -130,6 +153,44 @@ resource "google_compute_backend_service" "default" {
     max_ttl     = 10800
     negative_caching = true
     signed_url_cache_max_age_sec = 7200
+  }
+}
+
+resource "google_compute_http_health_check" "default" {
+  name               = "health-check"
+  request_path       = "/"
+  check_interval_sec = 1
+  timeout_sec        = 1
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=backend_service_cache_bypass_cache_on_request_headers&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Backend Service Cache Bypass Cache On Request Headers
+
+
+```hcl
+resource "google_compute_backend_service" "default" {
+  name          = "backend-service"
+  health_checks = [google_compute_http_health_check.default.id]
+  enable_cdn  = true
+  cdn_policy {
+    cache_mode = "CACHE_ALL_STATIC"
+    default_ttl = 3600
+    client_ttl  = 7200
+    max_ttl     = 10800
+    negative_caching = true
+    signed_url_cache_max_age_sec = 7200
+
+    bypass_cache_on_request_headers {
+      header_name = "Authorization"
+    }
+
+    bypass_cache_on_request_headers {
+      header_name = "Proxy-Authorization"
+    }
   }
 }
 
@@ -309,6 +370,11 @@ The following arguments are supported:
   is applicable only when the load_balancing_scheme is set to INTERNAL_SELF_MANAGED.
   Structure is [documented below](#nested_circuit_breakers).
 
+* `compression_mode` -
+  (Optional)
+  Compress text responses using Brotli or gzip compression, based on the client's Accept-Encoding header.
+  Possible values are: `AUTOMATIC`, `DISABLED`.
+
 * `consistent_hash` -
   (Optional)
   Consistent Hash-based load balancing can be used to provide soft session
@@ -370,7 +436,7 @@ The following arguments are supported:
   load balancing cannot be used with the other. For more information, refer to
   [Choosing a load balancer](https://cloud.google.com/load-balancing/docs/backend-service).
   Default value is `EXTERNAL`.
-  Possible values are `EXTERNAL`, `INTERNAL_SELF_MANAGED`, and `EXTERNAL_MANAGED`.
+  Possible values are: `EXTERNAL`, `INTERNAL_SELF_MANAGED`, `EXTERNAL_MANAGED`.
 
 * `locality_lb_policy` -
   (Optional)
@@ -394,18 +460,43 @@ The following arguments are supported:
               Maglev is not as stable as ring hash but has faster table lookup
               build times and host selection times. For more information about
               Maglev, refer to https://ai.google/research/pubs/pub44824
+  * `WEIGHTED_MAGLEV`: Per-instance weighted Load Balancing via health check
+                       reported weights. If set, the Backend Service must
+                       configure a non legacy HTTP-based Health Check, and
+                       health check replies are expected to contain
+                       non-standard HTTP response header field
+                       X-Load-Balancing-Endpoint-Weight to specify the
+                       per-instance weights. If set, Load Balancing is weight
+                       based on the per-instance weights reported in the last
+                       processed health check replies, as long as every
+                       instance either reported a valid weight or had
+                       UNAVAILABLE_WEIGHT. Otherwise, Load Balancing remains
+                       equal-weight.
 
   This field is applicable to either:
   * A regional backend service with the service_protocol set to HTTP, HTTPS, or HTTP2,
     and loadBalancingScheme set to INTERNAL_MANAGED.
   * A global backend service with the load_balancing_scheme set to INTERNAL_SELF_MANAGED.
+  * A regional backend service with loadBalancingScheme set to EXTERNAL (External Network
+    Load Balancing). Only MAGLEV and WEIGHTED_MAGLEV values are possible for External
+    Network Load Balancing. The default is MAGLEV.
 
-  If session_affinity is not NONE, and this field is not set to MAGLEV or RING_HASH,
-  session affinity settings will not take effect.
+  If session_affinity is not NONE, and this field is not set to MAGLEV, WEIGHTED_MAGLEV,
+  or RING_HASH, session affinity settings will not take effect.
   Only ROUND_ROBIN and RING_HASH are supported when the backend service is referenced
   by a URL map that is bound to target gRPC proxy that has validate_for_proxyless
   field set to true.
-  Possible values are `ROUND_ROBIN`, `LEAST_REQUEST`, `RING_HASH`, `RANDOM`, `ORIGINAL_DESTINATION`, and `MAGLEV`.
+  Possible values are: `ROUND_ROBIN`, `LEAST_REQUEST`, `RING_HASH`, `RANDOM`, `ORIGINAL_DESTINATION`, `MAGLEV`, `WEIGHTED_MAGLEV`.
+
+* `locality_lb_policies` -
+  (Optional)
+  A list of locality load balancing policies to be used in order of
+  preference. Either the policy or the customPolicy field should be set.
+  Overrides any value set in the localityLbPolicy field.
+  localityLbPolicies is only supported when the BackendService is referenced
+  by a URL Map that is referenced by a target gRPC proxy that has the
+  validateForProxyless field set to true.
+  Structure is [documented below](#nested_locality_lb_policies).
 
 * `outlier_detection` -
   (Optional)
@@ -425,11 +516,15 @@ The following arguments are supported:
   The protocol this BackendService uses to communicate with backends.
   The default is HTTP. **NOTE**: HTTP2 is only valid for beta HTTP/2 load balancer
   types and may result in errors if used with the GA API.
-  Possible values are `HTTP`, `HTTPS`, `HTTP2`, `TCP`, `SSL`, and `GRPC`.
+  Possible values are: `HTTP`, `HTTPS`, `HTTP2`, `TCP`, `SSL`, `GRPC`.
 
 * `security_policy` -
   (Optional)
   The security policy associated with this backend service.
+
+* `edge_security_policy` -
+  (Optional)
+  The resource URL for the edge security policy associated with this backend service.
 
 * `security_settings` -
   (Optional)
@@ -443,7 +538,7 @@ The following arguments are supported:
   (Optional)
   Type of session affinity to use. The default is NONE. Session affinity is
   not applicable if the protocol is UDP.
-  Possible values are `NONE`, `CLIENT_IP`, `CLIENT_IP_PORT_PROTO`, `CLIENT_IP_PROTO`, `GENERATED_COOKIE`, `HEADER_FIELD`, and `HTTP_COOKIE`.
+  Possible values are: `NONE`, `CLIENT_IP`, `CLIENT_IP_PORT_PROTO`, `CLIENT_IP_PROTO`, `GENERATED_COOKIE`, `HEADER_FIELD`, `HTTP_COOKIE`.
 
 * `timeout_sec` -
   (Optional)
@@ -471,7 +566,7 @@ The following arguments are supported:
   See the [Backend Services Overview](https://cloud.google.com/load-balancing/docs/backend-service#balancing-mode)
   for an explanation of load balancing modes.
   Default value is `UTILIZATION`.
-  Possible values are `UTILIZATION`, `RATE`, and `CONNECTION`.
+  Possible values are: `UTILIZATION`, `RATE`, `CONNECTION`.
 
 * `capacity_scaler` -
   (Optional)
@@ -707,11 +802,17 @@ The following arguments are supported:
   (Optional)
   Specifies the cache setting for all responses from this backend.
   The possible values are: USE_ORIGIN_HEADERS, FORCE_CACHE_ALL and CACHE_ALL_STATIC
-  Possible values are `USE_ORIGIN_HEADERS`, `FORCE_CACHE_ALL`, and `CACHE_ALL_STATIC`.
+  Possible values are: `USE_ORIGIN_HEADERS`, `FORCE_CACHE_ALL`, `CACHE_ALL_STATIC`.
 
 * `serve_while_stale` -
   (Optional)
   Serve existing content from the cache (if available) when revalidating content with the origin, or when an error is encountered when refreshing the cache.
+
+* `bypass_cache_on_request_headers` -
+  (Optional)
+  Bypass the cache when the specified request headers are matched - e.g. Pragma or Authorization headers. Up to 5 headers can be specified.
+  The cache is bypassed for all cdnPolicy.cacheMode settings.
+  Structure is [documented below](#nested_bypass_cache_on_request_headers).
 
 
 <a name="nested_cache_key_policy"></a>The `cache_key_policy` block supports:
@@ -749,6 +850,11 @@ The following arguments are supported:
   '&' and '=' will be percent encoded and not treated as
   delimiters.
 
+* `include_http_headers` -
+  (Optional)
+  Allows HTTP request headers (by name) to be used in the
+  cache key.
+
 * `include_named_cookies` -
   (Optional)
   Names of cookies to include in cache keys.
@@ -765,6 +871,12 @@ The following arguments are supported:
   The TTL (in seconds) for which to cache responses with the corresponding status code. The maximum allowed value is 1800s
   (30 minutes), noting that infrequently accessed objects may be evicted from the cache before the defined TTL.
 
+<a name="nested_bypass_cache_on_request_headers"></a>The `bypass_cache_on_request_headers` block supports:
+
+* `header_name` -
+  (Required)
+  The header field name to match on when bypassing cache. Values are case-insensitive.
+
 <a name="nested_iap"></a>The `iap` block supports:
 
 * `oauth2_client_id` -
@@ -777,8 +889,72 @@ The following arguments are supported:
   **Note**: This property is sensitive and will not be displayed in the plan.
 
 * `oauth2_client_secret_sha256` -
+  (Output)
   OAuth2 Client Secret SHA-256 for IAP
   **Note**: This property is sensitive and will not be displayed in the plan.
+
+<a name="nested_locality_lb_policies"></a>The `locality_lb_policies` block supports:
+
+* `policy` -
+  (Optional)
+  The configuration for a built-in load balancing policy.
+  Structure is [documented below](#nested_policy).
+
+* `custom_policy` -
+  (Optional)
+  The configuration for a custom policy implemented by the user and
+  deployed with the client.
+  Structure is [documented below](#nested_custom_policy).
+
+
+<a name="nested_policy"></a>The `policy` block supports:
+
+* `name` -
+  (Required)
+  The name of a locality load balancer policy to be used. The value
+  should be one of the predefined ones as supported by localityLbPolicy,
+  although at the moment only ROUND_ROBIN is supported.
+  This field should only be populated when the customPolicy field is not
+  used.
+  Note that specifying the same policy more than once for a backend is
+  not a valid configuration and will be rejected.
+  The possible values are:
+  * `ROUND_ROBIN`: This is a simple policy in which each healthy backend
+                  is selected in round robin order.
+  * `LEAST_REQUEST`: An O(1) algorithm which selects two random healthy
+                    hosts and picks the host which has fewer active requests.
+  * `RING_HASH`: The ring/modulo hash load balancer implements consistent
+                hashing to backends. The algorithm has the property that the
+                addition/removal of a host from a set of N hosts only affects
+                1/N of the requests.
+  * `RANDOM`: The load balancer selects a random healthy host.
+  * `ORIGINAL_DESTINATION`: Backend host is selected based on the client
+                            connection metadata, i.e., connections are opened
+                            to the same address as the destination address of
+                            the incoming connection before the connection
+                            was redirected to the load balancer.
+  * `MAGLEV`: used as a drop in replacement for the ring hash load balancer.
+              Maglev is not as stable as ring hash but has faster table lookup
+              build times and host selection times. For more information about
+              Maglev, refer to https://ai.google/research/pubs/pub44824
+  Possible values are: `ROUND_ROBIN`, `LEAST_REQUEST`, `RING_HASH`, `RANDOM`, `ORIGINAL_DESTINATION`, `MAGLEV`.
+
+<a name="nested_custom_policy"></a>The `custom_policy` block supports:
+
+* `name` -
+  (Required)
+  Identifies the custom policy.
+  The value should match the type the custom implementation is registered
+  with on the gRPC clients. It should follow protocol buffer
+  message naming conventions and include the full path (e.g.
+  myorg.CustomLbPolicy). The maximum length is 256 characters.
+  Note that specifying the same custom policy more than once for a
+  backend is not a valid configuration and will be rejected.
+
+* `data` -
+  (Optional)
+  An optional, arbitrary JSON object with configuration data, understood
+  by a locally installed custom policy implementation.
 
 <a name="nested_outlier_detection"></a>The `outlier_detection` block supports:
 
@@ -920,13 +1096,16 @@ In addition to the arguments listed above, the following computed attributes are
 * `fingerprint` -
   Fingerprint of this resource. A hash of the contents stored in this
   object. This field is used in optimistic locking.
+
+* `generated_id` -
+  The unique identifier for the resource. This identifier is defined by the server.
 * `self_link` - The URI of the created resource.
 
 
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -945,4 +1124,4 @@ $ terraform import google_compute_backend_service.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

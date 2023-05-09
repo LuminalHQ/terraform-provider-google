@@ -24,6 +24,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func TestAccContainerAzureClient_BasicHandWritten(t *testing.T) {
@@ -32,14 +35,14 @@ func TestAccContainerAzureClient_BasicHandWritten(t *testing.T) {
 	context := map[string]interface{}{
 		"azure_app":     "00000000-0000-0000-0000-17aad2f0f61f",
 		"azure_tenant":  "00000000-0000-0000-0000-17aad2f0f61f",
-		"project_name":  getTestProjectFromEnv(),
-		"random_suffix": randString(t, 10),
+		"project_name":  acctest.GetTestProjectFromEnv(),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckContainerAzureClientDestroyProducer(t),
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckContainerAzureClientDestroyProducer(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccContainerAzureClient_BasicHandWritten(context),
@@ -76,7 +79,7 @@ func testAccCheckContainerAzureClientDestroyProducer(t *testing.T) func(s *terra
 				continue
 			}
 
-			config := googleProviderConfig(t)
+			config := GoogleProviderConfig(t)
 
 			billingProject := ""
 			if config.BillingProject != "" {
@@ -94,7 +97,7 @@ func testAccCheckContainerAzureClientDestroyProducer(t *testing.T) func(s *terra
 				Uid:           dcl.StringOrNil(rs.Primary.Attributes["uid"]),
 			}
 
-			client := NewDCLContainerAzureClient(config, config.userAgent, billingProject, 0)
+			client := transport_tpg.NewDCLContainerAzureClient(config, config.UserAgent, billingProject, 0)
 			_, err := client.GetClient(context.Background(), obj)
 			if err == nil {
 				return fmt.Errorf("google_container_azure_client still exists %v", obj)

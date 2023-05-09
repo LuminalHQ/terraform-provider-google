@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeManagedSslCertificate() *schema.Resource {
+func ResourceComputeManagedSslCertificate() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeManagedSslCertificateCreate,
 		Read:   resourceComputeManagedSslCertificateRead,
@@ -58,7 +62,7 @@ certificate is managed (as indicated by a value of 'MANAGED' in 'type').`,
 							Type:             schema.TypeList,
 							Required:         true,
 							ForceNew:         true,
-							DiffSuppressFunc: absoluteDomainSuppress,
+							DiffSuppressFunc: tpgresource.AbsoluteDomainSuppress,
 							Description: `Domains for which a managed SSL certificate will be valid.  Currently,
 there can be up to 100 domains in this list.`,
 							MaxItems: 100,
@@ -88,7 +92,7 @@ These are in the same namespace as the managed SSL certificates.`,
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"MANAGED", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"MANAGED", ""}),
 				Description: `Enum field whose value is always 'MANAGED' - used to signal to the API
 which type this is. Default value: "MANAGED" Possible values: ["MANAGED"]`,
 				Default: "MANAGED",
@@ -107,7 +111,7 @@ which type this is. Default value: "MANAGED" Possible values: ["MANAGED"]`,
 			"expire_time": {
 				Type:        schema.TypeString,
 				Computed:    true,
-				Description: `Expire time of the certificate.`,
+				Description: `Expire time of the certificate in RFC3339 text format.`,
 			},
 			"subject_alternative_names": {
 				Type:        schema.TypeList,
@@ -133,8 +137,8 @@ which type this is. Default value: "MANAGED" Possible values: ["MANAGED"]`,
 }
 
 func resourceComputeManagedSslCertificateCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -165,7 +169,7 @@ func resourceComputeManagedSslCertificateCreate(d *schema.ResourceData, meta int
 		obj["type"] = typeProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates")
 	if err != nil {
 		return err
 	}
@@ -184,19 +188,19 @@ func resourceComputeManagedSslCertificateCreate(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating ManagedSslCertificate: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/global/sslCertificates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/sslCertificates/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating ManagedSslCertificate", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -212,13 +216,13 @@ func resourceComputeManagedSslCertificateCreate(d *schema.ResourceData, meta int
 }
 
 func resourceComputeManagedSslCertificateRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -236,9 +240,9 @@ func resourceComputeManagedSslCertificateRead(d *schema.ResourceData, meta inter
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeManagedSslCertificate %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeManagedSslCertificate %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -269,7 +273,7 @@ func resourceComputeManagedSslCertificateRead(d *schema.ResourceData, meta inter
 	if err := d.Set("expire_time", flattenComputeManagedSslCertificateExpireTime(res["expireTime"], d, config)); err != nil {
 		return fmt.Errorf("Error reading ManagedSslCertificate: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading ManagedSslCertificate: %s", err)
 	}
 
@@ -277,8 +281,8 @@ func resourceComputeManagedSslCertificateRead(d *schema.ResourceData, meta inter
 }
 
 func resourceComputeManagedSslCertificateDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -291,7 +295,7 @@ func resourceComputeManagedSslCertificateDelete(d *schema.ResourceData, meta int
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/global/sslCertificates/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -304,12 +308,12 @@ func resourceComputeManagedSslCertificateDelete(d *schema.ResourceData, meta int
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "ManagedSslCertificate")
+		return transport_tpg.HandleNotFoundError(err, d, "ManagedSslCertificate")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting ManagedSslCertificate", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -322,8 +326,8 @@ func resourceComputeManagedSslCertificateDelete(d *schema.ResourceData, meta int
 }
 
 func resourceComputeManagedSslCertificateImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/global/sslCertificates/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -332,7 +336,7 @@ func resourceComputeManagedSslCertificateImport(d *schema.ResourceData, meta int
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/global/sslCertificates/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/sslCertificates/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -341,18 +345,18 @@ func resourceComputeManagedSslCertificateImport(d *schema.ResourceData, meta int
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeManagedSslCertificateCreationTimestamp(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateCreationTimestamp(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeManagedSslCertificateDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeManagedSslCertificateCertificateId(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateCertificateId(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -366,11 +370,11 @@ func flattenComputeManagedSslCertificateCertificateId(v interface{}, d *schema.R
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeManagedSslCertificateName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeManagedSslCertificateManaged(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateManaged(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -383,31 +387,31 @@ func flattenComputeManagedSslCertificateManaged(v interface{}, d *schema.Resourc
 		flattenComputeManagedSslCertificateManagedDomains(original["domains"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeManagedSslCertificateManagedDomains(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateManagedDomains(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeManagedSslCertificateType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeManagedSslCertificateSubjectAlternativeNames(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateSubjectAlternativeNames(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeManagedSslCertificateExpireTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeManagedSslCertificateExpireTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandComputeManagedSslCertificateDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeManagedSslCertificateDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeManagedSslCertificateName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeManagedSslCertificateName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeManagedSslCertificateManaged(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeManagedSslCertificateManaged(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -426,10 +430,10 @@ func expandComputeManagedSslCertificateManaged(v interface{}, d TerraformResourc
 	return transformed, nil
 }
 
-func expandComputeManagedSslCertificateManagedDomains(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeManagedSslCertificateManagedDomains(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeManagedSslCertificateType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeManagedSslCertificateType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

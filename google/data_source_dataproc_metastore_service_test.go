@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
@@ -10,16 +11,16 @@ import (
 func TestAccDataprocMetastoreServiceDatasource_basic(t *testing.T) {
 	t.Parallel()
 
-	name := "tf-test-" + randString(t, 10)
+	name := "tf-test-" + RandString(t, 10)
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccDataprocMetastoreServiceDatasource_basic(name, "DEVELOPER"),
 				Check: resource.ComposeTestCheckFunc(
-					checkDataSourceStateMatchesResourceState("data.google_dataproc_metastore_service.my_metastore", "google_dataproc_metastore_service.my_metastore"),
+					acctest.CheckDataSourceStateMatchesResourceState("data.google_dataproc_metastore_service.my_metastore", "google_dataproc_metastore_service.my_metastore"),
 				),
 			},
 		},

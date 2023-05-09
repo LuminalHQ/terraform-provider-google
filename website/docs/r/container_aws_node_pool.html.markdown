@@ -14,7 +14,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "ContainerAws"
-page_title: "Google: google_container_aws_node_pool"
 description: |-
   An Anthos node pool running on AWS.
 ---
@@ -36,7 +35,7 @@ data "google_container_aws_versions" "versions" {
 resource "google_container_aws_cluster" "primary" {
   authorization {
     admin_users {
-      username = "emailAddress:my@service-account.com"
+      username = "my@service-account.com"
     }
   }
 
@@ -87,7 +86,7 @@ resource "google_container_aws_cluster" "primary" {
     }
 
     tags = {
-      owner = "emailAddress:my@service-account.com"
+      owner = "my@service-account.com"
     }
   }
 
@@ -232,6 +231,10 @@ The `autoscaling` block supports:
     
 The `config` block supports:
     
+* `autoscaling_metrics_collection` -
+  (Optional)
+  Optional. Configuration related to CloudWatch metrics collection on the Auto Scaling group of the node pool. When unspecified, metrics collection is disabled.
+    
 * `config_encryption` -
   (Required)
   The ARN of the AWS KMS key used to encrypt node pool configuration.
@@ -254,7 +257,7 @@ The `config` block supports:
     
 * `labels` -
   (Optional)
-  Optional. The initial labels assigned to nodes of this node pool. An object containing a list of "key": value pairs. Example { "name": "wrench", "mass": "1.3kg", "count": "3" }.
+  Optional. The initial labels assigned to nodes of this node pool. An object containing a list of "key": value pairs. Example: { "name": "wrench", "mass": "1.3kg", "count": "3" }.
     
 * `proxy_config` -
   (Optional)
@@ -267,6 +270,10 @@ The `config` block supports:
 * `security_group_ids` -
   (Optional)
   Optional. The IDs of additional security groups to add to nodes in this pool. The manager will automatically create security groups with minimum rules needed for a functioning cluster.
+    
+* `spot_config` -
+  (Optional)
+  (Beta only) Optional. When specified, the node pool will provision Spot instances from the set of spot_config.instance_types. This field is mutually exclusive with `instance_type`
     
 * `ssh_config` -
   (Optional)
@@ -304,6 +311,16 @@ The `max_pods_constraint` block supports:
   
 
 
+The `autoscaling_metrics_collection` block supports:
+    
+* `granularity` -
+  (Required)
+  The frequency at which EC2 Auto Scaling sends aggregated data to AWS CloudWatch. The only valid value is "1Minute".
+    
+* `metrics` -
+  (Optional)
+  The metrics to enable. For a list of valid metrics, see https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_EnableMetricsCollection.html. If you specify granularity and don't specify any metrics, all metrics are enabled.
+    
 The `instance_placement` block supports:
     
 * `tenancy` -
@@ -337,6 +354,12 @@ The `root_volume` block supports:
 * `volume_type` -
   (Optional)
   Optional. Type of the EBS volume. When unspecified, it defaults to GP2 volume. Possible values: VOLUME_TYPE_UNSPECIFIED, GP2, GP3
+    
+The `spot_config` block supports:
+    
+* `instance_types` -
+  (Required)
+  List of AWS EC2 instance types for creating a spot node pool's nodes. The specified instance types must have the same number of CPUs and memory. You can use the Amazon EC2 Instance Selector tool (https://github.com/aws/amazon-ec2-instance-selector) to choose instance types with matching CPU and memory
     
 The `ssh_config` block supports:
     
@@ -385,7 +408,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.

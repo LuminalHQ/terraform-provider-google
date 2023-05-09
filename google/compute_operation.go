@@ -9,6 +9,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"google.golang.org/api/compute/v1"
 )
 
@@ -68,10 +71,10 @@ func (w *ComputeOperationWaiter) QueryOp() (interface{}, error) {
 		}
 	}
 	if w.Op.Zone != "" {
-		zone := GetResourceNameFromSelfLink(w.Op.Zone)
+		zone := tpgresource.GetResourceNameFromSelfLink(w.Op.Zone)
 		return w.Service.ZoneOperations.Get(w.Project, zone, w.Op.Name).Do()
 	} else if w.Op.Region != "" {
-		region := GetResourceNameFromSelfLink(w.Op.Region)
+		region := tpgresource.GetResourceNameFromSelfLink(w.Op.Region)
 		return w.Service.RegionOperations.Get(w.Project, region, w.Op.Name).Do()
 	}
 	return w.Service.GlobalOperations.Get(w.Project, w.Op.Name).Do()
@@ -93,16 +96,16 @@ func (w *ComputeOperationWaiter) TargetStates() []string {
 	return []string{"DONE"}
 }
 
-func computeOperationWaitTime(config *Config, res interface{}, project, activity, userAgent string, timeout time.Duration) error {
+func ComputeOperationWaitTime(config *transport_tpg.Config, res interface{}, project, activity, userAgent string, timeout time.Duration) error {
 	op := &compute.Operation{}
-	err := Convert(res, op)
+	err := tpgresource.Convert(res, op)
 	if err != nil {
 		return err
 	}
 
 	w := &ComputeOperationWaiter{
 		Service: config.NewComputeClient(userAgent),
-		Context: config.context,
+		Context: config.Context,
 		Op:      op,
 		Project: project,
 	}
@@ -126,12 +129,42 @@ func (e ComputeOperationError) Error() string {
 	return buf.String()
 }
 
+const errMsgSep = "\n\n"
+
 func writeOperationError(w io.StringWriter, opError *compute.OperationErrorErrors) {
 	w.WriteString(opError.Message + "\n")
 
+	var lm *compute.LocalizedMessage
+	var link *compute.HelpLink
+
 	for _, ed := range opError.ErrorDetails {
-		if ed.LocalizedMessage != nil && ed.LocalizedMessage.Message != "" {
-			w.WriteString(ed.LocalizedMessage.Message + "\n")
+		if lm == nil && ed.LocalizedMessage != nil {
+			lm = ed.LocalizedMessage
+		}
+
+		if link == nil && ed.Help != nil && len(ed.Help.Links) > 0 {
+			link = ed.Help.Links[0]
+		}
+
+		if lm != nil && link != nil {
+			break
+		}
+	}
+
+	if lm != nil && lm.Message != "" {
+		w.WriteString(errMsgSep)
+		w.WriteString(lm.Message + "\n")
+	}
+
+	if link != nil {
+		w.WriteString(errMsgSep)
+
+		if link.Description != "" {
+			w.WriteString(link.Description + "\n")
+		}
+
+		if link.Url != "" {
+			w.WriteString(link.Url + "\n")
 		}
 	}
 }

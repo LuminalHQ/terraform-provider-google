@@ -22,6 +22,10 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
 var domainMappingGoogleProvidedLabels = []string{
@@ -29,7 +33,7 @@ var domainMappingGoogleProvidedLabels = []string{
 	"run.googleapis.com/overrideAt",
 }
 
-func domainMappingLabelDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
+func DomainMappingLabelDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
 	// Suppress diffs for the labels provided by Google
 	for _, label := range domainMappingGoogleProvidedLabels {
 		if strings.Contains(k, label) && new == "" {
@@ -46,7 +50,7 @@ func domainMappingLabelDiffSuppress(k, old, new string, d *schema.ResourceData) 
 	return false
 }
 
-func resourceCloudRunDomainMapping() *schema.Resource {
+func ResourceCloudRunDomainMapping() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudRunDomainMappingCreate,
 		Read:   resourceCloudRunDomainMappingRead,
@@ -103,7 +107,7 @@ or apply the lifecycle.ignore_changes rule to the metadata.0.annotations field.`
 							Computed:         true,
 							Optional:         true,
 							ForceNew:         true,
-							DiffSuppressFunc: domainMappingLabelDiffSuppress,
+							DiffSuppressFunc: DomainMappingLabelDiffSuppress,
 							Description: `Map of string keys and values that can be used to organize and categorize
 (scope and select) objects. May match selectors of replication controllers
 and routes.
@@ -161,7 +165,7 @@ More info: http://kubernetes.io/docs/user-guide/identifiers#uids`,
 							Type:             schema.TypeString,
 							Required:         true,
 							ForceNew:         true,
-							DiffSuppressFunc: compareSelfLinkOrResourceName,
+							DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 							Description: `The name of the Cloud Run Service that this DomainMapping applies to.
 The route must exist.`,
 						},
@@ -169,7 +173,7 @@ The route must exist.`,
 							Type:         schema.TypeString,
 							Optional:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"NONE", "AUTOMATIC", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"NONE", "AUTOMATIC", ""}),
 							Description:  `The mode of the certificate. Default value: "AUTOMATIC" Possible values: ["NONE", "AUTOMATIC"]`,
 							Default:      "AUTOMATIC",
 						},
@@ -202,7 +206,7 @@ serve the application via this domain mapping.`,
 									"type": {
 										Type:         schema.TypeString,
 										Optional:     true,
-										ValidateFunc: validateEnum([]string{"A", "AAAA", "CNAME", ""}),
+										ValidateFunc: verify.ValidateEnum([]string{"A", "AAAA", "CNAME", ""}),
 										Description:  `Resource record type. Example: 'AAAA'. Possible values: ["A", "AAAA", "CNAME"]`,
 									},
 									"name": {
@@ -276,8 +280,8 @@ was last processed by the controller.`,
 }
 
 func resourceCloudRunDomainMappingCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -301,7 +305,7 @@ func resourceCloudRunDomainMappingCreate(d *schema.ResourceData, meta interface{
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings")
 	if err != nil {
 		return err
 	}
@@ -320,13 +324,13 @@ func resourceCloudRunDomainMappingCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsCloudRunCreationConflict)
 	if err != nil {
 		return fmt.Errorf("Error creating DomainMapping: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/domainmappings/{{name}}")
+	id, err := ReplaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/domainmappings/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -344,9 +348,9 @@ func resourceCloudRunDomainMappingCreate(d *schema.ResourceData, meta interface{
 
 func resourceCloudRunDomainMappingPollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings/{{name}}")
+		url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings/{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -364,12 +368,12 @@ func resourceCloudRunDomainMappingPollRead(d *schema.ResourceData, meta interfac
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isCloudRunCreationConflict)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsCloudRunCreationConflict)
 		if err != nil {
 			return res, err
 		}
@@ -386,13 +390,13 @@ func resourceCloudRunDomainMappingPollRead(d *schema.ResourceData, meta interfac
 }
 
 func resourceCloudRunDomainMappingRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -410,9 +414,9 @@ func resourceCloudRunDomainMappingRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsCloudRunCreationConflict)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudRunDomainMapping %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CloudRunDomainMapping %q", d.Id()))
 	}
 
 	res, err = resourceCloudRunDomainMappingDecoder(d, meta, res)
@@ -445,8 +449,8 @@ func resourceCloudRunDomainMappingRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceCloudRunDomainMappingDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -459,7 +463,7 @@ func resourceCloudRunDomainMappingDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/domains.cloudrun.com/v1/namespaces/{{project}}/domainmappings/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -472,9 +476,9 @@ func resourceCloudRunDomainMappingDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsCloudRunCreationConflict)
 	if err != nil {
-		return handleNotFoundError(err, d, "DomainMapping")
+		return transport_tpg.HandleNotFoundError(err, d, "DomainMapping")
 	}
 
 	log.Printf("[DEBUG] Finished deleting DomainMapping %q: %#v", d.Id(), res)
@@ -482,8 +486,8 @@ func resourceCloudRunDomainMappingDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceCloudRunDomainMappingImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"locations/(?P<location>[^/]+)/namespaces/(?P<project>[^/]+)/domainmappings/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -492,7 +496,7 @@ func resourceCloudRunDomainMappingImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/domainmappings/{{name}}")
+	id, err := ReplaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/domainmappings/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -501,7 +505,7 @@ func resourceCloudRunDomainMappingImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCloudRunDomainMappingStatus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -520,7 +524,7 @@ func flattenCloudRunDomainMappingStatus(v interface{}, d *schema.ResourceData, c
 		flattenCloudRunDomainMappingStatusMappedRouteName(original["mappedRouteName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunDomainMappingStatusConditions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusConditions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -541,26 +545,26 @@ func flattenCloudRunDomainMappingStatusConditions(v interface{}, d *schema.Resou
 	}
 	return transformed
 }
-func flattenCloudRunDomainMappingStatusConditionsMessage(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusConditionsMessage(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusConditionsStatus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusConditionsStatus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusConditionsReason(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusConditionsReason(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusConditionsType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusConditionsType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusObservedGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusObservedGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -574,7 +578,7 @@ func flattenCloudRunDomainMappingStatusObservedGeneration(v interface{}, d *sche
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunDomainMappingStatusResourceRecords(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusResourceRecords(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -594,23 +598,23 @@ func flattenCloudRunDomainMappingStatusResourceRecords(v interface{}, d *schema.
 	}
 	return transformed
 }
-func flattenCloudRunDomainMappingStatusResourceRecordsType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusResourceRecordsType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusResourceRecordsRrdata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusResourceRecordsRrdata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusResourceRecordsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusResourceRecordsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingStatusMappedRouteName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingStatusMappedRouteName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -627,20 +631,20 @@ func flattenCloudRunDomainMappingSpec(v interface{}, d *schema.ResourceData, con
 		flattenCloudRunDomainMappingSpecCertificateMode(original["certificateMode"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunDomainMappingSpecForceOverride(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingSpecForceOverride(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// We want to ignore read on this field, but cannot because it is nested
 	return d.Get("spec.0.force_override")
 }
 
-func flattenCloudRunDomainMappingSpecRouteName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingSpecRouteName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingSpecCertificateMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingSpecCertificateMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingMetadata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -665,14 +669,14 @@ func flattenCloudRunDomainMappingMetadata(v interface{}, d *schema.ResourceData,
 		flattenCloudRunDomainMappingMetadataAnnotations(original["annotations"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunDomainMappingMetadataLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingMetadataGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -686,27 +690,27 @@ func flattenCloudRunDomainMappingMetadataGeneration(v interface{}, d *schema.Res
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunDomainMappingMetadataResourceVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataResourceVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingMetadataSelfLink(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataSelfLink(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingMetadataUid(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataUid(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunDomainMappingMetadataNamespace(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataNamespace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return d.Get("project")
 }
 
-func flattenCloudRunDomainMappingMetadataAnnotations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunDomainMappingMetadataAnnotations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCloudRunDomainMappingSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -739,19 +743,19 @@ func expandCloudRunDomainMappingSpec(v interface{}, d TerraformResourceData, con
 	return transformed, nil
 }
 
-func expandCloudRunDomainMappingSpecForceOverride(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingSpecForceOverride(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingSpecRouteName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
-	return GetResourceNameFromSelfLink(v.(string)), nil
+func expandCloudRunDomainMappingSpecRouteName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return tpgresource.GetResourceNameFromSelfLink(v.(string)), nil
 }
 
-func expandCloudRunDomainMappingSpecCertificateMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingSpecCertificateMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingMetadata(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingMetadata(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -812,7 +816,7 @@ func expandCloudRunDomainMappingMetadata(v interface{}, d TerraformResourceData,
 	return transformed, nil
 }
 
-func expandCloudRunDomainMappingMetadataLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunDomainMappingMetadataLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -823,27 +827,27 @@ func expandCloudRunDomainMappingMetadataLabels(v interface{}, d TerraformResourc
 	return m, nil
 }
 
-func expandCloudRunDomainMappingMetadataGeneration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingMetadataGeneration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingMetadataResourceVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingMetadataResourceVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingMetadataSelfLink(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingMetadataSelfLink(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingMetadataUid(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingMetadataUid(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingMetadataNamespace(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunDomainMappingMetadataNamespace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunDomainMappingMetadataAnnotations(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunDomainMappingMetadataAnnotations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Firebase"
-page_title: "Google: google_firebase_project"
 description: |-
   A Google Cloud Firebase instance.
 ---
@@ -23,7 +22,6 @@ description: |-
 A Google Cloud Firebase instance. This enables Firebase resources on a given google project.
 Since a FirebaseProject is actually also a GCP Project, a FirebaseProject uses underlying GCP
 identifiers (most importantly, the projectId) as its own for easy interop with GCP APIs.
-
 Once Firebase has been added to a Google Project it cannot be removed.
 
 ~> **Warning:** This resource is in beta, and should be used with the terraform-provider-google-beta provider.
@@ -31,7 +29,7 @@ See [Provider Versions](https://terraform.io/docs/providers/google/guides/provid
 
 To get more information about Project, see:
 
-* [API documentation](https://firebase.google.com/docs/projects/api/reference/rest/v1beta1/projects)
+* [API documentation](https://firebase.google.com/docs/reference/firebase-management/rest/v1beta1/projects)
 * How-to Guides
     * [Official Documentation](https://firebase.google.com/)
 
@@ -45,6 +43,10 @@ resource "google_project" "default" {
   project_id = "tf-test%{random_suffix}"
   name       = "tf-test%{random_suffix}"
   org_id     = "123456789"
+
+  labels = {
+    "firebase" = "enabled"
+  }
 }
 
 resource "google_firebase_project" "default" {
@@ -82,7 +84,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `delete` - Default is 20 minutes.
@@ -99,4 +101,4 @@ $ terraform import google_firebase_project.default {{project}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "Compute Engine"
-page_title: "Google: google_compute_target_https_proxy"
 description: |-
   Represents a TargetHttpsProxy resource, which is used by one or more
   global forwarding rule to route incoming HTTPS requests to a URL map.
@@ -124,10 +123,9 @@ The following arguments are supported:
   Specifies the QUIC override policy for this resource. This determines
   whether the load balancer will attempt to negotiate QUIC with clients
   or not. Can specify one of NONE, ENABLE, or DISABLE. If NONE is
-  specified, uses the QUIC policy with no user overrides, which is
-  equivalent to DISABLE.
+  specified, Google manages whether QUIC is used.
   Default value is `NONE`.
-  Possible values are `NONE`, `ENABLE`, and `DISABLE`.
+  Possible values are: `NONE`, `ENABLE`, `DISABLE`.
 
 * `ssl_certificates` -
   (Optional)
@@ -137,7 +135,7 @@ The following arguments are supported:
 
 * `certificate_map` -
   (Optional)
-  A reference to the CertificateMap resource uri that identifies a certificate map 
+  A reference to the CertificateMap resource uri that identifies a certificate map
   associated with the given target proxy. This field can only be set for global target proxies.
   Accepted format is `//certificatemanager.googleapis.com/projects/{project}/locations/{location}/certificateMaps/{resourceName}`.
 
@@ -173,7 +171,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -192,4 +190,4 @@ $ terraform import google_compute_target_https_proxy.default {{name}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

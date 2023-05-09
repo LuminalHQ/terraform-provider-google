@@ -21,9 +21,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceAppEngineApplicationUrlDispatchRules() *schema.Resource {
+func ResourceAppEngineApplicationUrlDispatchRules() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAppEngineApplicationUrlDispatchRulesCreate,
 		Read:   resourceAppEngineApplicationUrlDispatchRulesRead,
@@ -81,8 +83,8 @@ Defaults to matching all domains: "*".`,
 }
 
 func resourceAppEngineApplicationUrlDispatchRulesCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -95,14 +97,14 @@ func resourceAppEngineApplicationUrlDispatchRulesCreate(d *schema.ResourceData, 
 		obj["dispatchRules"] = dispatchRulesProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}?updateMask=dispatch_rules")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}?updateMask=dispatch_rules")
 	if err != nil {
 		return err
 	}
@@ -121,19 +123,19 @@ func resourceAppEngineApplicationUrlDispatchRulesCreate(d *schema.ResourceData, 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsAppEngineRetryableError)
 	if err != nil {
 		return fmt.Errorf("Error creating ApplicationUrlDispatchRules: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{project}}")
+	id, err := ReplaceVars(d, config, "{{project}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Creating ApplicationUrlDispatchRules", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -149,13 +151,13 @@ func resourceAppEngineApplicationUrlDispatchRulesCreate(d *schema.ResourceData, 
 }
 
 func resourceAppEngineApplicationUrlDispatchRulesRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/{{name}}")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -173,9 +175,9 @@ func resourceAppEngineApplicationUrlDispatchRulesRead(d *schema.ResourceData, me
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsAppEngineRetryableError)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("AppEngineApplicationUrlDispatchRules %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("AppEngineApplicationUrlDispatchRules %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -190,8 +192,8 @@ func resourceAppEngineApplicationUrlDispatchRulesRead(d *schema.ResourceData, me
 }
 
 func resourceAppEngineApplicationUrlDispatchRulesUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -212,14 +214,14 @@ func resourceAppEngineApplicationUrlDispatchRulesUpdate(d *schema.ResourceData, 
 		obj["dispatchRules"] = dispatchRulesProp
 	}
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}?updateMask=dispatch_rules")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}?updateMask=dispatch_rules")
 	if err != nil {
 		return err
 	}
@@ -231,7 +233,7 @@ func resourceAppEngineApplicationUrlDispatchRulesUpdate(d *schema.ResourceData, 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.IsAppEngineRetryableError)
 
 	if err != nil {
 		return fmt.Errorf("Error updating ApplicationUrlDispatchRules %q: %s", d.Id(), err)
@@ -239,7 +241,7 @@ func resourceAppEngineApplicationUrlDispatchRulesUpdate(d *schema.ResourceData, 
 		log.Printf("[DEBUG] Finished updating ApplicationUrlDispatchRules %q: %#v", d.Id(), res)
 	}
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Updating ApplicationUrlDispatchRules", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -251,8 +253,8 @@ func resourceAppEngineApplicationUrlDispatchRulesUpdate(d *schema.ResourceData, 
 }
 
 func resourceAppEngineApplicationUrlDispatchRulesDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -265,14 +267,14 @@ func resourceAppEngineApplicationUrlDispatchRulesDelete(d *schema.ResourceData, 
 	}
 	billingProject = project
 
-	lockName, err := replaceVars(d, config, "apps/{{project}}")
+	lockName, err := ReplaceVars(d, config, "apps/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}?updateMask=dispatch_rules")
+	url, err := ReplaceVars(d, config, "{{AppEngineBasePath}}apps/{{project}}?updateMask=dispatch_rules")
 	if err != nil {
 		return err
 	}
@@ -285,12 +287,12 @@ func resourceAppEngineApplicationUrlDispatchRulesDelete(d *schema.ResourceData, 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isAppEngineRetryableError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsAppEngineRetryableError)
 	if err != nil {
-		return handleNotFoundError(err, d, "ApplicationUrlDispatchRules")
+		return transport_tpg.HandleNotFoundError(err, d, "ApplicationUrlDispatchRules")
 	}
 
-	err = appEngineOperationWaitTime(
+	err = AppEngineOperationWaitTime(
 		config, res, project, "Deleting ApplicationUrlDispatchRules", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -303,15 +305,15 @@ func resourceAppEngineApplicationUrlDispatchRulesDelete(d *schema.ResourceData, 
 }
 
 func resourceAppEngineApplicationUrlDispatchRulesImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<project>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{project}}")
+	id, err := ReplaceVars(d, config, "{{project}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -320,7 +322,7 @@ func resourceAppEngineApplicationUrlDispatchRulesImport(d *schema.ResourceData, 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenAppEngineApplicationUrlDispatchRulesDispatchRules(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineApplicationUrlDispatchRulesDispatchRules(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -340,19 +342,19 @@ func flattenAppEngineApplicationUrlDispatchRulesDispatchRules(v interface{}, d *
 	}
 	return transformed
 }
-func flattenAppEngineApplicationUrlDispatchRulesDispatchRulesDomain(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineApplicationUrlDispatchRulesDispatchRulesDomain(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineApplicationUrlDispatchRulesDispatchRulesPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineApplicationUrlDispatchRulesDispatchRulesPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenAppEngineApplicationUrlDispatchRulesDispatchRulesService(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenAppEngineApplicationUrlDispatchRulesDispatchRulesService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandAppEngineApplicationUrlDispatchRulesDispatchRules(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineApplicationUrlDispatchRulesDispatchRules(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -388,14 +390,14 @@ func expandAppEngineApplicationUrlDispatchRulesDispatchRules(v interface{}, d Te
 	return req, nil
 }
 
-func expandAppEngineApplicationUrlDispatchRulesDispatchRulesDomain(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineApplicationUrlDispatchRulesDispatchRulesDomain(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineApplicationUrlDispatchRulesDispatchRulesPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineApplicationUrlDispatchRulesDispatchRulesPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandAppEngineApplicationUrlDispatchRulesDispatchRulesService(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandAppEngineApplicationUrlDispatchRulesDispatchRulesService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

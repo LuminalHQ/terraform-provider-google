@@ -21,9 +21,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceComputeResourcePolicy() *schema.Resource {
+func ResourceComputeResourcePolicy() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeResourcePolicyCreate,
 		Read:   resourceComputeResourcePolicyRead,
@@ -71,13 +75,12 @@ which cannot be a dash.`,
 							ForceNew: true,
 							Description: `The number of availability domains instances will be spread across. If two instances are in different
 availability domain, they will not be put in the same low latency network`,
-							AtLeastOneOf: []string{"group_placement_policy.0.vm_count", "group_placement_policy.0.availability_domain_count"},
 						},
 						"collocation": {
 							Type:         schema.TypeString,
 							Optional:     true,
 							ForceNew:     true,
-							ValidateFunc: validateEnum([]string{"COLLOCATED", ""}),
+							ValidateFunc: verify.ValidateEnum([]string{"COLLOCATED", ""}),
 							Description: `Collocation specifies whether to place VMs inside the same availability domain on the same low-latency network.
 Specify 'COLLOCATED' to enable collocation. Can only be specified with 'vm_count'. If compute instances are created
 with a COLLOCATED policy, then exactly 'vm_count' instances must be created at the same time with the resource policy
@@ -90,7 +93,6 @@ attached. Possible values: ["COLLOCATED"]`,
 							Description: `Number of VMs in this placement group. Google does not recommend that you use this field
 unless you use a compact policy and you want your policy to work only if it contains this
 exact number of VMs.`,
-							AtLeastOneOf: []string{"group_placement_policy.0.vm_count", "group_placement_policy.0.availability_domain_count"},
 						},
 					},
 				},
@@ -205,7 +207,7 @@ from the tz database: http://en.wikipedia.org/wiki/Tz_database.`,
 													Type:         schema.TypeString,
 													Required:     true,
 													ForceNew:     true,
-													ValidateFunc: validateHourlyOnly,
+													ValidateFunc: verify.ValidateHourlyOnly,
 													Description: `This must be in UTC format that resolves to one of
 00:00, 04:00, 08:00, 12:00, 16:00, or 20:00. For example,
 both 13:00-5 and 08:00 are valid.`,
@@ -232,7 +234,7 @@ both 13:00-5 and 08:00 are valid.`,
 													Type:         schema.TypeString,
 													Required:     true,
 													ForceNew:     true,
-													ValidateFunc: validateHourlyOnly,
+													ValidateFunc: verify.ValidateHourlyOnly,
 													Description: `Time within the window to start the operations.
 It must be in an hourly format "HH:MM",
 where HH : [00-23] and MM : [00] GMT.
@@ -285,7 +287,7 @@ eg: 21:00`,
 										Type:         schema.TypeString,
 										Optional:     true,
 										ForceNew:     true,
-										ValidateFunc: validateEnum([]string{"KEEP_AUTO_SNAPSHOTS", "APPLY_RETENTION_POLICY", ""}),
+										ValidateFunc: verify.ValidateEnum([]string{"KEEP_AUTO_SNAPSHOTS", "APPLY_RETENTION_POLICY", ""}),
 										Description: `Specifies the behavior to apply to scheduled snapshots when
 the source disk is deleted. Default value: "KEEP_AUTO_SNAPSHOTS" Possible values: ["KEEP_AUTO_SNAPSHOTS", "APPLY_RETENTION_POLICY"]`,
 										Default: "KEEP_AUTO_SNAPSHOTS",
@@ -301,6 +303,14 @@ the source disk is deleted. Default value: "KEEP_AUTO_SNAPSHOTS" Possible values
 							MaxItems:    1,
 							Elem: &schema.Resource{
 								Schema: map[string]*schema.Schema{
+									"chain_name": {
+										Type:     schema.TypeString,
+										Optional: true,
+										ForceNew: true,
+										Description: `Creates the new snapshot in the snapshot chain labeled with the
+specified name. The chain name must be 1-63 characters long and comply
+with RFC1035.`,
+									},
 									"guest_flush": {
 										Type:         schema.TypeBool,
 										Optional:     true,
@@ -358,7 +368,7 @@ func computeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeks
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
+				ValidateFunc: verify.ValidateEnum([]string{"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}),
 				Description:  `The day of the week to create the snapshot. e.g. MONDAY Possible values: ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]`,
 			},
 			"start_time": {
@@ -373,8 +383,8 @@ It must be in format "HH:MM", where HH : [00-23] and MM : [00-00] GMT.`,
 }
 
 func resourceComputeResourcePolicyCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -417,7 +427,7 @@ func resourceComputeResourcePolicyCreate(d *schema.ResourceData, meta interface{
 		obj["region"] = regionProp
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies")
 	if err != nil {
 		return err
 	}
@@ -436,19 +446,19 @@ func resourceComputeResourcePolicyCreate(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating ResourcePolicy: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
 	d.SetId(id)
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Creating ResourcePolicy", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 
@@ -464,13 +474,13 @@ func resourceComputeResourcePolicyCreate(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeResourcePolicyRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -488,9 +498,9 @@ func resourceComputeResourcePolicyRead(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ComputeResourcePolicy %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ComputeResourcePolicy %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -515,7 +525,7 @@ func resourceComputeResourcePolicyRead(d *schema.ResourceData, meta interface{})
 	if err := d.Set("region", flattenComputeResourcePolicyRegion(res["region"], d, config)); err != nil {
 		return fmt.Errorf("Error reading ResourcePolicy: %s", err)
 	}
-	if err := d.Set("self_link", ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
+	if err := d.Set("self_link", tpgresource.ConvertSelfLinkToV1(res["selfLink"].(string))); err != nil {
 		return fmt.Errorf("Error reading ResourcePolicy: %s", err)
 	}
 
@@ -523,8 +533,8 @@ func resourceComputeResourcePolicyRead(d *schema.ResourceData, meta interface{})
 }
 
 func resourceComputeResourcePolicyDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -537,7 +547,7 @@ func resourceComputeResourcePolicyDelete(d *schema.ResourceData, meta interface{
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ComputeBasePath}}projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -550,12 +560,12 @@ func resourceComputeResourcePolicyDelete(d *schema.ResourceData, meta interface{
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "ResourcePolicy")
+		return transport_tpg.HandleNotFoundError(err, d, "ResourcePolicy")
 	}
 
-	err = computeOperationWaitTime(
+	err = ComputeOperationWaitTime(
 		config, res, project, "Deleting ResourcePolicy", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -568,8 +578,8 @@ func resourceComputeResourcePolicyDelete(d *schema.ResourceData, meta interface{
 }
 
 func resourceComputeResourcePolicyImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/regions/(?P<region>[^/]+)/resourcePolicies/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<region>[^/]+)/(?P<name>[^/]+)",
 		"(?P<region>[^/]+)/(?P<name>[^/]+)",
@@ -579,7 +589,7 @@ func resourceComputeResourcePolicyImport(d *schema.ResourceData, meta interface{
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/regions/{{region}}/resourcePolicies/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -588,15 +598,15 @@ func resourceComputeResourcePolicyImport(d *schema.ResourceData, meta interface{
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenComputeResourcePolicyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -613,7 +623,7 @@ func flattenComputeResourcePolicySnapshotSchedulePolicy(v interface{}, d *schema
 		flattenComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(original["snapshotProperties"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicySchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicySchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -630,7 +640,7 @@ func flattenComputeResourcePolicySnapshotSchedulePolicySchedule(v interface{}, d
 		flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(original["weeklySchedule"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlySchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlySchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -645,10 +655,10 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlySchedule(v 
 		flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleStartTime(original["startTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleHoursInCycle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleHoursInCycle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -662,11 +672,11 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleHou
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailySchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailySchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -681,10 +691,10 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailySchedule(v i
 		flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleStartTime(original["startTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleDaysInCycle(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleDaysInCycle(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -698,11 +708,11 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleDays
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -715,7 +725,7 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(v 
 		flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeks(original["dayOfWeeks"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeks(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeks(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -734,15 +744,15 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDay
 	}
 	return transformed
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksDay(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksDay(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -757,10 +767,10 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicy(v interfa
 		flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyOnSourceDiskDelete(original["onSourceDiskDelete"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyMaxRetentionDays(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyMaxRetentionDays(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -774,11 +784,11 @@ func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyMaxRetenti
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyOnSourceDiskDelete(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyOnSourceDiskDelete(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -793,24 +803,30 @@ func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(v inte
 		flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesStorageLocations(original["storageLocations"], d, config)
 	transformed["guest_flush"] =
 		flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesGuestFlush(original["guestFlush"], d, config)
+	transformed["chain_name"] =
+		flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesChainName(original["chainName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesStorageLocations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesStorageLocations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
 	return schema.NewSet(schema.HashString, v.([]interface{}))
 }
 
-func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesGuestFlush(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesGuestFlush(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyGroupPlacementPolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesChainName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenComputeResourcePolicyGroupPlacementPolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -827,10 +843,10 @@ func flattenComputeResourcePolicyGroupPlacementPolicy(v interface{}, d *schema.R
 		flattenComputeResourcePolicyGroupPlacementPolicyCollocation(original["collocation"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicyGroupPlacementPolicyVmCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyGroupPlacementPolicyVmCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -844,10 +860,10 @@ func flattenComputeResourcePolicyGroupPlacementPolicyVmCount(v interface{}, d *s
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeResourcePolicyGroupPlacementPolicyAvailabilityDomainCount(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyGroupPlacementPolicyAvailabilityDomainCount(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -861,11 +877,11 @@ func flattenComputeResourcePolicyGroupPlacementPolicyAvailabilityDomainCount(v i
 	return v // let terraform core handle it otherwise
 }
 
-func flattenComputeResourcePolicyGroupPlacementPolicyCollocation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyGroupPlacementPolicyCollocation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyInstanceSchedulePolicy(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicy(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -886,7 +902,7 @@ func flattenComputeResourcePolicyInstanceSchedulePolicy(v interface{}, d *schema
 		flattenComputeResourcePolicyInstanceSchedulePolicyExpirationTime(original["expirationTime"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicyInstanceSchedulePolicyVmStartSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyVmStartSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -899,11 +915,11 @@ func flattenComputeResourcePolicyInstanceSchedulePolicyVmStartSchedule(v interfa
 		flattenComputeResourcePolicyInstanceSchedulePolicyVmStartScheduleSchedule(original["schedule"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicyInstanceSchedulePolicyVmStartScheduleSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyVmStartScheduleSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyInstanceSchedulePolicyVmStopSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyVmStopSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -916,38 +932,38 @@ func flattenComputeResourcePolicyInstanceSchedulePolicyVmStopSchedule(v interfac
 		flattenComputeResourcePolicyInstanceSchedulePolicyVmStopScheduleSchedule(original["schedule"], d, config)
 	return []interface{}{transformed}
 }
-func flattenComputeResourcePolicyInstanceSchedulePolicyVmStopScheduleSchedule(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyVmStopScheduleSchedule(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyInstanceSchedulePolicyTimeZone(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyTimeZone(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyInstanceSchedulePolicyStartTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyStartTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyInstanceSchedulePolicyExpirationTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyInstanceSchedulePolicyExpirationTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenComputeResourcePolicyRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenComputeResourcePolicyRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return ConvertSelfLinkToV1(v.(string))
+	return tpgresource.ConvertSelfLinkToV1(v.(string))
 }
 
-func expandComputeResourcePolicyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -980,7 +996,7 @@ func expandComputeResourcePolicySnapshotSchedulePolicy(v interface{}, d Terrafor
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicySchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicySchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1013,7 +1029,7 @@ func expandComputeResourcePolicySnapshotSchedulePolicySchedule(v interface{}, d 
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlySchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlySchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1039,15 +1055,15 @@ func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlySchedule(v i
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleHoursInCycle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleHoursInCycle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleHourlyScheduleStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailySchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailySchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1073,15 +1089,15 @@ func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailySchedule(v in
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleDaysInCycle(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleDaysInCycle(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleDailyScheduleStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1100,7 +1116,7 @@ func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklySchedule(v i
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeks(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeks(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -1130,15 +1146,15 @@ func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayO
 	return req, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksDay(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyScheduleWeeklyScheduleDayOfWeeksDay(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1164,15 +1180,15 @@ func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicy(v interfac
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyMaxRetentionDays(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyMaxRetentionDays(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyOnSourceDiskDelete(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicyRetentionPolicyOnSourceDiskDelete(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1202,10 +1218,17 @@ func expandComputeResourcePolicySnapshotSchedulePolicySnapshotProperties(v inter
 		transformed["guestFlush"] = transformedGuestFlush
 	}
 
+	transformedChainName, err := expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesChainName(original["chain_name"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedChainName); val.IsValid() && !isEmptyValue(val) {
+		transformed["chainName"] = transformedChainName
+	}
+
 	return transformed, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -1216,16 +1239,20 @@ func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesLabels(v
 	return m, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesStorageLocations(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesStorageLocations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	return v, nil
 }
 
-func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesGuestFlush(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesGuestFlush(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyGroupPlacementPolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicySnapshotSchedulePolicySnapshotPropertiesChainName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandComputeResourcePolicyGroupPlacementPolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1258,19 +1285,19 @@ func expandComputeResourcePolicyGroupPlacementPolicy(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandComputeResourcePolicyGroupPlacementPolicyVmCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyGroupPlacementPolicyVmCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyGroupPlacementPolicyAvailabilityDomainCount(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyGroupPlacementPolicyAvailabilityDomainCount(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyGroupPlacementPolicyCollocation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyGroupPlacementPolicyCollocation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicy(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicy(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1317,7 +1344,7 @@ func expandComputeResourcePolicyInstanceSchedulePolicy(v interface{}, d Terrafor
 	return transformed, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyVmStartSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyVmStartSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1336,11 +1363,11 @@ func expandComputeResourcePolicyInstanceSchedulePolicyVmStartSchedule(v interfac
 	return transformed, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyVmStartScheduleSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyVmStartScheduleSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyVmStopSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyVmStopSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -1359,23 +1386,23 @@ func expandComputeResourcePolicyInstanceSchedulePolicyVmStopSchedule(v interface
 	return transformed, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyVmStopScheduleSchedule(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyVmStopScheduleSchedule(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyTimeZone(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyTimeZone(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyStartTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyStartTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyInstanceSchedulePolicyExpirationTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyInstanceSchedulePolicyExpirationTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandComputeResourcePolicyRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandComputeResourcePolicyRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	f, err := parseGlobalFieldValue("regions", v.(string), "project", d, config, true)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid value for region: %s", err)

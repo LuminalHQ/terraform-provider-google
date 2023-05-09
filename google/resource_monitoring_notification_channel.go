@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 var sensitiveLabels = []string{"auth_token", "service_key", "password"}
@@ -37,7 +39,7 @@ func sensitiveLabelCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, v
 	return nil
 }
 
-func resourceMonitoringNotificationChannel() *schema.Resource {
+func ResourceMonitoringNotificationChannel() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceMonitoringNotificationChannelCreate,
 		Read:   resourceMonitoringNotificationChannelRead,
@@ -145,6 +147,16 @@ The [CHANNEL_ID] is automatically assigned by the server on creation.`,
 				Computed:    true,
 				Description: `Indicates whether this channel has been verified or not. On a ListNotificationChannels or GetNotificationChannel operation, this field is expected to be populated.If the value is UNVERIFIED, then it indicates that the channel is non-functioning (it both requires verification and lacks verification); otherwise, it is assumed that the channel works.If the channel is neither VERIFIED nor UNVERIFIED, it implies that the channel is of a type that does not require verification or that this specific channel has been exempted from verification because it was created prior to verification being required for channels of this type.This field cannot be modified using a standard UpdateNotificationChannel operation. To change the value of this field, you must call VerifyNotificationChannel.`,
 			},
+			"force_delete": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+				Description: `If true, the notification channel will be deleted regardless
+of its use in alert policies (the policies will be updated
+to remove the channel). If false, channels that are still
+referenced by an existing alerting policy will fail to be
+deleted in a delete operation.`,
+			},
 			"project": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -157,8 +169,8 @@ The [CHANNEL_ID] is automatically assigned by the server on creation.`,
 }
 
 func resourceMonitoringNotificationChannelCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -206,14 +218,14 @@ func resourceMonitoringNotificationChannelCreate(d *schema.ResourceData, meta in
 		return err
 	}
 
-	lockName, err := replaceVars(d, config, "stackdriver/notifications/{{project}}")
+	lockName, err := ReplaceVars(d, config, "stackdriver/notifications/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/projects/{{project}}/notificationChannels")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/projects/{{project}}/notificationChannels")
 	if err != nil {
 		return err
 	}
@@ -232,7 +244,7 @@ func resourceMonitoringNotificationChannelCreate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsMonitoringConcurrentEditError)
 	if err != nil {
 		return fmt.Errorf("Error creating NotificationChannel: %s", err)
 	}
@@ -241,7 +253,7 @@ func resourceMonitoringNotificationChannelCreate(d *schema.ResourceData, meta in
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -271,13 +283,13 @@ func resourceMonitoringNotificationChannelCreate(d *schema.ResourceData, meta in
 }
 
 func resourceMonitoringNotificationChannelRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -295,9 +307,9 @@ func resourceMonitoringNotificationChannelRead(d *schema.ResourceData, meta inte
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsMonitoringConcurrentEditError)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("MonitoringNotificationChannel %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("MonitoringNotificationChannel %q", d.Id()))
 	}
 
 	res, err = resourceMonitoringNotificationChannelDecoder(d, meta, res)
@@ -312,6 +324,12 @@ func resourceMonitoringNotificationChannelRead(d *schema.ResourceData, meta inte
 		return nil
 	}
 
+	// Explicitly set virtual fields to default values if unset
+	if _, ok := d.GetOkExists("force_delete"); !ok {
+		if err := d.Set("force_delete", false); err != nil {
+			return fmt.Errorf("Error setting force_delete: %s", err)
+		}
+	}
 	if err := d.Set("project", project); err != nil {
 		return fmt.Errorf("Error reading NotificationChannel: %s", err)
 	}
@@ -345,8 +363,8 @@ func resourceMonitoringNotificationChannelRead(d *schema.ResourceData, meta inte
 }
 
 func resourceMonitoringNotificationChannelUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -402,14 +420,14 @@ func resourceMonitoringNotificationChannelUpdate(d *schema.ResourceData, meta in
 		return err
 	}
 
-	lockName, err := replaceVars(d, config, "stackdriver/notifications/{{project}}")
+	lockName, err := ReplaceVars(d, config, "stackdriver/notifications/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -421,7 +439,7 @@ func resourceMonitoringNotificationChannelUpdate(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.IsMonitoringConcurrentEditError)
 
 	if err != nil {
 		return fmt.Errorf("Error updating NotificationChannel %q: %s", d.Id(), err)
@@ -433,8 +451,8 @@ func resourceMonitoringNotificationChannelUpdate(d *schema.ResourceData, meta in
 }
 
 func resourceMonitoringNotificationChannelDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -447,14 +465,14 @@ func resourceMonitoringNotificationChannelDelete(d *schema.ResourceData, meta in
 	}
 	billingProject = project
 
-	lockName, err := replaceVars(d, config, "stackdriver/notifications/{{project}}")
+	lockName, err := ReplaceVars(d, config, "stackdriver/notifications/{{project}}")
 	if err != nil {
 		return err
 	}
-	mutexKV.Lock(lockName)
-	defer mutexKV.Unlock(lockName)
+	transport_tpg.MutexStore.Lock(lockName)
+	defer transport_tpg.MutexStore.Unlock(lockName)
 
-	url, err := replaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MonitoringBasePath}}v3/{{name}}?force={{force_delete}}")
 	if err != nil {
 		return err
 	}
@@ -467,9 +485,9 @@ func resourceMonitoringNotificationChannelDelete(d *schema.ResourceData, meta in
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isMonitoringConcurrentEditError)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsMonitoringConcurrentEditError)
 	if err != nil {
-		return handleNotFoundError(err, d, "NotificationChannel")
+		return transport_tpg.HandleNotFoundError(err, d, "NotificationChannel")
 	}
 
 	log.Printf("[DEBUG] Finished deleting NotificationChannel %q: %#v", d.Id(), res)
@@ -478,49 +496,49 @@ func resourceMonitoringNotificationChannelDelete(d *schema.ResourceData, meta in
 
 func resourceMonitoringNotificationChannelImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<project>[^ ]+) (?P<name>[^ ]+)", "(?P<name>[^ ]+)"}, d, config); err != nil {
 		return nil, err
 	}
 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenMonitoringNotificationChannelLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelVerificationStatus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelVerificationStatus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelUserLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelUserLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMonitoringNotificationChannelEnabled(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMonitoringNotificationChannelEnabled(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandMonitoringNotificationChannelLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandMonitoringNotificationChannelLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -531,11 +549,11 @@ func expandMonitoringNotificationChannelLabels(v interface{}, d TerraformResourc
 	return m, nil
 }
 
-func expandMonitoringNotificationChannelType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringNotificationChannelType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMonitoringNotificationChannelUserLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandMonitoringNotificationChannelUserLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -546,15 +564,15 @@ func expandMonitoringNotificationChannelUserLabels(v interface{}, d TerraformRes
 	return m, nil
 }
 
-func expandMonitoringNotificationChannelDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringNotificationChannelDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMonitoringNotificationChannelDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringNotificationChannelDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMonitoringNotificationChannelEnabled(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMonitoringNotificationChannelEnabled(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

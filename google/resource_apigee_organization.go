@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+	"github.com/hashicorp/terraform-provider-google/google/verify"
 )
 
-func resourceApigeeOrganization() *schema.Resource {
+func ResourceApigeeOrganization() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceApigeeOrganizationCreate,
 		Read:   resourceApigeeOrganizationRead,
@@ -78,10 +81,40 @@ Valid only when 'RuntimeType' is set to CLOUD. The value can be updated only whe
 				Optional:    true,
 				Description: `The display name of the Apigee organization.`,
 			},
+			"properties": {
+				Type:        schema.TypeList,
+				Computed:    true,
+				Optional:    true,
+				Description: `Properties defined in the Apigee organization profile.`,
+				MaxItems:    1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"property": {
+							Type:        schema.TypeList,
+							Optional:    true,
+							Description: `List of all properties in the object.`,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: `Name of the property.`,
+									},
+									"value": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: `Value of the property.`,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			"retention": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: validateEnum([]string{"DELETION_RETENTION_UNSPECIFIED", "MINIMUM", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"DELETION_RETENTION_UNSPECIFIED", "MINIMUM", ""}),
 				Description: `Optional. This setting is applicable only for organizations that are soft-deleted (i.e., BillingType
 is not EVALUATION). It controls how long Organization data will be retained after the initial delete
 operation completes. During this period, the Organization may be restored to its last known state.
@@ -101,7 +134,7 @@ Valid only when 'RuntimeType' is CLOUD. For example: 'projects/foo/locations/us/
 				Type:         schema.TypeString,
 				Optional:     true,
 				ForceNew:     true,
-				ValidateFunc: validateEnum([]string{"CLOUD", "HYBRID", ""}),
+				ValidateFunc: verify.ValidateEnum([]string{"CLOUD", "HYBRID", ""}),
 				Description:  `Runtime type of the Apigee organization based on the Apigee subscription purchased. Default value: "CLOUD" Possible values: ["CLOUD", "HYBRID"]`,
 				Default:      "CLOUD",
 			},
@@ -128,8 +161,8 @@ Valid values include trial (free, limited, and for evaluation purposes only) or 
 }
 
 func resourceApigeeOrganizationCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -177,13 +210,19 @@ func resourceApigeeOrganizationCreate(d *schema.ResourceData, meta interface{}) 
 	} else if v, ok := d.GetOkExists("runtime_database_encryption_key_name"); !isEmptyValue(reflect.ValueOf(runtimeDatabaseEncryptionKeyNameProp)) && (ok || !reflect.DeepEqual(v, runtimeDatabaseEncryptionKeyNameProp)) {
 		obj["runtimeDatabaseEncryptionKeyName"] = runtimeDatabaseEncryptionKeyNameProp
 	}
+	propertiesProp, err := expandApigeeOrganizationProperties(d.Get("properties"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("properties"); !isEmptyValue(reflect.ValueOf(propertiesProp)) && (ok || !reflect.DeepEqual(v, propertiesProp)) {
+		obj["properties"] = propertiesProp
+	}
 
 	obj, err = resourceApigeeOrganizationEncoder(d, meta, obj)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}organizations?parent=projects/{{project_id}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}organizations?parent=projects/{{project_id}}")
 	if err != nil {
 		return err
 	}
@@ -196,13 +235,13 @@ func resourceApigeeOrganizationCreate(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Organization: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "organizations/{{name}}")
+	id, err := ReplaceVars(d, config, "organizations/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -211,12 +250,13 @@ func resourceApigeeOrganizationCreate(d *schema.ResourceData, meta interface{}) 
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = apigeeOperationWaitTimeWithResponse(
+	err = ApigeeOperationWaitTimeWithResponse(
 		config, res, &opRes, "Creating Organization", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Organization: %s", err)
 	}
 
@@ -225,7 +265,7 @@ func resourceApigeeOrganizationCreate(d *schema.ResourceData, meta interface{}) 
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "organizations/{{name}}")
+	id, err = ReplaceVars(d, config, "organizations/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -237,13 +277,13 @@ func resourceApigeeOrganizationCreate(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceApigeeOrganizationRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}organizations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}organizations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -255,9 +295,9 @@ func resourceApigeeOrganizationRead(d *schema.ResourceData, meta interface{}) er
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("ApigeeOrganization %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("ApigeeOrganization %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenApigeeOrganizationName(res["name"], d, config)); err != nil {
@@ -290,13 +330,16 @@ func resourceApigeeOrganizationRead(d *schema.ResourceData, meta interface{}) er
 	if err := d.Set("runtime_database_encryption_key_name", flattenApigeeOrganizationRuntimeDatabaseEncryptionKeyName(res["runtimeDatabaseEncryptionKeyName"], d, config)); err != nil {
 		return fmt.Errorf("Error reading Organization: %s", err)
 	}
+	if err := d.Set("properties", flattenApigeeOrganizationProperties(res["properties"], d, config)); err != nil {
+		return fmt.Errorf("Error reading Organization: %s", err)
+	}
 
 	return nil
 }
 
 func resourceApigeeOrganizationUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -346,13 +389,19 @@ func resourceApigeeOrganizationUpdate(d *schema.ResourceData, meta interface{}) 
 	} else if v, ok := d.GetOkExists("runtime_database_encryption_key_name"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, runtimeDatabaseEncryptionKeyNameProp)) {
 		obj["runtimeDatabaseEncryptionKeyName"] = runtimeDatabaseEncryptionKeyNameProp
 	}
+	propertiesProp, err := expandApigeeOrganizationProperties(d.Get("properties"), d, config)
+	if err != nil {
+		return err
+	} else if v, ok := d.GetOkExists("properties"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, propertiesProp)) {
+		obj["properties"] = propertiesProp
+	}
 
 	obj, err = resourceApigeeOrganizationEncoder(d, meta, obj)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}organizations/{{name}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}organizations/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -364,7 +413,7 @@ func resourceApigeeOrganizationUpdate(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Organization %q: %s", d.Id(), err)
@@ -372,7 +421,7 @@ func resourceApigeeOrganizationUpdate(d *schema.ResourceData, meta interface{}) 
 		log.Printf("[DEBUG] Finished updating Organization %q: %#v", d.Id(), res)
 	}
 
-	err = apigeeOperationWaitTime(
+	err = ApigeeOperationWaitTime(
 		config, res, "Updating Organization", userAgent,
 		d.Timeout(schema.TimeoutUpdate))
 
@@ -384,15 +433,15 @@ func resourceApigeeOrganizationUpdate(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceApigeeOrganizationDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{ApigeeBasePath}}organizations/{{name}}?retention={{retention}}")
+	url, err := ReplaceVars(d, config, "{{ApigeeBasePath}}organizations/{{name}}?retention={{retention}}")
 	if err != nil {
 		return err
 	}
@@ -405,9 +454,9 @@ func resourceApigeeOrganizationDelete(d *schema.ResourceData, meta interface{}) 
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Organization")
+		return transport_tpg.HandleNotFoundError(err, d, "Organization")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Organization %q: %#v", d.Id(), res)
@@ -415,10 +464,10 @@ func resourceApigeeOrganizationDelete(d *schema.ResourceData, meta interface{}) 
 }
 
 func resourceApigeeOrganizationImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
 	// current import_formats can't import fields with forward slashes in their value
-	if err := parseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
+	if err := ParseImportId([]string{"(?P<name>.+)"}, d, config); err != nil {
 		return nil, err
 	}
 
@@ -448,7 +497,7 @@ func resourceApigeeOrganizationImport(d *schema.ResourceData, meta interface{}) 
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "organizations/{{name}}")
+	id, err := ReplaceVars(d, config, "organizations/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -457,71 +506,167 @@ func resourceApigeeOrganizationImport(d *schema.ResourceData, meta interface{}) 
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenApigeeOrganizationName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationAnalyticsRegion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationAnalyticsRegion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationAuthorizedNetwork(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationAuthorizedNetwork(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationRuntimeType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationRuntimeType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationSubscriptionType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationSubscriptionType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationBillingType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationBillingType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationCaCertificate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationCaCertificate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenApigeeOrganizationRuntimeDatabaseEncryptionKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenApigeeOrganizationRuntimeDatabaseEncryptionKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandApigeeOrganizationDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func flattenApigeeOrganizationProperties(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["property"] =
+		flattenApigeeOrganizationPropertiesProperty(original["property"], d, config)
+	return []interface{}{transformed}
+}
+func flattenApigeeOrganizationPropertiesProperty(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"name":  flattenApigeeOrganizationPropertiesPropertyName(original["name"], d, config),
+			"value": flattenApigeeOrganizationPropertiesPropertyValue(original["value"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenApigeeOrganizationPropertiesPropertyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenApigeeOrganizationPropertiesPropertyValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func expandApigeeOrganizationDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeOrganizationDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeOrganizationDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeOrganizationAnalyticsRegion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeOrganizationAnalyticsRegion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeOrganizationAuthorizedNetwork(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeOrganizationAuthorizedNetwork(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeOrganizationRuntimeType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeOrganizationRuntimeType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeOrganizationBillingType(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeOrganizationBillingType(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandApigeeOrganizationRuntimeDatabaseEncryptionKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandApigeeOrganizationRuntimeDatabaseEncryptionKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandApigeeOrganizationProperties(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedProperty, err := expandApigeeOrganizationPropertiesProperty(original["property"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedProperty); val.IsValid() && !isEmptyValue(val) {
+		transformed["property"] = transformedProperty
+	}
+
+	return transformed, nil
+}
+
+func expandApigeeOrganizationPropertiesProperty(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedName, err := expandApigeeOrganizationPropertiesPropertyName(original["name"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedName); val.IsValid() && !isEmptyValue(val) {
+			transformed["name"] = transformedName
+		}
+
+		transformedValue, err := expandApigeeOrganizationPropertiesPropertyValue(original["value"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedValue); val.IsValid() && !isEmptyValue(val) {
+			transformed["value"] = transformedValue
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandApigeeOrganizationPropertiesPropertyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandApigeeOrganizationPropertiesPropertyValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 

@@ -6,6 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"google.golang.org/api/googleapi"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -13,7 +16,7 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func resourceComputeInstanceGroup() *schema.Resource {
+func ResourceComputeInstanceGroup() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeInstanceGroupCreate,
 		Read:   resourceComputeInstanceGroupRead,
@@ -60,7 +63,7 @@ func resourceComputeInstanceGroup() *schema.Resource {
 				Optional:    true,
 				Computed:    true,
 				Elem:        &schema.Schema{Type: schema.TypeString},
-				Set:         selfLinkRelativePathHash,
+				Set:         tpgresource.SelfLinkRelativePathHash,
 				Description: `The list of instances in the group, in self_link format. When adding instances they must all be in the same network and zone as the instance group.`,
 			},
 
@@ -89,7 +92,7 @@ func resourceComputeInstanceGroup() *schema.Resource {
 				Type:             schema.TypeString,
 				Optional:         true,
 				Computed:         true,
-				DiffSuppressFunc: compareSelfLinkOrResourceName,
+				DiffSuppressFunc: tpgresource.CompareSelfLinkOrResourceName,
 				ForceNew:         true,
 				Description:      `The URL of the network the instance group is in. If this is different from the network where the instances are in, the creation fails. Defaults to the network where the instances are in (if neither network nor instances is specified, this field will be blank).`,
 			},
@@ -137,8 +140,8 @@ func validInstanceURLs(instanceUrls []string) bool {
 }
 
 func resourceComputeInstanceGroupCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -183,7 +186,7 @@ func resourceComputeInstanceGroupCreate(d *schema.ResourceData, meta interface{}
 	d.SetId(fmt.Sprintf("projects/%s/zones/%s/instanceGroups/%s", project, zone, name))
 
 	// Wait for the operation to complete
-	err = computeOperationWaitTime(config, op, project, "Creating InstanceGroup", userAgent, d.Timeout(schema.TimeoutCreate))
+	err = ComputeOperationWaitTime(config, op, project, "Creating InstanceGroup", userAgent, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		d.SetId("")
 		return err
@@ -197,7 +200,7 @@ func resourceComputeInstanceGroupCreate(d *schema.ResourceData, meta interface{}
 			if strings.HasPrefix(v, "https://") {
 				instanceUrls = append(instanceUrls, v)
 			} else {
-				url, err := replaceVars(d, config, "{{ComputeBasePath}}"+v)
+				url, err := ReplaceVars(d, config, "{{ComputeBasePath}}"+v)
 				if err != nil {
 					return err
 				}
@@ -217,7 +220,7 @@ func resourceComputeInstanceGroupCreate(d *schema.ResourceData, meta interface{}
 		}
 
 		// Wait for the operation to complete
-		err = computeOperationWaitTime(config, op, project, "Adding instances to InstanceGroup", userAgent, d.Timeout(schema.TimeoutCreate))
+		err = ComputeOperationWaitTime(config, op, project, "Adding instances to InstanceGroup", userAgent, d.Timeout(schema.TimeoutCreate))
 		if err != nil {
 			return err
 		}
@@ -227,8 +230,8 @@ func resourceComputeInstanceGroupCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceComputeInstanceGroupRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -248,7 +251,7 @@ func resourceComputeInstanceGroupRead(d *schema.ResourceData, meta interface{}) 
 	instanceGroup, err := config.NewComputeClient(userAgent).InstanceGroups.Get(
 		project, zone, name).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Instance Group %q", name))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Instance Group %q", name))
 	}
 
 	// retrieve instance group members
@@ -304,8 +307,8 @@ func resourceComputeInstanceGroupRead(d *schema.ResourceData, meta interface{}) 
 	return nil
 }
 func resourceComputeInstanceGroupUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -337,7 +340,7 @@ func resourceComputeInstanceGroupUpdate(d *schema.ResourceData, meta interface{}
 			return fmt.Errorf("Error invalid instance URLs: %v", to)
 		}
 
-		add, remove := calcAddRemove(from, to)
+		add, remove := tpgresource.CalcAddRemove(from, to)
 
 		if len(remove) > 0 {
 			removeReq := &compute.InstanceGroupsRemoveInstancesRequest{
@@ -355,7 +358,7 @@ func resourceComputeInstanceGroupUpdate(d *schema.ResourceData, meta interface{}
 				}
 			} else {
 				// Wait for the operation to complete
-				err = computeOperationWaitTime(config, removeOp, project, "Updating InstanceGroup", userAgent, d.Timeout(schema.TimeoutUpdate))
+				err = ComputeOperationWaitTime(config, removeOp, project, "Updating InstanceGroup", userAgent, d.Timeout(schema.TimeoutUpdate))
 				if err != nil {
 					return err
 				}
@@ -376,7 +379,7 @@ func resourceComputeInstanceGroupUpdate(d *schema.ResourceData, meta interface{}
 			}
 
 			// Wait for the operation to complete
-			err = computeOperationWaitTime(config, addOp, project, "Updating InstanceGroup", userAgent, d.Timeout(schema.TimeoutUpdate))
+			err = ComputeOperationWaitTime(config, addOp, project, "Updating InstanceGroup", userAgent, d.Timeout(schema.TimeoutUpdate))
 			if err != nil {
 				return err
 			}
@@ -397,7 +400,7 @@ func resourceComputeInstanceGroupUpdate(d *schema.ResourceData, meta interface{}
 			return fmt.Errorf("Error updating named ports for InstanceGroup: %s", err)
 		}
 
-		err = computeOperationWaitTime(config, op, project, "Updating InstanceGroup", userAgent, d.Timeout(schema.TimeoutUpdate))
+		err = ComputeOperationWaitTime(config, op, project, "Updating InstanceGroup", userAgent, d.Timeout(schema.TimeoutUpdate))
 		if err != nil {
 			return err
 		}
@@ -409,8 +412,8 @@ func resourceComputeInstanceGroupUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceComputeInstanceGroupDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -430,7 +433,7 @@ func resourceComputeInstanceGroupDelete(d *schema.ResourceData, meta interface{}
 		return fmt.Errorf("Error deleting InstanceGroup: %s", err)
 	}
 
-	err = computeOperationWaitTime(config, op, project, "Deleting InstanceGroup", userAgent, d.Timeout(schema.TimeoutDelete))
+	err = ComputeOperationWaitTime(config, op, project, "Deleting InstanceGroup", userAgent, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
 		return err
 	}
@@ -440,15 +443,15 @@ func resourceComputeInstanceGroupDelete(d *schema.ResourceData, meta interface{}
 }
 
 func resourceComputeInstanceGroupImportState(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/zones/(?P<zone>[^/]+)/instanceGroups/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<zone>[^/]+)/(?P<name>[^/]+)",
 		"(?P<zone>[^/]+)/(?P<name>[^/]+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
-	id, err := replaceVars(d, config, "projects/{{project}}/zones/{{zone}}/instanceGroups/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/zones/{{zone}}/instanceGroups/{{name}}")
 	if err != nil {
 		return nil, err
 	}

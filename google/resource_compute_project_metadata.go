@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"log"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func resourceComputeProjectMetadata() *schema.Resource {
+func ResourceComputeProjectMetadata() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceComputeProjectMetadataCreateOrUpdate,
 		Read:   resourceComputeProjectMetadataRead,
@@ -48,8 +49,8 @@ func resourceComputeProjectMetadata() *schema.Resource {
 }
 
 func resourceComputeProjectMetadataCreateOrUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -74,8 +75,8 @@ func resourceComputeProjectMetadataCreateOrUpdate(d *schema.ResourceData, meta i
 }
 
 func resourceComputeProjectMetadataRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func resourceComputeProjectMetadataRead(d *schema.ResourceData, meta interface{}
 
 	project, err := config.NewComputeClient(userAgent).Projects.Get(projectId).Do()
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("Project metadata for project %q", projectId))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("Project metadata for project %q", projectId))
 	}
 
 	err = d.Set("metadata", flattenMetadata(project.CommonInstanceMetadata))
@@ -109,8 +110,8 @@ func resourceComputeProjectMetadataRead(d *schema.ResourceData, meta interface{}
 }
 
 func resourceComputeProjectMetadataDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -129,7 +130,7 @@ func resourceComputeProjectMetadataDelete(d *schema.ResourceData, meta interface
 	return resourceComputeProjectMetadataRead(d, meta)
 }
 
-func resourceComputeProjectMetadataSet(projectID, userAgent string, config *Config, md *compute.Metadata, timeout time.Duration) error {
+func resourceComputeProjectMetadataSet(projectID, userAgent string, config *transport_tpg.Config, md *compute.Metadata, timeout time.Duration) error {
 	createMD := func() error {
 		log.Printf("[DEBUG] Loading project service: %s", projectID)
 		project, err := config.NewComputeClient(userAgent).Projects.Get(projectID).Do()
@@ -144,9 +145,9 @@ func resourceComputeProjectMetadataSet(projectID, userAgent string, config *Conf
 		}
 
 		log.Printf("[DEBUG] SetCommonMetadata: %d (%s)", op.Id, op.SelfLink)
-		return computeOperationWaitTime(config, op, project.Name, "SetCommonMetadata", userAgent, timeout)
+		return ComputeOperationWaitTime(config, op, project.Name, "SetCommonMetadata", userAgent, timeout)
 	}
 
-	err := MetadataRetryWrapper(createMD)
+	err := transport_tpg.MetadataRetryWrapper(createMD)
 	return err
 }

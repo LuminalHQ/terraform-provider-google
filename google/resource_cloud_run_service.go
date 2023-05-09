@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
+
 	"google.golang.org/api/googleapi"
 )
 
@@ -54,11 +57,16 @@ func cloudrunAnnotationDiffSuppress(k, old, new string, d *schema.ResourceData) 
 }
 
 var cloudRunGoogleProvidedTemplateAnnotations = regexp.MustCompile(`template\.0\.metadata\.0\.annotations\.run\.googleapis\.com/sandbox`)
+var cloudRunGoogleProvidedTemplateAnnotations_autoscaling_maxscale = regexp.MustCompile(`template\.0\.metadata\.0\.annotations\.autoscaling\.knative\.dev/maxScale`)
 
 func cloudrunTemplateAnnotationDiffSuppress(k, old, new string, d *schema.ResourceData) bool {
 	// Suppress diffs for the annotations provided by API
 	if cloudRunGoogleProvidedTemplateAnnotations.MatchString(k) &&
 		old == "gvisor" && new == "" {
+		return true
+	}
+
+	if cloudRunGoogleProvidedTemplateAnnotations_autoscaling_maxscale.MatchString(k) && new == "" {
 		return true
 	}
 
@@ -83,7 +91,7 @@ func cloudrunLabelDiffSuppress(k, old, new string, d *schema.ResourceData) bool 
 	return false
 }
 
-func resourceCloudRunService() *schema.Resource {
+func ResourceCloudRunService() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudRunServiceCreate,
 		Read:   resourceCloudRunServiceRead,
@@ -114,7 +122,7 @@ func resourceCloudRunService() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
-				Description: `Name must be unique within a namespace, within a Cloud Run region.
+				Description: `Name must be unique within a Google Cloud project and region.
 Is required when creating resources. Name is primarily intended
 for creation idempotence and configuration definition. Cannot be updated.
 More info: http://kubernetes.io/docs/user-guide/identifiers#names`,
@@ -149,30 +157,20 @@ responsible for materializing the container image from source.`,
 										Optional: true,
 										Description: `Container defines the unit of execution for this Revision.
 In the context of a Revision, we disallow a number of the fields of
-this Container, including: name, ports, and volumeMounts.
-The runtime contract is documented here:
-https://github.com/knative/serving/blob/main/docs/runtime-contract.md`,
+this Container, including: name, ports, and volumeMounts.`,
 										Elem: &schema.Resource{
 											Schema: map[string]*schema.Schema{
 												"image": {
 													Type:     schema.TypeString,
 													Required: true,
 													Description: `Docker image name. This is most often a reference to a container located
-in the container registry, such as gcr.io/cloudrun/hello
-More info: https://kubernetes.io/docs/concepts/containers/images`,
+in the container registry, such as gcr.io/cloudrun/hello`,
 												},
 												"args": {
 													Type:     schema.TypeList,
 													Optional: true,
 													Description: `Arguments to the entrypoint.
-The docker image's CMD is used if this is not provided.
-Variable references $(VAR_NAME) are expanded using the container's
-environment. If a variable cannot be resolved, the reference in the input
-string will be unchanged. The $(VAR_NAME) syntax can be escaped with a
-double $$, ie: $$(VAR_NAME). Escaped references will never be expanded,
-regardless of whether the variable exists or not.
-More info:
-https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell`,
+The docker image's CMD is used if this is not provided.`,
 													Elem: &schema.Schema{
 														Type: schema.TypeString,
 													},
@@ -181,14 +179,7 @@ https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument
 													Type:     schema.TypeList,
 													Optional: true,
 													Description: `Entrypoint array. Not executed within a shell.
-The docker image's ENTRYPOINT is used if this is not provided.
-Variable references $(VAR_NAME) are expanded using the container's
-environment. If a variable cannot be resolved, the reference in the input
-string will be unchanged. The $(VAR_NAME) syntax can be escaped with a
-double $$, ie: $$(VAR_NAME). Escaped references will never be expanded,
-regardless of whether the variable exists or not.
-More info:
-https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell`,
+The docker image's ENTRYPOINT is used if this is not provided.`,
 													Elem: &schema.Schema{
 														Type: schema.TypeString,
 													},
@@ -227,11 +218,9 @@ precedence.`,
 																			Elem: &schema.Resource{
 																				Schema: map[string]*schema.Schema{
 																					"name": {
-																						Type:     schema.TypeString,
-																						Required: true,
-																						Description: `Name of the referent.
-More info:
-https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names`,
+																						Type:        schema.TypeString,
+																						Required:    true,
+																						Description: `Name of the referent.`,
 																					},
 																				},
 																			},
@@ -264,11 +253,9 @@ https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names`,
 																			Elem: &schema.Resource{
 																				Schema: map[string]*schema.Schema{
 																					"name": {
-																						Type:     schema.TypeString,
-																						Required: true,
-																						Description: `Name of the referent.
-More info:
-https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names`,
+																						Type:        schema.TypeString,
+																						Required:    true,
+																						Description: `Name of the referent.`,
 																					},
 																				},
 																			},
@@ -284,25 +271,132 @@ https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names`,
 														},
 													},
 												},
+												"liveness_probe": {
+													Type:        schema.TypeList,
+													Optional:    true,
+													Description: `Periodic probe of container liveness. Container will be restarted if the probe fails.`,
+													MaxItems:    1,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"failure_threshold": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `Minimum consecutive failures for the probe to be considered failed after
+having succeeded. Defaults to 3. Minimum value is 1.`,
+																Default: 3,
+															},
+															"grpc": {
+																Type:        schema.TypeList,
+																Optional:    true,
+																Description: `GRPC specifies an action involving a GRPC port.`,
+																MaxItems:    1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"port": {
+																			Type:     schema.TypeInt,
+																			Computed: true,
+																			Optional: true,
+																			Description: `Port number to access on the container. Number must be in the range 1 to 65535.
+If not specified, defaults to the same value as container.ports[0].containerPort.`,
+																		},
+																		"service": {
+																			Type:     schema.TypeString,
+																			Optional: true,
+																			Description: `The name of the service to place in the gRPC HealthCheckRequest
+(see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).
+If this is not specified, the default behavior is defined by gRPC.`,
+																		},
+																	},
+																},
+																ExactlyOneOf: []string{},
+															},
+															"http_get": {
+																Type:        schema.TypeList,
+																Optional:    true,
+																Description: `HttpGet specifies the http request to perform.`,
+																MaxItems:    1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"http_headers": {
+																			Type:        schema.TypeList,
+																			Optional:    true,
+																			Description: `Custom headers to set in the request. HTTP allows repeated headers.`,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"name": {
+																						Type:        schema.TypeString,
+																						Required:    true,
+																						Description: `The header field name.`,
+																					},
+																					"value": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Description: `The header field value.`,
+																						Default:     "",
+																					},
+																				},
+																			},
+																		},
+																		"path": {
+																			Type:        schema.TypeString,
+																			Optional:    true,
+																			Description: `Path to access on the HTTP server. If set, it should not be empty string.`,
+																			Default:     "/",
+																		},
+																		"port": {
+																			Type:     schema.TypeInt,
+																			Computed: true,
+																			Optional: true,
+																			Description: `Port number to access on the container. Number must be in the range 1 to 65535.
+If not specified, defaults to the same value as container.ports[0].containerPort.`,
+																		},
+																	},
+																},
+																ExactlyOneOf: []string{},
+															},
+															"initial_delay_seconds": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `Number of seconds after the container has started before the probe is
+initiated.
+Defaults to 0 seconds. Minimum value is 0. Maximum value is 3600.`,
+																Default: 0,
+															},
+															"period_seconds": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `How often (in seconds) to perform the probe.
+Default to 10 seconds. Minimum value is 1. Maximum value is 3600.`,
+																Default: 10,
+															},
+															"timeout_seconds": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `Number of seconds after which the probe times out.
+Defaults to 1 second. Minimum value is 1. Maximum value is 3600.
+Must be smaller than period_seconds.`,
+																Default: 1,
+															},
+														},
+													},
+												},
 												"ports": {
-													Type:     schema.TypeList,
-													Computed: true,
-													Optional: true,
-													Description: `List of open ports in the container.
-More Info:
-https://cloud.google.com/run/docs/reference/rest/v1/RevisionSpec#ContainerPort`,
+													Type:        schema.TypeList,
+													Computed:    true,
+													Optional:    true,
+													Description: `List of open ports in the container.`,
 													Elem: &schema.Resource{
 														Schema: map[string]*schema.Schema{
 															"container_port": {
 																Type:        schema.TypeInt,
 																Optional:    true,
-																Description: `Port number the container listens on. This must be a valid port number, 0 < x < 65536.`,
+																Description: `Port number the container listens on. This must be a valid port number (between 1 and 65535). Defaults to "8080".`,
 															},
 															"name": {
 																Type:        schema.TypeString,
 																Computed:    true,
 																Optional:    true,
-																Description: `If specified, used to specify which protocol to use. Allowed values are "http1" and "h2c".`,
+																Description: `If specified, used to specify which protocol to use. Allowed values are "http1" (HTTP/1) and "h2c" (HTTP/2 end-to-end). Defaults to "http1".`,
 															},
 															"protocol": {
 																Type:        schema.TypeString,
@@ -313,13 +407,11 @@ https://cloud.google.com/run/docs/reference/rest/v1/RevisionSpec#ContainerPort`,
 													},
 												},
 												"resources": {
-													Type:     schema.TypeList,
-													Computed: true,
-													Optional: true,
-													Description: `Compute Resources required by this container. Used to set values such as max memory
-More info:
-https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#requests-and-limits`,
-													MaxItems: 1,
+													Type:        schema.TypeList,
+													Computed:    true,
+													Optional:    true,
+													Description: `Compute Resources required by this container. Used to set values such as max memory`,
+													MaxItems:    1,
 													Elem: &schema.Resource{
 														Schema: map[string]*schema.Schema{
 															"limits": {
@@ -340,6 +432,136 @@ explicitly specified, otherwise to an implementation-defined value.
 The values of the map is string form of the 'quantity' k8s type:
 https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apimachinery/pkg/api/resource/quantity.go`,
 																Elem: &schema.Schema{Type: schema.TypeString},
+															},
+														},
+													},
+												},
+												"startup_probe": {
+													Type:     schema.TypeList,
+													Computed: true,
+													Optional: true,
+													Description: `Startup probe of application within the container.
+All other probes are disabled if a startup probe is provided, until it
+succeeds. Container will not be added to service endpoints if the probe fails.`,
+													MaxItems: 1,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"failure_threshold": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `Minimum consecutive failures for the probe to be considered failed after
+having succeeded. Defaults to 3. Minimum value is 1.`,
+																Default: 3,
+															},
+															"grpc": {
+																Type:        schema.TypeList,
+																Optional:    true,
+																Description: `GRPC specifies an action involving a GRPC port.`,
+																MaxItems:    1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"port": {
+																			Type:     schema.TypeInt,
+																			Computed: true,
+																			Optional: true,
+																			Description: `Port number to access on the container. Number must be in the range 1 to 65535.
+If not specified, defaults to the same value as container.ports[0].containerPort.`,
+																		},
+																		"service": {
+																			Type:     schema.TypeString,
+																			Optional: true,
+																			Description: `The name of the service to place in the gRPC HealthCheckRequest
+(see https://github.com/grpc/grpc/blob/master/doc/health-checking.md).
+If this is not specified, the default behavior is defined by gRPC.`,
+																		},
+																	},
+																},
+																ExactlyOneOf: []string{},
+															},
+															"http_get": {
+																Type:        schema.TypeList,
+																Optional:    true,
+																Description: `HttpGet specifies the http request to perform.`,
+																MaxItems:    1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"http_headers": {
+																			Type:        schema.TypeList,
+																			Optional:    true,
+																			Description: `Custom headers to set in the request. HTTP allows repeated headers.`,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"name": {
+																						Type:        schema.TypeString,
+																						Required:    true,
+																						Description: `The header field name.`,
+																					},
+																					"value": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Description: `The header field value.`,
+																						Default:     "",
+																					},
+																				},
+																			},
+																		},
+																		"path": {
+																			Type:        schema.TypeString,
+																			Optional:    true,
+																			Description: `Path to access on the HTTP server. If set, it should not be empty string.`,
+																			Default:     "/",
+																		},
+																		"port": {
+																			Type:     schema.TypeInt,
+																			Computed: true,
+																			Optional: true,
+																			Description: `Port number to access on the container. Number must be in the range 1 to 65535.
+If not specified, defaults to the same value as container.ports[0].containerPort.`,
+																		},
+																	},
+																},
+																ExactlyOneOf: []string{},
+															},
+															"initial_delay_seconds": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `Number of seconds after the container has started before the probe is
+initiated.
+Defaults to 0 seconds. Minimum value is 0. Maximum value is 240.`,
+																Default: 0,
+															},
+															"period_seconds": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `How often (in seconds) to perform the probe.
+Default to 10 seconds. Minimum value is 1. Maximum value is 240.`,
+																Default: 10,
+															},
+															"tcp_socket": {
+																Type:        schema.TypeList,
+																Optional:    true,
+																Description: `TcpSocket specifies an action involving a TCP port.`,
+																MaxItems:    1,
+																Elem: &schema.Resource{
+																	Schema: map[string]*schema.Schema{
+																		"port": {
+																			Type:     schema.TypeInt,
+																			Computed: true,
+																			Optional: true,
+																			Description: `Port number to access on the container. Number must be in the range 1 to 65535.
+If not specified, defaults to the same value as container.ports[0].containerPort.`,
+																		},
+																	},
+																},
+																ExactlyOneOf: []string{},
+															},
+															"timeout_seconds": {
+																Type:     schema.TypeInt,
+																Optional: true,
+																Description: `Number of seconds after which the probe times out.
+Defaults to 1 second. Minimum value is 1. Maximum value is 3600.
+Must be smaller than periodSeconds.`,
+																Default: 1,
 															},
 														},
 													},
@@ -430,7 +652,7 @@ the file is the secret_name.`,
 is assumed to be in the same project.
 If the secret is in another project, you must define an alias.
 An alias definition has the form:
-<alias>:projects/<project-id|project-number>/secrets/<secret-name>.
+{alias}:projects/{project-id|project-number}/secrets/{secret-name}.
 If multiple alias definitions are needed, they must be separated by
 commas.
 The alias definitions must be set on the run.googleapis.com/secrets
@@ -522,26 +744,57 @@ info: http://kubernetes.io/docs/user-guide/annotations
 
 **Note**: The Cloud Run API may add additional annotations that were not provided in your config.
 If terraform plan shows a diff where a server-side annotation is added, you can add it to your config
-or apply the lifecycle.ignore_changes rule to the metadata.0.annotations field.`,
+or apply the lifecycle.ignore_changes rule to the metadata.0.annotations field.
+
+Annotations with 'run.googleapis.com/' and 'autoscaling.knative.dev' are restricted. Use the following annotation
+keys to configure features on a Revision template:
+
+- 'autoscaling.knative.dev/maxScale' sets the [maximum number of container
+  instances](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--max-instances) of the Revision to run.
+- 'autoscaling.knative.dev/minScale' sets the [minimum number of container
+  instances](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--min-instances) of the Revision to run.
+- 'run.googleapis.com/client-name' sets the client name calling the Cloud Run API.
+- 'run.googleapis.com/cloudsql-instances' sets the [Cloud SQL
+  instances](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--add-cloudsql-instances) the Revision connects to.
+- 'run.googleapis.com/cpu-throttling' sets whether to throttle the CPU when the container is not actively serving
+  requests. See https://cloud.google.com/sdk/gcloud/reference/run/deploy#--[no-]cpu-throttling.
+- 'run.googleapis.com/encryption-key-shutdown-hours' sets the number of hours to wait before an automatic shutdown
+  server after CMEK key revocation is detected.
+- 'run.googleapis.com/encryption-key' sets the [CMEK key](https://cloud.google.com/run/docs/securing/using-cmek)
+  reference to encrypt the container with.
+- 'run.googleapis.com/execution-environment' sets the [execution
+  environment](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--execution-environment)
+  where the application will run.
+- 'run.googleapis.com/post-key-revocation-action-type' sets the
+  [action type](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--post-key-revocation-action-type)
+  after CMEK key revocation.
+- 'run.googleapis.com/secrets' sets a list of key-value pairs to set as
+  [secrets](https://cloud.google.com/run/docs/configuring/secrets#yaml).
+- 'run.googleapis.com/sessionAffinity' sets whether to enable
+  [session affinity](https://cloud.google.com/sdk/gcloud/reference/beta/run/deploy#--[no-]session-affinity)
+  for connections to the Revision.
+- 'run.googleapis.com/startup-cpu-boost' sets whether to allocate extra CPU to containers on startup.
+  See https://cloud.google.com/sdk/gcloud/reference/run/deploy#--[no-]cpu-boost.
+- 'run.googleapis.com/vpc-access-connector' sets a [VPC connector](https://cloud.google.com/run/docs/configuring/connecting-vpc#terraform_1)
+  for the Revision.
+- 'run.googleapis.com/vpc-access-egress' sets the outbound traffic to send through the VPC connector for this resource.
+  See https://cloud.google.com/sdk/gcloud/reference/run/deploy#--vpc-egress.`,
 										Elem: &schema.Schema{Type: schema.TypeString},
 									},
 									"labels": {
 										Type:     schema.TypeMap,
 										Optional: true,
 										Description: `Map of string keys and values that can be used to organize and categorize
-(scope and select) objects. May match selectors of replication controllers
-and routes.
-More info: http://kubernetes.io/docs/user-guide/labels`,
+(scope and select) objects.`,
 										Elem: &schema.Schema{Type: schema.TypeString},
 									},
 									"name": {
 										Type:     schema.TypeString,
 										Computed: true,
 										Optional: true,
-										Description: `Name must be unique within a namespace, within a Cloud Run region.
+										Description: `Name must be unique within a Google Cloud project and region.
 Is required when creating resources. Name is primarily intended
-for creation idempotence and configuration definition. Cannot be updated.
-More info: http://kubernetes.io/docs/user-guide/identifiers#names`,
+for creation idempotence and configuration definition. Cannot be updated.`,
 									},
 									"namespace": {
 										Type:     schema.TypeString,
@@ -562,10 +815,7 @@ project ID or project number. It will default to the resource's project.`,
 can be used by clients to determine when objects have changed. May be used
 for optimistic concurrency, change detection, and the watch operation on a
 resource or set of resources. They may only be valid for a
-particular resource or set of resources.
-
-More info:
-https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-control-and-consistency`,
+particular resource or set of resources.`,
 									},
 									"self_link": {
 										Type:        schema.TypeString,
@@ -576,9 +826,7 @@ https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-c
 										Type:     schema.TypeString,
 										Computed: true,
 										Description: `UID is a unique id generated by the server on successful creation of a resource and is not
-allowed to change on PUT operations.
-
-More info: http://kubernetes.io/docs/user-guide/identifiers#uids`,
+allowed to change on PUT operations.`,
 									},
 								},
 							},
@@ -620,8 +868,8 @@ false when RevisionName is non-empty.`,
 						"url": {
 							Type:     schema.TypeString,
 							Computed: true,
-							Description: `URL displays the URL for accessing tagged traffic targets. URL is displayed in status, 
-and is disallowed on spec. URL must contain a scheme (e.g. http://) and a hostname, 
+							Description: `URL displays the URL for accessing tagged traffic targets. URL is displayed in status,
+and is disallowed on spec. URL must contain a scheme (e.g. http://) and a hostname,
 but may not contain anything else (e.g. basic auth, url path, etc.)`,
 						},
 					},
@@ -650,10 +898,19 @@ info: http://kubernetes.io/docs/user-guide/annotations
 If terraform plan shows a diff where a server-side annotation is added, you can add it to your config
 or apply the lifecycle.ignore_changes rule to the metadata.0.annotations field.
 
-Cloud Run (fully managed) uses the following annotation keys to configure features on a Service:
+Annotations with 'run.googleapis.com/' and 'autoscaling.knative.dev' are restricted. Use the following annotation
+keys to configure features on a Service:
 
+- 'run.googleapis.com/binary-authorization-breakglass' sets the [Binary Authorization breakglass](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--breakglass).
+- 'run.googleapis.com/binary-authorization' sets the [Binary Authorization](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--binary-authorization).
+- 'run.googleapis.com/client-name' sets the client name calling the Cloud Run API.
+- 'run.googleapis.com/custom-audiences' sets the [custom audiences](https://cloud.google.com/sdk/gcloud/reference/alpha/run/deploy#--add-custom-audiences)
+  that can be used in the audience field of ID token for authenticated requests.
+- 'run.googleapis.com/description' sets a user defined description for the Service.
 - 'run.googleapis.com/ingress' sets the [ingress settings](https://cloud.google.com/sdk/gcloud/reference/run/deploy#--ingress)
-  for the Service. For example, '"run.googleapis.com/ingress" = "all"'.`,
+  for the Service. For example, '"run.googleapis.com/ingress" = "all"'.
+- 'run.googleapis.com/launch-stage' sets the [launch stage](https://cloud.google.com/run/docs/troubleshooting#launch-stage-validation)
+  when a preview feature is used. For example, '"run.googleapis.com/launch-stage": "BETA"'`,
 							Elem: &schema.Schema{Type: schema.TypeString},
 						},
 						"labels": {
@@ -663,8 +920,7 @@ Cloud Run (fully managed) uses the following annotation keys to configure featur
 							DiffSuppressFunc: cloudrunLabelDiffSuppress,
 							Description: `Map of string keys and values that can be used to organize and categorize
 (scope and select) objects. May match selectors of replication controllers
-and routes.
-More info: http://kubernetes.io/docs/user-guide/labels`,
+and routes.`,
 							Elem: &schema.Schema{Type: schema.TypeString},
 						},
 						"namespace": {
@@ -686,10 +942,7 @@ project ID or project number.`,
 can be used by clients to determine when objects have changed. May be used
 for optimistic concurrency, change detection, and the watch operation on a
 resource or set of resources. They may only be valid for a
-particular resource or set of resources.
-
-More info:
-https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-control-and-consistency`,
+particular resource or set of resources.`,
 						},
 						"self_link": {
 							Type:        schema.TypeString,
@@ -700,9 +953,7 @@ https://git.k8s.io/community/contributors/devel/api-conventions.md#concurrency-c
 							Type:     schema.TypeString,
 							Computed: true,
 							Description: `UID is a unique id generated by the server on successful creation of a resource and is not
-allowed to change on PUT operations.
-
-More info: http://kubernetes.io/docs/user-guide/identifiers#uids`,
+allowed to change on PUT operations.`,
 						},
 					},
 				},
@@ -779,6 +1030,11 @@ https://{route-hash}-{project-hash}-{cluster-level-suffix}.a.run.app`,
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
+				Description: `If set to 'true', the revision name (template.metadata.name) will be omitted and
+autogenerated by Cloud Run. This cannot be set to 'true' while 'template.metadata.name'
+is also set.
+(For legacy support, if 'template.metadata.name' is unset in state while
+this field is set to false, the revision name will still autogenerate.)`,
 			},
 			"project": {
 				Type:     schema.TypeString,
@@ -800,16 +1056,9 @@ func cloudrunServiceSpecTemplateSpecContainersContainersEnvSchema() *schema.Reso
 				Description: `Name of the environment variable.`,
 			},
 			"value": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Description: `Variable references $(VAR_NAME) are expanded
-using the previous defined environment variables in the container and
-any route environment variables. If a variable cannot be resolved,
-the reference in the input string will be unchanged. The $(VAR_NAME)
-syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped
-references will never be expanded, regardless of whether the variable
-exists or not.
-Defaults to "".`,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: `Defaults to "".`,
 			},
 			"value_from": {
 				Type:        schema.TypeList,
@@ -834,10 +1083,10 @@ version or an integer for a specific version.`,
 									"name": {
 										Type:     schema.TypeString,
 										Required: true,
-										Description: `The name of the secret in Cloud Secret Manager. By default, the secret is assumed to be in the same project. 
-If the secret is in another project, you must define an alias. 
-An alias definition has the form: :projects/<project-id|project-number>/secrets/. 
-If multiple alias definitions are needed, they must be separated by commas. 
+										Description: `The name of the secret in Cloud Secret Manager. By default, the secret is assumed to be in the same project.
+If the secret is in another project, you must define an alias.
+An alias definition has the form: :projects/{project-id|project-number}/secrets/.
+If multiple alias definitions are needed, they must be separated by commas.
 The alias definitions must be set on the run.googleapis.com/secrets annotation.`,
 									},
 								},
@@ -851,8 +1100,8 @@ The alias definitions must be set on the run.googleapis.com/secrets annotation.`
 }
 
 func resourceCloudRunServiceCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -876,7 +1125,7 @@ func resourceCloudRunServiceCreate(d *schema.ResourceData, meta interface{}) err
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services")
 	if err != nil {
 		return err
 	}
@@ -895,13 +1144,13 @@ func resourceCloudRunServiceCreate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate), transport_tpg.IsCloudRunCreationConflict)
 	if err != nil {
 		return fmt.Errorf("Error creating Service: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/services/{{name}}")
+	id, err := ReplaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/services/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -919,9 +1168,9 @@ func resourceCloudRunServiceCreate(d *schema.ResourceData, meta interface{}) err
 
 func resourceCloudRunServicePollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
 	return func() (map[string]interface{}, error) {
-		config := meta.(*Config)
+		config := meta.(*transport_tpg.Config)
 
-		url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
+		url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
 		if err != nil {
 			return nil, err
 		}
@@ -939,12 +1188,12 @@ func resourceCloudRunServicePollRead(d *schema.ResourceData, meta interface{}) P
 			billingProject = bp
 		}
 
-		userAgent, err := generateUserAgentString(d, config.userAgent)
+		userAgent, err := generateUserAgentString(d, config.UserAgent)
 		if err != nil {
 			return nil, err
 		}
 
-		res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isCloudRunCreationConflict)
+		res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsCloudRunCreationConflict)
 		if err != nil {
 			return res, err
 		}
@@ -961,13 +1210,13 @@ func resourceCloudRunServicePollRead(d *schema.ResourceData, meta interface{}) P
 }
 
 func resourceCloudRunServiceRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -985,9 +1234,9 @@ func resourceCloudRunServiceRead(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil, isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil, transport_tpg.IsCloudRunCreationConflict)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("CloudRunService %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("CloudRunService %q", d.Id()))
 	}
 
 	res, err = resourceCloudRunServiceDecoder(d, meta, res)
@@ -1038,8 +1287,8 @@ func resourceCloudRunServiceRead(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceCloudRunServiceUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1071,7 +1320,7 @@ func resourceCloudRunServiceUpdate(d *schema.ResourceData, meta interface{}) err
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1083,7 +1332,7 @@ func resourceCloudRunServiceUpdate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PUT", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate), transport_tpg.IsCloudRunCreationConflict)
 
 	if err != nil {
 		return fmt.Errorf("Error updating Service %q: %s", d.Id(), err)
@@ -1100,8 +1349,8 @@ func resourceCloudRunServiceUpdate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceCloudRunServiceDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -1114,7 +1363,7 @@ func resourceCloudRunServiceDelete(d *schema.ResourceData, meta interface{}) err
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
+	url, err := ReplaceVars(d, config, "{{CloudRunBasePath}}apis/serving.knative.dev/v1/namespaces/{{project}}/services/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -1127,9 +1376,9 @@ func resourceCloudRunServiceDelete(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), isCloudRunCreationConflict)
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete), transport_tpg.IsCloudRunCreationConflict)
 	if err != nil {
-		return handleNotFoundError(err, d, "Service")
+		return transport_tpg.HandleNotFoundError(err, d, "Service")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Service %q: %#v", d.Id(), res)
@@ -1137,8 +1386,8 @@ func resourceCloudRunServiceDelete(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceCloudRunServiceImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"locations/(?P<location>[^/]+)/namespaces/(?P<project>[^/]+)/services/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -1147,7 +1396,7 @@ func resourceCloudRunServiceImport(d *schema.ResourceData, meta interface{}) ([]
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/services/{{name}}")
+	id, err := ReplaceVars(d, config, "locations/{{location}}/namespaces/{{project}}/services/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -1161,7 +1410,7 @@ func resourceCloudRunServiceImport(d *schema.ResourceData, meta interface{}) ([]
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenCloudRunServiceSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1176,7 +1425,7 @@ func flattenCloudRunServiceSpec(v interface{}, d *schema.ResourceData, config *C
 		flattenCloudRunServiceSpecTemplate(original["template"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTraffic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTraffic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1198,14 +1447,14 @@ func flattenCloudRunServiceSpecTraffic(v interface{}, d *schema.ResourceData, co
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTrafficRevisionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTrafficRevisionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTrafficPercent(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTrafficPercent(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1219,19 +1468,19 @@ func flattenCloudRunServiceSpecTrafficPercent(v interface{}, d *schema.ResourceD
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTrafficTag(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTrafficTag(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTrafficLatestRevision(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTrafficLatestRevision(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTrafficUrl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTrafficUrl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplate(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplate(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1246,7 +1495,7 @@ func flattenCloudRunServiceSpecTemplate(v interface{}, d *schema.ResourceData, c
 		flattenCloudRunServiceSpecTemplateSpec(original["spec"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateMetadata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1273,14 +1522,14 @@ func flattenCloudRunServiceSpecTemplateMetadata(v interface{}, d *schema.Resourc
 		flattenCloudRunServiceSpecTemplateMetadataName(original["name"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateMetadataLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1294,31 +1543,31 @@ func flattenCloudRunServiceSpecTemplateMetadataGeneration(v interface{}, d *sche
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataResourceVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataResourceVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataSelfLink(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataSelfLink(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataUid(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataUid(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataNamespace(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataNamespace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataAnnotations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataAnnotations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateMetadataName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateMetadataName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1341,7 +1590,7 @@ func flattenCloudRunServiceSpecTemplateSpec(v interface{}, d *schema.ResourceDat
 		flattenCloudRunServiceSpecTemplateSpecServingState(original["servingState"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainers(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainers(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1354,28 +1603,30 @@ func flattenCloudRunServiceSpecTemplateSpecContainers(v interface{}, d *schema.R
 			continue
 		}
 		transformed = append(transformed, map[string]interface{}{
-			"working_dir":   flattenCloudRunServiceSpecTemplateSpecContainersWorkingDir(original["workingDir"], d, config),
-			"args":          flattenCloudRunServiceSpecTemplateSpecContainersArgs(original["args"], d, config),
-			"env_from":      flattenCloudRunServiceSpecTemplateSpecContainersEnvFrom(original["envFrom"], d, config),
-			"image":         flattenCloudRunServiceSpecTemplateSpecContainersImage(original["image"], d, config),
-			"command":       flattenCloudRunServiceSpecTemplateSpecContainersCommand(original["command"], d, config),
-			"env":           flattenCloudRunServiceSpecTemplateSpecContainersEnv(original["env"], d, config),
-			"ports":         flattenCloudRunServiceSpecTemplateSpecContainersPorts(original["ports"], d, config),
-			"resources":     flattenCloudRunServiceSpecTemplateSpecContainersResources(original["resources"], d, config),
-			"volume_mounts": flattenCloudRunServiceSpecTemplateSpecContainersVolumeMounts(original["volumeMounts"], d, config),
+			"working_dir":    flattenCloudRunServiceSpecTemplateSpecContainersWorkingDir(original["workingDir"], d, config),
+			"args":           flattenCloudRunServiceSpecTemplateSpecContainersArgs(original["args"], d, config),
+			"env_from":       flattenCloudRunServiceSpecTemplateSpecContainersEnvFrom(original["envFrom"], d, config),
+			"image":          flattenCloudRunServiceSpecTemplateSpecContainersImage(original["image"], d, config),
+			"command":        flattenCloudRunServiceSpecTemplateSpecContainersCommand(original["command"], d, config),
+			"env":            flattenCloudRunServiceSpecTemplateSpecContainersEnv(original["env"], d, config),
+			"ports":          flattenCloudRunServiceSpecTemplateSpecContainersPorts(original["ports"], d, config),
+			"resources":      flattenCloudRunServiceSpecTemplateSpecContainersResources(original["resources"], d, config),
+			"volume_mounts":  flattenCloudRunServiceSpecTemplateSpecContainersVolumeMounts(original["volumeMounts"], d, config),
+			"startup_probe":  flattenCloudRunServiceSpecTemplateSpecContainersStartupProbe(original["startupProbe"], d, config),
+			"liveness_probe": flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbe(original["livenessProbe"], d, config),
 		})
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersWorkingDir(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersWorkingDir(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersArgs(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersArgs(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFrom(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFrom(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1395,11 +1646,11 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvFrom(v interface{}, d *s
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromPrefix(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromPrefix(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRef(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRef(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1414,11 +1665,11 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRef(v inter
 		flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReference(original["localObjectReference"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefOptional(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefOptional(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReference(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReference(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1431,11 +1682,11 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObj
 		flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReferenceName(original["name"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReferenceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReferenceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRef(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRef(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1450,7 +1701,7 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRef(v interfac
 		flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefOptional(original["optional"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReference(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReference(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1463,23 +1714,23 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObject
 		flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReferenceName(original["name"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReferenceName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReferenceName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefOptional(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefOptional(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersImage(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersImage(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersCommand(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersCommand(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnv(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnv(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1499,15 +1750,15 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnv(v interface{}, d *schem
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvValue(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFrom(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFrom(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1520,7 +1771,7 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFrom(v interface{},
 		flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(original["secretKeyRef"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1535,15 +1786,15 @@ func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(v 
 		flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefName(original["name"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersPorts(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersPorts(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1563,18 +1814,18 @@ func flattenCloudRunServiceSpecTemplateSpecContainersPorts(v interface{}, d *sch
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersPortsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersPortsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersPortsProtocol(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersPortsProtocol(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersPortsContainerPort(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersPortsContainerPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1588,7 +1839,7 @@ func flattenCloudRunServiceSpecTemplateSpecContainersPortsContainerPort(v interf
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersResources(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersResources(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1603,15 +1854,15 @@ func flattenCloudRunServiceSpecTemplateSpecContainersResources(v interface{}, d 
 		flattenCloudRunServiceSpecTemplateSpecContainersResourcesRequests(original["requests"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersResourcesLimits(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersResourcesLimits(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersResourcesRequests(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersResourcesRequests(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMounts(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMounts(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1630,18 +1881,43 @@ func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMounts(v interface{},
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMountsMountPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMountsMountPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMountsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersVolumeMountsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecContainerConcurrency(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbe(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["initial_delay_seconds"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeInitialDelaySeconds(original["initialDelaySeconds"], d, config)
+	transformed["timeout_seconds"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeTimeoutSeconds(original["timeoutSeconds"], d, config)
+	transformed["period_seconds"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbePeriodSeconds(original["periodSeconds"], d, config)
+	transformed["failure_threshold"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeFailureThreshold(original["failureThreshold"], d, config)
+	transformed["tcp_socket"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocket(original["tcpSocket"], d, config)
+	transformed["http_get"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGet(original["httpGet"], d, config)
+	transformed["grpc"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpc(original["grpc"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeInitialDelaySeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1655,10 +1931,10 @@ func flattenCloudRunServiceSpecTemplateSpecContainerConcurrency(v interface{}, d
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTemplateSpecTimeoutSeconds(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeTimeoutSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1672,11 +1948,387 @@ func flattenCloudRunServiceSpecTemplateSpecTimeoutSeconds(v interface{}, d *sche
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTemplateSpecServiceAccountName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbePeriodSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeFailureThreshold(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocket(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	transformed := make(map[string]interface{})
+	transformed["port"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocketPort(original["port"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocketPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGet(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	transformed := make(map[string]interface{})
+	transformed["path"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPath(original["path"], d, config)
+	transformed["port"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPort(original["port"], d, config)
+	transformed["http_headers"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeaders(original["httpHeaders"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecVolumes(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"name":  flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersName(original["name"], d, config),
+			"value": flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersValue(original["value"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpc(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	transformed := make(map[string]interface{})
+	transformed["port"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcPort(original["port"], d, config)
+	transformed["service"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcService(original["service"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbe(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	if len(original) == 0 {
+		return nil
+	}
+	transformed := make(map[string]interface{})
+	transformed["initial_delay_seconds"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeInitialDelaySeconds(original["initialDelaySeconds"], d, config)
+	transformed["timeout_seconds"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeTimeoutSeconds(original["timeoutSeconds"], d, config)
+	transformed["period_seconds"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbePeriodSeconds(original["periodSeconds"], d, config)
+	transformed["failure_threshold"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeFailureThreshold(original["failureThreshold"], d, config)
+	transformed["http_get"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGet(original["httpGet"], d, config)
+	transformed["grpc"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpc(original["grpc"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeInitialDelaySeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeTimeoutSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbePeriodSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeFailureThreshold(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGet(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	transformed := make(map[string]interface{})
+	transformed["path"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPath(original["path"], d, config)
+	transformed["port"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPort(original["port"], d, config)
+	transformed["http_headers"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeaders(original["httpHeaders"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeaders(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return v
+	}
+	l := v.([]interface{})
+	transformed := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		original := raw.(map[string]interface{})
+		if len(original) < 1 {
+			// Do not include empty json objects coming back from the api
+			continue
+		}
+		transformed = append(transformed, map[string]interface{}{
+			"name":  flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersName(original["name"], d, config),
+			"value": flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersValue(original["value"], d, config),
+		})
+	}
+	return transformed
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersValue(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpc(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	if v == nil {
+		return nil
+	}
+	original := v.(map[string]interface{})
+	transformed := make(map[string]interface{})
+	transformed["port"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcPort(original["port"], d, config)
+	transformed["service"] =
+		flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcService(original["service"], d, config)
+	return []interface{}{transformed}
+}
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcPort(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcService(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecContainerConcurrency(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecTimeoutSeconds(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	// Handles the string fixed64 format
+	if strVal, ok := v.(string); ok {
+		if intVal, err := StringToFixed64(strVal); err == nil {
+			return intVal
+		}
+	}
+
+	// number values are represented as float64
+	if floatVal, ok := v.(float64); ok {
+		intVal := int(floatVal)
+		return intVal
+	}
+
+	return v // let terraform core handle it otherwise
+}
+
+func flattenCloudRunServiceSpecTemplateSpecServiceAccountName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
+	return v
+}
+
+func flattenCloudRunServiceSpecTemplateSpecVolumes(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1695,11 +2347,11 @@ func flattenCloudRunServiceSpecTemplateSpecVolumes(v interface{}, d *schema.Reso
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecVolumesName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecret(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecret(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1716,14 +2368,14 @@ func flattenCloudRunServiceSpecTemplateSpecVolumesSecret(v interface{}, d *schem
 		flattenCloudRunServiceSpecTemplateSpecVolumesSecretItems(original["items"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecretSecretName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecretSecretName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecretDefaultMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecretDefaultMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1737,7 +2389,7 @@ func flattenCloudRunServiceSpecTemplateSpecVolumesSecretDefaultMode(v interface{
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItems(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItems(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1757,18 +2409,18 @@ func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItems(v interface{}, d *
 	}
 	return transformed
 }
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsKey(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsKey(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsPath(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsPath(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsMode(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsMode(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1782,11 +2434,11 @@ func flattenCloudRunServiceSpecTemplateSpecVolumesSecretItemsMode(v interface{},
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceSpecTemplateSpecServingState(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceSpecTemplateSpecServingState(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1807,7 +2459,7 @@ func flattenCloudRunServiceStatus(v interface{}, d *schema.ResourceData, config 
 		flattenCloudRunServiceStatusLatestReadyRevisionName(original["latestReadyRevisionName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceStatusConditions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusConditions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -1828,30 +2480,30 @@ func flattenCloudRunServiceStatusConditions(v interface{}, d *schema.ResourceDat
 	}
 	return transformed
 }
-func flattenCloudRunServiceStatusConditionsMessage(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusConditionsMessage(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatusConditionsStatus(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusConditionsStatus(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatusConditionsReason(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusConditionsReason(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatusConditionsType(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusConditionsType(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatusUrl(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusUrl(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatusObservedGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusObservedGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1865,15 +2517,15 @@ func flattenCloudRunServiceStatusObservedGeneration(v interface{}, d *schema.Res
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceStatusLatestCreatedRevisionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusLatestCreatedRevisionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceStatusLatestReadyRevisionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceStatusLatestReadyRevisionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceMetadata(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadata(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -1898,14 +2550,14 @@ func flattenCloudRunServiceMetadata(v interface{}, d *schema.ResourceData, confi
 		flattenCloudRunServiceMetadataAnnotations(original["annotations"], d, config)
 	return []interface{}{transformed}
 }
-func flattenCloudRunServiceMetadataLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceMetadataGeneration(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataGeneration(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	// Handles the string fixed64 format
 	if strVal, ok := v.(string); ok {
-		if intVal, err := stringToFixed64(strVal); err == nil {
+		if intVal, err := StringToFixed64(strVal); err == nil {
 			return intVal
 		}
 	}
@@ -1919,27 +2571,27 @@ func flattenCloudRunServiceMetadataGeneration(v interface{}, d *schema.ResourceD
 	return v // let terraform core handle it otherwise
 }
 
-func flattenCloudRunServiceMetadataResourceVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataResourceVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceMetadataSelfLink(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataSelfLink(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceMetadataUid(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataUid(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenCloudRunServiceMetadataNamespace(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataNamespace(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return d.Get("project")
 }
 
-func flattenCloudRunServiceMetadataAnnotations(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenCloudRunServiceMetadataAnnotations(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandCloudRunServiceSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	transformed := make(map[string]interface{})
 	transformedTraffic, err := expandCloudRunServiceSpecTraffic(d.Get("traffic"), d, config)
 	if err != nil {
@@ -1958,7 +2610,7 @@ func expandCloudRunServiceSpec(v interface{}, d TerraformResourceData, config *C
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTraffic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTraffic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2008,27 +2660,27 @@ func expandCloudRunServiceSpecTraffic(v interface{}, d TerraformResourceData, co
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTrafficRevisionName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTrafficRevisionName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTrafficPercent(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTrafficPercent(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTrafficTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTrafficTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTrafficLatestRevision(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTrafficLatestRevision(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTrafficUrl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTrafficUrl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplate(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplate(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2054,7 +2706,7 @@ func expandCloudRunServiceSpecTemplate(v interface{}, d TerraformResourceData, c
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadata(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadata(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2122,7 +2774,7 @@ func expandCloudRunServiceSpecTemplateMetadata(v interface{}, d TerraformResourc
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunServiceSpecTemplateMetadataLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -2133,24 +2785,24 @@ func expandCloudRunServiceSpecTemplateMetadataLabels(v interface{}, d TerraformR
 	return m, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataGeneration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadataGeneration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataResourceVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadataResourceVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataSelfLink(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadataSelfLink(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataUid(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadataUid(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 // If the property hasn't been explicitly set in config use the project defined by the provider or env.
-func expandCloudRunServiceSpecTemplateMetadataNamespace(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadataNamespace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil {
 		project, err := getProject(d, config)
 		if err != nil {
@@ -2160,7 +2812,7 @@ func expandCloudRunServiceSpecTemplateMetadataNamespace(v interface{}, d Terrafo
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataAnnotations(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunServiceSpecTemplateMetadataAnnotations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -2171,14 +2823,14 @@ func expandCloudRunServiceSpecTemplateMetadataAnnotations(v interface{}, d Terra
 	return m, nil
 }
 
-func expandCloudRunServiceSpecTemplateMetadataName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateMetadataName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if d.Get("autogenerate_revision_name") == true {
 		return nil, nil
 	}
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2232,7 +2884,7 @@ func expandCloudRunServiceSpecTemplateSpec(v interface{}, d TerraformResourceDat
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainers(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainers(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2305,20 +2957,34 @@ func expandCloudRunServiceSpecTemplateSpecContainers(v interface{}, d TerraformR
 			transformed["volumeMounts"] = transformedVolumeMounts
 		}
 
+		transformedStartupProbe, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbe(original["startup_probe"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedStartupProbe); val.IsValid() && !isEmptyValue(val) {
+			transformed["startupProbe"] = transformedStartupProbe
+		}
+
+		transformedLivenessProbe, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbe(original["liveness_probe"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedLivenessProbe); val.IsValid() && !isEmptyValue(val) {
+			transformed["livenessProbe"] = transformedLivenessProbe
+		}
+
 		req = append(req, transformed)
 	}
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersWorkingDir(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersWorkingDir(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersArgs(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersArgs(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFrom(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFrom(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2354,11 +3020,11 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvFrom(v interface{}, d Ter
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromPrefix(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromPrefix(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRef(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRef(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2384,11 +3050,11 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRef(v interf
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefOptional(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefOptional(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReference(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReference(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2407,11 +3073,11 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObje
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReferenceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromConfigMapRefLocalObjectReferenceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRef(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRef(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2437,7 +3103,7 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRef(v interface
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReference(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReference(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2456,23 +3122,23 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectR
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReferenceName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefLocalObjectReferenceName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefOptional(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvFromSecretRefOptional(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersImage(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersImage(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersCommand(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersCommand(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnv(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnv(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	v = v.(*schema.Set).List()
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
@@ -2509,15 +3175,15 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnv(v interface{}, d Terrafo
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvValue(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFrom(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFrom(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2536,7 +3202,7 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFrom(v interface{}, 
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2562,15 +3228,15 @@ func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRef(v i
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersEnvValueFromSecretKeyRefName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersPorts(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersPorts(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2606,19 +3272,19 @@ func expandCloudRunServiceSpecTemplateSpecContainersPorts(v interface{}, d Terra
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersPortsName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersPortsName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersPortsProtocol(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersPortsProtocol(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersPortsContainerPort(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersPortsContainerPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersResources(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersResources(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2644,7 +3310,7 @@ func expandCloudRunServiceSpecTemplateSpecContainersResources(v interface{}, d T
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersResourcesLimits(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersResourcesLimits(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -2655,7 +3321,7 @@ func expandCloudRunServiceSpecTemplateSpecContainersResourcesLimits(v interface{
 	return m, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersResourcesRequests(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersResourcesRequests(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -2666,7 +3332,7 @@ func expandCloudRunServiceSpecTemplateSpecContainersResourcesRequests(v interfac
 	return m, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersVolumeMounts(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersVolumeMounts(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2695,27 +3361,446 @@ func expandCloudRunServiceSpecTemplateSpecContainersVolumeMounts(v interface{}, 
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersVolumeMountsMountPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersVolumeMountsMountPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainersVolumeMountsName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersVolumeMountsName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecContainerConcurrency(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbe(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedInitialDelaySeconds, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeInitialDelaySeconds(original["initial_delay_seconds"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedInitialDelaySeconds); val.IsValid() && !isEmptyValue(val) {
+		transformed["initialDelaySeconds"] = transformedInitialDelaySeconds
+	}
+
+	transformedTimeoutSeconds, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeTimeoutSeconds(original["timeout_seconds"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedTimeoutSeconds); val.IsValid() && !isEmptyValue(val) {
+		transformed["timeoutSeconds"] = transformedTimeoutSeconds
+	}
+
+	transformedPeriodSeconds, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbePeriodSeconds(original["period_seconds"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPeriodSeconds); val.IsValid() && !isEmptyValue(val) {
+		transformed["periodSeconds"] = transformedPeriodSeconds
+	}
+
+	transformedFailureThreshold, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeFailureThreshold(original["failure_threshold"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedFailureThreshold); val.IsValid() && !isEmptyValue(val) {
+		transformed["failureThreshold"] = transformedFailureThreshold
+	}
+
+	transformedTcpSocket, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocket(original["tcp_socket"], d, config)
+	if err != nil {
+		return nil, err
+	} else {
+		transformed["tcpSocket"] = transformedTcpSocket
+	}
+
+	transformedHttpGet, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGet(original["http_get"], d, config)
+	if err != nil {
+		return nil, err
+	} else {
+		transformed["httpGet"] = transformedHttpGet
+	}
+
+	transformedGrpc, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpc(original["grpc"], d, config)
+	if err != nil {
+		return nil, err
+	} else {
+		transformed["grpc"] = transformedGrpc
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeInitialDelaySeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecTimeoutSeconds(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeTimeoutSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecServiceAccountName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbePeriodSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumes(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeFailureThreshold(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocket(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+
+	if l[0] == nil {
+		transformed := make(map[string]interface{})
+		return transformed, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPort, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocketPort(original["port"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPort); val.IsValid() && !isEmptyValue(val) {
+		transformed["port"] = transformedPort
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeTcpSocketPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGet(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+
+	if l[0] == nil {
+		transformed := make(map[string]interface{})
+		return transformed, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPath, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPath(original["path"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPath); val.IsValid() && !isEmptyValue(val) {
+		transformed["path"] = transformedPath
+	}
+
+	transformedPort, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPort(original["port"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPort); val.IsValid() && !isEmptyValue(val) {
+		transformed["port"] = transformedPort
+	}
+
+	transformedHttpHeaders, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeaders(original["http_headers"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedHttpHeaders); val.IsValid() && !isEmptyValue(val) {
+		transformed["httpHeaders"] = transformedHttpHeaders
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedName, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersName(original["name"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedName); val.IsValid() && !isEmptyValue(val) {
+			transformed["name"] = transformedName
+		}
+
+		transformedValue, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersValue(original["value"], d, config)
+		if err != nil {
+			return nil, err
+		} else {
+			transformed["value"] = transformedValue
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeHttpGetHttpHeadersValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpc(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+
+	if l[0] == nil {
+		transformed := make(map[string]interface{})
+		return transformed, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPort, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcPort(original["port"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPort); val.IsValid() && !isEmptyValue(val) {
+		transformed["port"] = transformedPort
+	}
+
+	transformedService, err := expandCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcService(original["service"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedService); val.IsValid() && !isEmptyValue(val) {
+		transformed["service"] = transformedService
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersStartupProbeGrpcService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbe(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 || l[0] == nil {
+		return nil, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedInitialDelaySeconds, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeInitialDelaySeconds(original["initial_delay_seconds"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedInitialDelaySeconds); val.IsValid() && !isEmptyValue(val) {
+		transformed["initialDelaySeconds"] = transformedInitialDelaySeconds
+	}
+
+	transformedTimeoutSeconds, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeTimeoutSeconds(original["timeout_seconds"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedTimeoutSeconds); val.IsValid() && !isEmptyValue(val) {
+		transformed["timeoutSeconds"] = transformedTimeoutSeconds
+	}
+
+	transformedPeriodSeconds, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbePeriodSeconds(original["period_seconds"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPeriodSeconds); val.IsValid() && !isEmptyValue(val) {
+		transformed["periodSeconds"] = transformedPeriodSeconds
+	}
+
+	transformedFailureThreshold, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeFailureThreshold(original["failure_threshold"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedFailureThreshold); val.IsValid() && !isEmptyValue(val) {
+		transformed["failureThreshold"] = transformedFailureThreshold
+	}
+
+	transformedHttpGet, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGet(original["http_get"], d, config)
+	if err != nil {
+		return nil, err
+	} else {
+		transformed["httpGet"] = transformedHttpGet
+	}
+
+	transformedGrpc, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpc(original["grpc"], d, config)
+	if err != nil {
+		return nil, err
+	} else {
+		transformed["grpc"] = transformedGrpc
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeInitialDelaySeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeTimeoutSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbePeriodSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeFailureThreshold(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGet(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+
+	if l[0] == nil {
+		transformed := make(map[string]interface{})
+		return transformed, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPath, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPath(original["path"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPath); val.IsValid() && !isEmptyValue(val) {
+		transformed["path"] = transformedPath
+	}
+
+	transformedPort, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPort(original["port"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPort); val.IsValid() && !isEmptyValue(val) {
+		transformed["port"] = transformedPort
+	}
+
+	transformedHttpHeaders, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeaders(original["http_headers"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedHttpHeaders); val.IsValid() && !isEmptyValue(val) {
+		transformed["httpHeaders"] = transformedHttpHeaders
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeaders(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	req := make([]interface{}, 0, len(l))
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		original := raw.(map[string]interface{})
+		transformed := make(map[string]interface{})
+
+		transformedName, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersName(original["name"], d, config)
+		if err != nil {
+			return nil, err
+		} else if val := reflect.ValueOf(transformedName); val.IsValid() && !isEmptyValue(val) {
+			transformed["name"] = transformedName
+		}
+
+		transformedValue, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersValue(original["value"], d, config)
+		if err != nil {
+			return nil, err
+		} else {
+			transformed["value"] = transformedValue
+		}
+
+		req = append(req, transformed)
+	}
+	return req, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeHttpGetHttpHeadersValue(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpc(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	l := v.([]interface{})
+	if len(l) == 0 {
+		return nil, nil
+	}
+
+	if l[0] == nil {
+		transformed := make(map[string]interface{})
+		return transformed, nil
+	}
+	raw := l[0]
+	original := raw.(map[string]interface{})
+	transformed := make(map[string]interface{})
+
+	transformedPort, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcPort(original["port"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedPort); val.IsValid() && !isEmptyValue(val) {
+		transformed["port"] = transformedPort
+	}
+
+	transformedService, err := expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcService(original["service"], d, config)
+	if err != nil {
+		return nil, err
+	} else if val := reflect.ValueOf(transformedService); val.IsValid() && !isEmptyValue(val) {
+		transformed["service"] = transformedService
+	}
+
+	return transformed, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcPort(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainersLivenessProbeGrpcService(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecContainerConcurrency(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecTimeoutSeconds(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecServiceAccountName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
+	return v, nil
+}
+
+func expandCloudRunServiceSpecTemplateSpecVolumes(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2744,11 +3829,11 @@ func expandCloudRunServiceSpecTemplateSpecVolumes(v interface{}, d TerraformReso
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecret(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecret(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2781,15 +3866,15 @@ func expandCloudRunServiceSpecTemplateSpecVolumesSecret(v interface{}, d Terrafo
 	return transformed, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecretSecretName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecretSecretName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecretDefaultMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecretDefaultMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecretItems(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecretItems(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -2825,23 +3910,23 @@ func expandCloudRunServiceSpecTemplateSpecVolumesSecretItems(v interface{}, d Te
 	return req, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecretItemsKey(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecretItemsKey(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecretItemsPath(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecretItemsPath(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecVolumesSecretItemsMode(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecVolumesSecretItemsMode(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceSpecTemplateSpecServingState(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceSpecTemplateSpecServingState(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceMetadata(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceMetadata(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -2902,7 +3987,7 @@ func expandCloudRunServiceMetadata(v interface{}, d TerraformResourceData, confi
 	return transformed, nil
 }
 
-func expandCloudRunServiceMetadataLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunServiceMetadataLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -2913,24 +3998,24 @@ func expandCloudRunServiceMetadataLabels(v interface{}, d TerraformResourceData,
 	return m, nil
 }
 
-func expandCloudRunServiceMetadataGeneration(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceMetadataGeneration(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceMetadataResourceVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceMetadataResourceVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceMetadataSelfLink(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceMetadataSelfLink(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandCloudRunServiceMetadataUid(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceMetadataUid(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
 // If the property hasn't been explicitly set in config use the project defined by the provider or env.
-func expandCloudRunServiceMetadataNamespace(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandCloudRunServiceMetadataNamespace(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil {
 		project, err := getProject(d, config)
 		if err != nil {
@@ -2940,7 +4025,7 @@ func expandCloudRunServiceMetadataNamespace(v interface{}, d TerraformResourceDa
 	return v, nil
 }
 
-func expandCloudRunServiceMetadataAnnotations(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandCloudRunServiceMetadataAnnotations(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}

@@ -18,24 +18,26 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
 )
 
 func TestAccAppEngineServiceNetworkSettings_appEngineServiceNetworkSettingsExample(t *testing.T) {
 	t.Parallel()
 
 	context := map[string]interface{}{
-		"random_suffix": randString(t, 10),
+		"random_suffix": RandString(t, 10),
 	}
 
-	vcrTest(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+	VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: ProtoV5ProviderFactories(t),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccAppEngineServiceNetworkSettings_appEngineServiceNetworkSettingsExample(context),
 			},
 			{
-				ResourceName:      "google_app_engine_service_network_settings.liveapp",
+				ResourceName:      "google_app_engine_service_network_settings.internalapp",
 				ImportState:       true,
 				ImportStateVerify: true,
 			},
@@ -56,9 +58,9 @@ resource "google_storage_bucket_object" "object" {
 	source = "./test-fixtures/appengine/hello-world.zip"
 }
 
-resource "google_app_engine_standard_app_version" "liveapp_v1" {
+resource "google_app_engine_standard_app_version" "internalapp" {
   version_id = "v1"
-  service = "liveapp"
+  service = "internalapp"
   delete_service_on_destroy = true
 
   runtime = "nodejs10"
@@ -75,8 +77,8 @@ resource "google_app_engine_standard_app_version" "liveapp_v1" {
   }
 }
 
-resource "google_app_engine_service_network_settings" "liveapp" {
-  service = google_app_engine_standard_app_version.liveapp_v1.service
+resource "google_app_engine_service_network_settings" "internalapp" {
+  service = google_app_engine_standard_app_version.internalapp.service
   network_settings {
     ingress_traffic_allowed = "INGRESS_TRAFFIC_ALLOWED_INTERNAL_ONLY"
   }

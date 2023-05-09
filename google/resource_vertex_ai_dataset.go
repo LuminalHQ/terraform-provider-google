@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceVertexAIDataset() *schema.Resource {
+func ResourceVertexAIDataset() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceVertexAIDatasetCreate,
 		Read:   resourceVertexAIDatasetRead,
@@ -61,7 +63,7 @@ func resourceVertexAIDataset() *schema.Resource {
 							Type:     schema.TypeString,
 							Optional: true,
 							ForceNew: true,
-							Description: `Required. The Cloud KMS resource identifier of the customer managed encryption key used to protect a resource. 
+							Description: `Required. The Cloud KMS resource identifier of the customer managed encryption key used to protect a resource.
 Has the form: projects/my-project/locations/my-region/keyRings/my-kr/cryptoKeys/my-key. The key needs to be in the same region as where the resource is created.`,
 						},
 					},
@@ -108,8 +110,8 @@ Has the form: projects/my-project/locations/my-region/keyRings/my-kr/cryptoKeys/
 }
 
 func resourceVertexAIDatasetCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -140,7 +142,7 @@ func resourceVertexAIDatasetCreate(d *schema.ResourceData, meta interface{}) err
 		obj["metadataSchemaUri"] = metadataSchemaUriProp
 	}
 
-	url, err := replaceVars(d, config, "{{VertexAIBasePath}}projects/{{project}}/locations/{{region}}/datasets")
+	url, err := ReplaceVars(d, config, "{{VertexAIBasePath}}projects/{{project}}/locations/{{region}}/datasets")
 	if err != nil {
 		return err
 	}
@@ -159,13 +161,13 @@ func resourceVertexAIDatasetCreate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Dataset: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -174,12 +176,13 @@ func resourceVertexAIDatasetCreate(d *schema.ResourceData, meta interface{}) err
 	// Use the resource in the operation response to populate
 	// identity fields and d.Id() before read
 	var opRes map[string]interface{}
-	err = vertexAIOperationWaitTimeWithResponse(
+	err = VertexAIOperationWaitTimeWithResponse(
 		config, res, &opRes, project, "Creating Dataset", userAgent,
 		d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		// The resource didn't actually create
 		d.SetId("")
+
 		return fmt.Errorf("Error waiting to create Dataset: %s", err)
 	}
 
@@ -188,7 +191,7 @@ func resourceVertexAIDatasetCreate(d *schema.ResourceData, meta interface{}) err
 	}
 
 	// This may have caused the ID to update - update it if so.
-	id, err = replaceVars(d, config, "{{name}}")
+	id, err = ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -200,13 +203,13 @@ func resourceVertexAIDatasetCreate(d *schema.ResourceData, meta interface{}) err
 }
 
 func resourceVertexAIDatasetRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{VertexAIBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{VertexAIBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -224,9 +227,9 @@ func resourceVertexAIDatasetRead(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("VertexAIDataset %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("VertexAIDataset %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -259,8 +262,8 @@ func resourceVertexAIDatasetRead(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceVertexAIDatasetUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -287,7 +290,7 @@ func resourceVertexAIDatasetUpdate(d *schema.ResourceData, meta interface{}) err
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{VertexAIBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{VertexAIBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -302,9 +305,9 @@ func resourceVertexAIDatasetUpdate(d *schema.ResourceData, meta interface{}) err
 	if d.HasChange("labels") {
 		updateMask = append(updateMask, "labels")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -314,7 +317,7 @@ func resourceVertexAIDatasetUpdate(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Dataset %q: %s", d.Id(), err)
@@ -322,20 +325,12 @@ func resourceVertexAIDatasetUpdate(d *schema.ResourceData, meta interface{}) err
 		log.Printf("[DEBUG] Finished updating Dataset %q: %#v", d.Id(), res)
 	}
 
-	err = vertexAIOperationWaitTime(
-		config, res, project, "Updating Dataset", userAgent,
-		d.Timeout(schema.TimeoutUpdate))
-
-	if err != nil {
-		return err
-	}
-
 	return resourceVertexAIDatasetRead(d, meta)
 }
 
 func resourceVertexAIDatasetDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -348,7 +343,7 @@ func resourceVertexAIDatasetDelete(d *schema.ResourceData, meta interface{}) err
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{VertexAIBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{VertexAIBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -361,12 +356,12 @@ func resourceVertexAIDatasetDelete(d *schema.ResourceData, meta interface{}) err
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Dataset")
+		return transport_tpg.HandleNotFoundError(err, d, "Dataset")
 	}
 
-	err = vertexAIOperationWaitTime(
+	err = VertexAIOperationWaitTime(
 		config, res, project, "Deleting Dataset", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -378,27 +373,27 @@ func resourceVertexAIDatasetDelete(d *schema.ResourceData, meta interface{}) err
 	return nil
 }
 
-func flattenVertexAIDatasetName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenVertexAIDatasetDisplayName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetDisplayName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenVertexAIDatasetCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenVertexAIDatasetUpdateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetUpdateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenVertexAIDatasetLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenVertexAIDatasetEncryptionSpec(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetEncryptionSpec(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -411,19 +406,19 @@ func flattenVertexAIDatasetEncryptionSpec(v interface{}, d *schema.ResourceData,
 		flattenVertexAIDatasetEncryptionSpecKmsKeyName(original["kmsKeyName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenVertexAIDatasetEncryptionSpecKmsKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetEncryptionSpecKmsKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenVertexAIDatasetMetadataSchemaUri(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenVertexAIDatasetMetadataSchemaUri(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandVertexAIDatasetDisplayName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandVertexAIDatasetDisplayName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandVertexAIDatasetLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandVertexAIDatasetLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -434,7 +429,7 @@ func expandVertexAIDatasetLabels(v interface{}, d TerraformResourceData, config 
 	return m, nil
 }
 
-func expandVertexAIDatasetEncryptionSpec(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandVertexAIDatasetEncryptionSpec(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -453,10 +448,10 @@ func expandVertexAIDatasetEncryptionSpec(v interface{}, d TerraformResourceData,
 	return transformed, nil
 }
 
-func expandVertexAIDatasetEncryptionSpecKmsKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandVertexAIDatasetEncryptionSpecKmsKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandVertexAIDatasetMetadataSchemaUri(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandVertexAIDatasetMetadataSchemaUri(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

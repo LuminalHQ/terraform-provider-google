@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "API Gateway"
-page_title: "Google: google_api_gateway_api_config"
 description: |-
   An API Configuration is an association of an API Controller Config and a Gateway Config
 ---
@@ -42,13 +41,13 @@ To get more information about ApiConfig, see:
 ```hcl
 resource "google_api_gateway_api" "api_cfg" {
   provider = google-beta
-  api_id = "api-cfg"
+  api_id = "my-api"
 }
 
 resource "google_api_gateway_api_config" "api_cfg" {
   provider = google-beta
   api = google_api_gateway_api.api_cfg.api_id
-  api_config_id = "cfg"
+  api_config_id = "my-config"
 
   openapi_documents {
     document {
@@ -72,13 +71,13 @@ resource "google_api_gateway_api_config" "api_cfg" {
 ```hcl
 resource "google_api_gateway_api" "api_cfg" {
   provider = google-beta
-  api_id = "api-cfg"
+  api_id = "my-api"
 }
 
 resource "google_api_gateway_api_config" "api_cfg" {
   provider = google-beta
   api = google_api_gateway_api.api_cfg.api_id
-  api_config_id = "cfg"
+  api_config_id = "my-config"
 
   grpc_services {
     file_descriptor_set {
@@ -261,7 +260,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `update` - Default is 20 minutes.
@@ -280,4 +279,4 @@ $ terraform import google_api_gateway_api_config.default {{api}}/{{api_config_id
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

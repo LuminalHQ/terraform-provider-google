@@ -25,9 +25,11 @@ import (
 
 	dcl "github.com/GoogleCloudPlatform/declarative-resource-client-library/dcl"
 	cloudbuild "github.com/GoogleCloudPlatform/declarative-resource-client-library/services/google/cloudbuild"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceCloudbuildWorkerPool() *schema.Resource {
+func ResourceCloudbuildWorkerPool() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceCloudbuildWorkerPoolCreate,
 		Read:   resourceCloudbuildWorkerPoolRead,
@@ -142,6 +144,13 @@ func CloudbuildWorkerPoolNetworkConfigSchema() *schema.Resource {
 				DiffSuppressFunc: compareResourceNames,
 				Description:      "Required. Immutable. The network definition that the workers are peered to. If this section is left empty, the workers will be peered to `WorkerPool.project_id` on the service producer network. Must be in the format `projects/{project}/global/networks/{network}`, where `{project}` is a project number, such as `12345`, and `{network}` is the name of a VPC network in the project. See [Understanding network configuration options](https://cloud.google.com/cloud-build/docs/custom-workers/set-up-custom-worker-pool-environment#understanding_the_network_configuration_options)",
 			},
+
+			"peered_network_ip_range": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Optional. Immutable. Subnet IP range within the peered network. This is specified in CIDR notation with a slash and the subnet prefix size. You can optionally specify an IP address before the subnet prefix value. e.g. `192.168.0.0/29` would specify an IP range starting at 192.168.0.0 with a prefix size of 29 bits. `/16` would specify a prefix size of 16 bits, with an automatically determined IP within the peered VPC. If unspecified, a value of `/24` will be used.",
+			},
 		},
 	}
 }
@@ -172,7 +181,7 @@ func CloudbuildWorkerPoolWorkerConfigSchema() *schema.Resource {
 }
 
 func resourceCloudbuildWorkerPoolCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -194,7 +203,7 @@ func resourceCloudbuildWorkerPoolCreate(d *schema.ResourceData, meta interface{}
 	}
 	d.SetId(id)
 	directive := CreateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -203,8 +212,8 @@ func resourceCloudbuildWorkerPoolCreate(d *schema.ResourceData, meta interface{}
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutCreate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -226,7 +235,7 @@ func resourceCloudbuildWorkerPoolCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceCloudbuildWorkerPoolRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -242,7 +251,7 @@ func resourceCloudbuildWorkerPoolRead(d *schema.ResourceData, meta interface{}) 
 		WorkerConfig:  expandCloudbuildWorkerPoolWorkerConfig(d.Get("worker_config")),
 	}
 
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -251,8 +260,8 @@ func resourceCloudbuildWorkerPoolRead(d *schema.ResourceData, meta interface{}) 
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutRead))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -304,7 +313,7 @@ func resourceCloudbuildWorkerPoolRead(d *schema.ResourceData, meta interface{}) 
 	return nil
 }
 func resourceCloudbuildWorkerPoolUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -320,7 +329,7 @@ func resourceCloudbuildWorkerPoolUpdate(d *schema.ResourceData, meta interface{}
 		WorkerConfig:  expandCloudbuildWorkerPoolWorkerConfig(d.Get("worker_config")),
 	}
 	directive := UpdateDirective
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -330,8 +339,8 @@ func resourceCloudbuildWorkerPoolUpdate(d *schema.ResourceData, meta interface{}
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutUpdate))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -353,7 +362,7 @@ func resourceCloudbuildWorkerPoolUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceCloudbuildWorkerPoolDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 	project, err := getProject(d, config)
 	if err != nil {
 		return err
@@ -370,7 +379,7 @@ func resourceCloudbuildWorkerPoolDelete(d *schema.ResourceData, meta interface{}
 	}
 
 	log.Printf("[DEBUG] Deleting WorkerPool %q", d.Id())
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -379,8 +388,8 @@ func resourceCloudbuildWorkerPoolDelete(d *schema.ResourceData, meta interface{}
 	if bp, err := getBillingProject(d, config); err == nil {
 		billingProject = bp
 	}
-	client := NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
-	if bp, err := replaceVars(d, config, client.Config.BasePath); err != nil {
+	client := transport_tpg.NewDCLCloudbuildClient(config, userAgent, billingProject, d.Timeout(schema.TimeoutDelete))
+	if bp, err := ReplaceVars(d, config, client.Config.BasePath); err != nil {
 		d.SetId("")
 		return fmt.Errorf("Could not format %q: %w", client.Config.BasePath, err)
 	} else {
@@ -395,9 +404,9 @@ func resourceCloudbuildWorkerPoolDelete(d *schema.ResourceData, meta interface{}
 }
 
 func resourceCloudbuildWorkerPoolImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
+	config := meta.(*transport_tpg.Config)
 
-	if err := parseImportId([]string{
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/workerPools/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<location>[^/]+)/(?P<name>[^/]+)",
 		"(?P<location>[^/]+)/(?P<name>[^/]+)",
@@ -425,7 +434,8 @@ func expandCloudbuildWorkerPoolNetworkConfig(o interface{}) *cloudbuild.WorkerPo
 	}
 	obj := objArr[0].(map[string]interface{})
 	return &cloudbuild.WorkerPoolNetworkConfig{
-		PeeredNetwork: dcl.String(obj["peered_network"].(string)),
+		PeeredNetwork:        dcl.String(obj["peered_network"].(string)),
+		PeeredNetworkIPRange: dcl.String(obj["peered_network_ip_range"].(string)),
 	}
 }
 
@@ -434,7 +444,8 @@ func flattenCloudbuildWorkerPoolNetworkConfig(obj *cloudbuild.WorkerPoolNetworkC
 		return nil
 	}
 	transformed := map[string]interface{}{
-		"peered_network": obj.PeeredNetwork,
+		"peered_network":          obj.PeeredNetwork,
+		"peered_network_ip_range": obj.PeeredNetworkIPRange,
 	}
 
 	return []interface{}{transformed}

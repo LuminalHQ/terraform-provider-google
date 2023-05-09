@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceSecretManagerSecret() *schema.Resource {
+func ResourceSecretManagerSecret() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceSecretManagerSecretCreate,
 		Read:   resourceSecretManagerSecretRead,
@@ -176,7 +178,6 @@ For publication to succeed, the Secret Manager Service Agent service account mus
 						},
 					},
 				},
-				RequiredWith: []string{"rotation"},
 			},
 			"ttl": {
 				Type:     schema.TypeString,
@@ -208,8 +209,8 @@ A duration in seconds with up to nine fractional digits, terminated by 's'. Exam
 }
 
 func resourceSecretManagerSecretCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -252,7 +253,7 @@ func resourceSecretManagerSecretCreate(d *schema.ResourceData, meta interface{})
 		obj["rotation"] = rotationProp
 	}
 
-	url, err := replaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets?secretId={{secret_id}}")
+	url, err := ReplaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets?secretId={{secret_id}}")
 	if err != nil {
 		return err
 	}
@@ -271,7 +272,7 @@ func resourceSecretManagerSecretCreate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Secret: %s", err)
 	}
@@ -280,7 +281,7 @@ func resourceSecretManagerSecretCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/secrets/{{secret_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/secrets/{{secret_id}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -292,13 +293,13 @@ func resourceSecretManagerSecretCreate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceSecretManagerSecretRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets/{{secret_id}}")
+	url, err := ReplaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets/{{secret_id}}")
 	if err != nil {
 		return err
 	}
@@ -316,9 +317,9 @@ func resourceSecretManagerSecretRead(d *schema.ResourceData, meta interface{}) e
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("SecretManagerSecret %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("SecretManagerSecret %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -351,8 +352,8 @@ func resourceSecretManagerSecretRead(d *schema.ResourceData, meta interface{}) e
 }
 
 func resourceSecretManagerSecretUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -391,7 +392,7 @@ func resourceSecretManagerSecretUpdate(d *schema.ResourceData, meta interface{})
 		obj["rotation"] = rotationProp
 	}
 
-	url, err := replaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets/{{secret_id}}")
+	url, err := ReplaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets/{{secret_id}}")
 	if err != nil {
 		return err
 	}
@@ -414,9 +415,9 @@ func resourceSecretManagerSecretUpdate(d *schema.ResourceData, meta interface{})
 	if d.HasChange("rotation") {
 		updateMask = append(updateMask, "rotation")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -426,7 +427,7 @@ func resourceSecretManagerSecretUpdate(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Secret %q: %s", d.Id(), err)
@@ -438,8 +439,8 @@ func resourceSecretManagerSecretUpdate(d *schema.ResourceData, meta interface{})
 }
 
 func resourceSecretManagerSecretDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -452,7 +453,7 @@ func resourceSecretManagerSecretDelete(d *schema.ResourceData, meta interface{})
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets/{{secret_id}}")
+	url, err := ReplaceVars(d, config, "{{SecretManagerBasePath}}projects/{{project}}/secrets/{{secret_id}}")
 	if err != nil {
 		return err
 	}
@@ -465,9 +466,9 @@ func resourceSecretManagerSecretDelete(d *schema.ResourceData, meta interface{})
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Secret")
+		return transport_tpg.HandleNotFoundError(err, d, "Secret")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Secret %q: %#v", d.Id(), res)
@@ -475,8 +476,8 @@ func resourceSecretManagerSecretDelete(d *schema.ResourceData, meta interface{})
 }
 
 func resourceSecretManagerSecretImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/secrets/(?P<secret_id>[^/]+)",
 		"(?P<project>[^/]+)/(?P<secret_id>[^/]+)",
 		"(?P<secret_id>[^/]+)",
@@ -485,7 +486,7 @@ func resourceSecretManagerSecretImport(d *schema.ResourceData, meta interface{})
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/secrets/{{secret_id}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/secrets/{{secret_id}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -494,19 +495,19 @@ func resourceSecretManagerSecretImport(d *schema.ResourceData, meta interface{})
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenSecretManagerSecretName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretCreateTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretCreateTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretReplication(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplication(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -521,11 +522,11 @@ func flattenSecretManagerSecretReplication(v interface{}, d *schema.ResourceData
 		flattenSecretManagerSecretReplicationUserManaged(original["userManaged"], d, config)
 	return []interface{}{transformed}
 }
-func flattenSecretManagerSecretReplicationAutomatic(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplicationAutomatic(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v != nil
 }
 
-func flattenSecretManagerSecretReplicationUserManaged(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplicationUserManaged(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -538,7 +539,7 @@ func flattenSecretManagerSecretReplicationUserManaged(v interface{}, d *schema.R
 		flattenSecretManagerSecretReplicationUserManagedReplicas(original["replicas"], d, config)
 	return []interface{}{transformed}
 }
-func flattenSecretManagerSecretReplicationUserManagedReplicas(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplicationUserManagedReplicas(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -557,11 +558,11 @@ func flattenSecretManagerSecretReplicationUserManagedReplicas(v interface{}, d *
 	}
 	return transformed
 }
-func flattenSecretManagerSecretReplicationUserManagedReplicasLocation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplicationUserManagedReplicasLocation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -574,11 +575,11 @@ func flattenSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncr
 		flattenSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryptionKmsKeyName(original["kmsKeyName"], d, config)
 	return []interface{}{transformed}
 }
-func flattenSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryptionKmsKeyName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryptionKmsKeyName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretTopics(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretTopics(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
@@ -596,15 +597,15 @@ func flattenSecretManagerSecretTopics(v interface{}, d *schema.ResourceData, con
 	}
 	return transformed
 }
-func flattenSecretManagerSecretTopicsName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretTopicsName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretExpireTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretExpireTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretRotation(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretRotation(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -619,15 +620,15 @@ func flattenSecretManagerSecretRotation(v interface{}, d *schema.ResourceData, c
 		flattenSecretManagerSecretRotationRotationPeriod(original["rotationPeriod"], d, config)
 	return []interface{}{transformed}
 }
-func flattenSecretManagerSecretRotationNextRotationTime(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretRotationNextRotationTime(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenSecretManagerSecretRotationRotationPeriod(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenSecretManagerSecretRotationRotationPeriod(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandSecretManagerSecretLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandSecretManagerSecretLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
@@ -638,7 +639,7 @@ func expandSecretManagerSecretLabels(v interface{}, d TerraformResourceData, con
 	return m, nil
 }
 
-func expandSecretManagerSecretReplication(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplication(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -664,7 +665,7 @@ func expandSecretManagerSecretReplication(v interface{}, d TerraformResourceData
 	return transformed, nil
 }
 
-func expandSecretManagerSecretReplicationAutomatic(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplicationAutomatic(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	if v == nil || !v.(bool) {
 		return nil, nil
 	}
@@ -672,7 +673,7 @@ func expandSecretManagerSecretReplicationAutomatic(v interface{}, d TerraformRes
 	return struct{}{}, nil
 }
 
-func expandSecretManagerSecretReplicationUserManaged(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplicationUserManaged(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -691,7 +692,7 @@ func expandSecretManagerSecretReplicationUserManaged(v interface{}, d TerraformR
 	return transformed, nil
 }
 
-func expandSecretManagerSecretReplicationUserManagedReplicas(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplicationUserManagedReplicas(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -720,11 +721,11 @@ func expandSecretManagerSecretReplicationUserManagedReplicas(v interface{}, d Te
 	return req, nil
 }
 
-func expandSecretManagerSecretReplicationUserManagedReplicasLocation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplicationUserManagedReplicasLocation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -743,11 +744,11 @@ func expandSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncry
 	return transformed, nil
 }
 
-func expandSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryptionKmsKeyName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryptionKmsKeyName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSecretManagerSecretTopics(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretTopics(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	req := make([]interface{}, 0, len(l))
 	for _, raw := range l {
@@ -769,19 +770,19 @@ func expandSecretManagerSecretTopics(v interface{}, d TerraformResourceData, con
 	return req, nil
 }
 
-func expandSecretManagerSecretTopicsName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretTopicsName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSecretManagerSecretExpireTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretExpireTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSecretManagerSecretTtl(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretTtl(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSecretManagerSecretRotation(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretRotation(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -807,10 +808,10 @@ func expandSecretManagerSecretRotation(v interface{}, d TerraformResourceData, c
 	return transformed, nil
 }
 
-func expandSecretManagerSecretRotationNextRotationTime(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretRotationNextRotationTime(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandSecretManagerSecretRotationRotationPeriod(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandSecretManagerSecretRotationRotationPeriod(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

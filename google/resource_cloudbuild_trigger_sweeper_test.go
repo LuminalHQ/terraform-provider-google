@@ -21,6 +21,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+
+	"github.com/hashicorp/terraform-provider-google/google/acctest"
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 func init() {
@@ -35,7 +39,7 @@ func testSweepCloudBuildTrigger(region string) error {
 	resourceName := "CloudBuildTrigger"
 	log.Printf("[INFO][SWEEPER_LOG] Starting sweeper for %s", resourceName)
 
-	config, err := sharedConfigForRegion(region)
+	config, err := acctest.SharedConfigForRegion(region)
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] error getting shared config for region: %s", err)
 		return err
@@ -48,10 +52,10 @@ func testSweepCloudBuildTrigger(region string) error {
 	}
 
 	t := &testing.T{}
-	billingId := getTestBillingAccountFromEnv(t)
+	billingId := acctest.GetTestBillingAccountFromEnv(t)
 
 	// Setup variables to replace in list template
-	d := &ResourceDataMock{
+	d := &acctest.ResourceDataMock{
 		FieldsInSchema: map[string]interface{}{
 			"project":         config.Project,
 			"region":          region,
@@ -61,14 +65,14 @@ func testSweepCloudBuildTrigger(region string) error {
 		},
 	}
 
-	listTemplate := strings.Split("https://cloudbuild.googleapis.com/v1/projects/{{project}}/triggers", "?")[0]
-	listUrl, err := replaceVars(d, config, listTemplate)
+	listTemplate := strings.Split("https://cloudbuild.googleapis.com/v1/projects/{{project}}/locations/{{location}}/triggers", "?")[0]
+	listUrl, err := ReplaceVars(d, config, listTemplate)
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] error preparing sweeper list url: %s", err)
 		return nil
 	}
 
-	res, err := sendRequest(config, "GET", config.Project, listUrl, config.userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", config.Project, listUrl, config.UserAgent, nil)
 	if err != nil {
 		log.Printf("[INFO][SWEEPER_LOG] Error in response from request %s: %s", listUrl, err)
 		return nil
@@ -90,21 +94,21 @@ func testSweepCloudBuildTrigger(region string) error {
 		var name string
 		// Id detected in the delete URL, attempt to use id.
 		if obj["id"] != nil {
-			name = GetResourceNameFromSelfLink(obj["id"].(string))
+			name = tpgresource.GetResourceNameFromSelfLink(obj["id"].(string))
 		} else if obj["name"] != nil {
-			name = GetResourceNameFromSelfLink(obj["name"].(string))
+			name = tpgresource.GetResourceNameFromSelfLink(obj["name"].(string))
 		} else {
 			log.Printf("[INFO][SWEEPER_LOG] %s resource name and id were nil", resourceName)
 			return nil
 		}
 		// Skip resources that shouldn't be sweeped
-		if !isSweepableTestResource(name) {
+		if !acctest.IsSweepableTestResource(name) {
 			nonPrefixCount++
 			continue
 		}
 
-		deleteTemplate := "https://cloudbuild.googleapis.com/v1/projects/{{project}}/triggers/{{trigger_id}}"
-		deleteUrl, err := replaceVars(d, config, deleteTemplate)
+		deleteTemplate := "https://cloudbuild.googleapis.com/v1/projects/{{project}}/locations/{{location}}/triggers/{{trigger_id}}"
+		deleteUrl, err := ReplaceVars(d, config, deleteTemplate)
 		if err != nil {
 			log.Printf("[INFO][SWEEPER_LOG] error preparing delete url: %s", err)
 			return nil
@@ -112,7 +116,7 @@ func testSweepCloudBuildTrigger(region string) error {
 		deleteUrl = deleteUrl + name
 
 		// Don't wait on operations as we may have a lot to delete
-		_, err = sendRequest(config, "DELETE", config.Project, deleteUrl, config.userAgent, nil)
+		_, err = transport_tpg.SendRequest(config, "DELETE", config.Project, deleteUrl, config.UserAgent, nil)
 		if err != nil {
 			log.Printf("[INFO][SWEEPER_LOG] Error deleting for url %s : %s", deleteUrl, err)
 		} else {

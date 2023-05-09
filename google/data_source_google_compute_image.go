@@ -2,6 +2,7 @@ package google
 
 import (
 	"fmt"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"log"
 	"strconv"
 
@@ -10,7 +11,7 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-func dataSourceGoogleComputeImage() *schema.Resource {
+func DataSourceGoogleComputeImage() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceGoogleComputeImageRead,
 
@@ -112,8 +113,8 @@ func dataSourceGoogleComputeImage() *schema.Resource {
 }
 
 func dataSourceGoogleComputeImageRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -218,7 +219,7 @@ func dataSourceGoogleComputeImageRead(d *schema.ResourceData, meta interface{}) 
 		return fmt.Errorf("Error setting status: %s", err)
 	}
 
-	id, err := replaceVars(d, config, "projects/{{project}}/global/images/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/global/images/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}

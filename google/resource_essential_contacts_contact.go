@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceEssentialContactsContact() *schema.Resource {
+func ResourceEssentialContactsContact() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceEssentialContactsContactCreate,
 		Read:   resourceEssentialContactsContactRead,
@@ -78,8 +80,8 @@ func resourceEssentialContactsContact() *schema.Resource {
 }
 
 func resourceEssentialContactsContactCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -104,7 +106,7 @@ func resourceEssentialContactsContactCreate(d *schema.ResourceData, meta interfa
 		obj["languageTag"] = languageTagProp
 	}
 
-	url, err := replaceVars(d, config, "{{EssentialContactsBasePath}}{{parent}}/contacts")
+	url, err := ReplaceVars(d, config, "{{EssentialContactsBasePath}}{{parent}}/contacts")
 	if err != nil {
 		return err
 	}
@@ -117,7 +119,7 @@ func resourceEssentialContactsContactCreate(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Contact: %s", err)
 	}
@@ -126,7 +128,7 @@ func resourceEssentialContactsContactCreate(d *schema.ResourceData, meta interfa
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -138,13 +140,13 @@ func resourceEssentialContactsContactCreate(d *schema.ResourceData, meta interfa
 }
 
 func resourceEssentialContactsContactRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{EssentialContactsBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{EssentialContactsBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -156,9 +158,9 @@ func resourceEssentialContactsContactRead(d *schema.ResourceData, meta interface
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("EssentialContactsContact %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("EssentialContactsContact %q", d.Id()))
 	}
 
 	if err := d.Set("name", flattenEssentialContactsContactName(res["name"], d, config)); err != nil {
@@ -178,8 +180,8 @@ func resourceEssentialContactsContactRead(d *schema.ResourceData, meta interface
 }
 
 func resourceEssentialContactsContactUpdate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -200,7 +202,7 @@ func resourceEssentialContactsContactUpdate(d *schema.ResourceData, meta interfa
 		obj["languageTag"] = languageTagProp
 	}
 
-	url, err := replaceVars(d, config, "{{EssentialContactsBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{EssentialContactsBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -215,9 +217,9 @@ func resourceEssentialContactsContactUpdate(d *schema.ResourceData, meta interfa
 	if d.HasChange("language_tag") {
 		updateMask = append(updateMask, "languageTag")
 	}
-	// updateMask is a URL parameter but not present in the schema, so replaceVars
+	// updateMask is a URL parameter but not present in the schema, so ReplaceVars
 	// won't set it
-	url, err = addQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
+	url, err = transport_tpg.AddQueryParams(url, map[string]string{"updateMask": strings.Join(updateMask, ",")})
 	if err != nil {
 		return err
 	}
@@ -227,7 +229,7 @@ func resourceEssentialContactsContactUpdate(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "PATCH", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutUpdate))
 
 	if err != nil {
 		return fmt.Errorf("Error updating Contact %q: %s", d.Id(), err)
@@ -239,15 +241,15 @@ func resourceEssentialContactsContactUpdate(d *schema.ResourceData, meta interfa
 }
 
 func resourceEssentialContactsContactDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
 	billingProject := ""
 
-	url, err := replaceVars(d, config, "{{EssentialContactsBasePath}}{{name}}")
+	url, err := ReplaceVars(d, config, "{{EssentialContactsBasePath}}{{name}}")
 	if err != nil {
 		return err
 	}
@@ -260,9 +262,9 @@ func resourceEssentialContactsContactDelete(d *schema.ResourceData, meta interfa
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Contact")
+		return transport_tpg.HandleNotFoundError(err, d, "Contact")
 	}
 
 	log.Printf("[DEBUG] Finished deleting Contact %q: %#v", d.Id(), res)
@@ -270,15 +272,15 @@ func resourceEssentialContactsContactDelete(d *schema.ResourceData, meta interfa
 }
 
 func resourceEssentialContactsContactImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"(?P<name>.+)",
 	}, d, config); err != nil {
 		return nil, err
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "{{name}}")
+	id, err := ReplaceVars(d, config, "{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -287,30 +289,30 @@ func resourceEssentialContactsContactImport(d *schema.ResourceData, meta interfa
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenEssentialContactsContactName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenEssentialContactsContactName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenEssentialContactsContactEmail(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenEssentialContactsContactEmail(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenEssentialContactsContactNotificationCategorySubscriptions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenEssentialContactsContactNotificationCategorySubscriptions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenEssentialContactsContactLanguageTag(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenEssentialContactsContactLanguageTag(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandEssentialContactsContactEmail(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandEssentialContactsContactEmail(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandEssentialContactsContactNotificationCategorySubscriptions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandEssentialContactsContactNotificationCategorySubscriptions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandEssentialContactsContactLanguageTag(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandEssentialContactsContactLanguageTag(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }

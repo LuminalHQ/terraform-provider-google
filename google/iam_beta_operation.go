@@ -17,10 +17,12 @@ package google
 import (
 	"fmt"
 	"time"
+
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
 type IAMBetaOperationWaiter struct {
-	Config    *Config
+	Config    *transport_tpg.Config
 	UserAgent string
 	Project   string
 	CommonOperationWaiter
@@ -33,10 +35,10 @@ func (w *IAMBetaOperationWaiter) QueryOp() (interface{}, error) {
 	// Returns the proper get.
 	url := fmt.Sprintf("%s%s", w.Config.IAMBetaBasePath, w.CommonOperationWaiter.Op.Name)
 
-	return sendRequest(w.Config, "GET", w.Project, url, w.UserAgent, nil)
+	return transport_tpg.SendRequest(w.Config, "GET", w.Project, url, w.UserAgent, nil)
 }
 
-func createIAMBetaWaiter(config *Config, op map[string]interface{}, project, activity, userAgent string) (*IAMBetaOperationWaiter, error) {
+func createIAMBetaWaiter(config *transport_tpg.Config, op map[string]interface{}, project, activity, userAgent string) (*IAMBetaOperationWaiter, error) {
 	w := &IAMBetaOperationWaiter{
 		Config:    config,
 		UserAgent: userAgent,
@@ -48,7 +50,7 @@ func createIAMBetaWaiter(config *Config, op map[string]interface{}, project, act
 	return w, nil
 }
 
-func iAMBetaOperationWaitTime(config *Config, op map[string]interface{}, project, activity, userAgent string, timeout time.Duration) error {
+func IAMBetaOperationWaitTime(config *transport_tpg.Config, op map[string]interface{}, project, activity, userAgent string, timeout time.Duration) error {
 	if val, ok := op["name"]; !ok || val == "" {
 		// This was a synchronous call - there is no operation to wait for.
 		return nil

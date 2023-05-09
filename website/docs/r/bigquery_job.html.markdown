@@ -13,7 +13,6 @@
 #
 # ----------------------------------------------------------------------------
 subcategory: "BigQuery"
-page_title: "Google: google_bigquery_job"
 description: |-
   Jobs are actions that BigQuery runs on your behalf to load data, export data, query data, or copy data.
 ---
@@ -171,6 +170,133 @@ resource "google_bigquery_job" "job" {
 
     write_disposition = "WRITE_APPEND"
     autodetect = true
+  }
+}
+```
+## Example Usage - Bigquery Job Load Geojson
+
+
+```hcl
+locals {
+  project = "my-project-name" # Google Cloud Platform Project ID
+}
+
+resource "google_storage_bucket" "bucket" {
+  name     = "${local.project}-bq-geojson"  # Every bucket name must be globally unique
+  location = "US"
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_object" "object" {
+  name   = "geojson-data.jsonl"
+  bucket = google_storage_bucket.bucket.name
+  content = <<EOF
+{"type":"Feature","properties":{"continent":"Europe","region":"Scandinavia"},"geometry":{"type":"Polygon","coordinates":[[[-30.94,53.33],[33.05,53.33],[33.05,71.86],[-30.94,71.86],[-30.94,53.33]]]}}
+{"type":"Feature","properties":{"continent":"Africa","region":"West Africa"},"geometry":{"type":"Polygon","coordinates":[[[-23.91,0],[11.95,0],[11.95,18.98],[-23.91,18.98],[-23.91,0]]]}}
+EOF
+}
+
+resource "google_bigquery_table" "foo" {
+  deletion_protection = false
+  dataset_id = google_bigquery_dataset.bar.dataset_id
+  table_id   = "job_load_table"
+}
+
+resource "google_bigquery_dataset" "bar" {
+  dataset_id                  = "job_load_dataset"
+  friendly_name               = "test"
+  description                 = "This is a test description"
+  location                    = "US"
+}
+
+resource "google_bigquery_job" "job" {
+  job_id     = "job_load"
+
+  labels = {
+    "my_job" = "load"
+  }
+
+  load {
+    source_uris = [
+      "gs://${google_storage_bucket_object.object.bucket}/${google_storage_bucket_object.object.name}"
+    ]
+
+    destination_table {
+      project_id = google_bigquery_table.foo.project
+      dataset_id = google_bigquery_table.foo.dataset_id
+      table_id   = google_bigquery_table.foo.table_id
+    }
+
+    write_disposition = "WRITE_TRUNCATE"
+    autodetect = true
+    source_format = "NEWLINE_DELIMITED_JSON"
+    json_extension = "GEOJSON"
+  }
+
+  depends_on = ["google_storage_bucket_object.object"]
+}
+```
+<div class = "oics-button" style="float: right; margin: 0 0 -15px">
+  <a href="https://console.cloud.google.com/cloudshell/open?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fterraform-google-modules%2Fdocs-examples.git&cloudshell_working_dir=bigquery_job_load_parquet&cloudshell_image=gcr.io%2Fgraphite-cloud-shell-images%2Fterraform%3Alatest&open_in_editor=main.tf&cloudshell_print=.%2Fmotd&cloudshell_tutorial=.%2Ftutorial.md" target="_blank">
+    <img alt="Open in Cloud Shell" src="//gstatic.com/cloudssh/images/open-btn.svg" style="max-height: 44px; margin: 32px auto; max-width: 100%;">
+  </a>
+</div>
+## Example Usage - Bigquery Job Load Parquet
+
+
+```hcl
+resource "google_storage_bucket" "test" {
+  name                        = "job_load_bucket"
+  location                    = "US"
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_object" "test" {
+  name   =  "job_load_bucket_object"
+  source = "./test-fixtures/bigquerytable/test.parquet.gzip"
+  bucket = google_storage_bucket.test.name
+}
+
+resource "google_bigquery_dataset" "test" {
+  dataset_id                  = "job_load_dataset"
+  friendly_name               = "test"
+  description                 = "This is a test description"
+  location                    = "US"
+}
+
+resource "google_bigquery_table" "test" {
+  deletion_protection = false
+  table_id            = "job_load_table"
+  dataset_id          = google_bigquery_dataset.test.dataset_id
+}
+
+resource "google_bigquery_job" "job" {
+  job_id = "job_load"
+
+  labels = {
+    "my_job" ="load"
+  }
+
+  load {
+    source_uris = [
+      "gs://${google_storage_bucket_object.test.bucket}/${google_storage_bucket_object.test.name}"
+    ]
+
+    destination_table {
+      project_id = google_bigquery_table.test.project
+      dataset_id = google_bigquery_table.test.dataset_id
+      table_id   = google_bigquery_table.test.table_id
+    }
+
+    schema_update_options = ["ALLOW_FIELD_RELAXATION", "ALLOW_FIELD_ADDITION"]
+    write_disposition     = "WRITE_APPEND"
+    source_format         = "PARQUET"
+    autodetect            = true
+
+    parquet_options {
+      enum_as_string        = true
+      enable_list_inference = true
+    }
   }
 }
 ```
@@ -408,7 +534,7 @@ The following arguments are supported:
   CREATE_NEVER: The table must already exist. If it does not, a 'notFound' error is returned in the job result.
   Creation, truncation and append actions occur as one atomic update upon job completion
   Default value is `CREATE_IF_NEEDED`.
-  Possible values are `CREATE_IF_NEEDED` and `CREATE_NEVER`.
+  Possible values are: `CREATE_IF_NEEDED`, `CREATE_NEVER`.
 
 * `write_disposition` -
   (Optional)
@@ -419,7 +545,7 @@ The following arguments are supported:
   Each action is atomic and only occurs if BigQuery is able to complete the job successfully.
   Creation, truncation and append actions occur as one atomic update upon job completion.
   Default value is `WRITE_EMPTY`.
-  Possible values are `WRITE_TRUNCATE`, `WRITE_APPEND`, and `WRITE_EMPTY`.
+  Possible values are: `WRITE_TRUNCATE`, `WRITE_APPEND`, `WRITE_EMPTY`.
 
 * `default_dataset` -
   (Optional)
@@ -430,7 +556,7 @@ The following arguments are supported:
   (Optional)
   Specifies a priority for the query.
   Default value is `INTERACTIVE`.
-  Possible values are `INTERACTIVE` and `BATCH`.
+  Possible values are: `INTERACTIVE`, `BATCH`.
 
 * `allow_large_results` -
   (Optional)
@@ -534,6 +660,7 @@ The following arguments are supported:
   The BigQuery Service Account associated with your project requires access to this encryption key.
 
 * `kms_key_version` -
+  (Output)
   Describes the Cloud KMS encryption key version used to protect destination BigQuery table.
 
 <a name="nested_script_options"></a>The `script_options` block supports:
@@ -550,18 +677,18 @@ The following arguments are supported:
   (Optional)
   Determines which statement in the script represents the "key result",
   used to populate the schema and query results of the script job.
-  Possible values are `LAST` and `FIRST_SELECT`.
+  Possible values are: `LAST`, `FIRST_SELECT`.
 
 <a name="nested_load"></a>The `load` block supports:
 
 * `source_uris` -
   (Required)
   The fully-qualified URIs that point to your data in Google Cloud.
-  For Google Cloud Storage URIs: Each URI can contain one '*' wildcard character
+  For Google Cloud Storage URIs: Each URI can contain one '\*' wildcard character
   and it must come after the 'bucket' name. Size limits related to load jobs apply
   to external data sources. For Google Cloud Bigtable URIs: Exactly one URI can be
   specified and it has be a fully specified and valid HTTPS URL for a Google Cloud Bigtable table.
-  For Google Cloud Datastore backups: Exactly one URI can be specified. Also, the '*' wildcard character is not allowed.
+  For Google Cloud Datastore backups: Exactly one URI can be specified. Also, the '\*' wildcard character is not allowed.
 
 * `destination_table` -
   (Required)
@@ -575,7 +702,7 @@ The following arguments are supported:
   CREATE_NEVER: The table must already exist. If it does not, a 'notFound' error is returned in the job result.
   Creation, truncation and append actions occur as one atomic update upon job completion
   Default value is `CREATE_IF_NEEDED`.
-  Possible values are `CREATE_IF_NEEDED` and `CREATE_NEVER`.
+  Possible values are: `CREATE_IF_NEEDED`, `CREATE_NEVER`.
 
 * `write_disposition` -
   (Optional)
@@ -586,7 +713,7 @@ The following arguments are supported:
   Each action is atomic and only occurs if BigQuery is able to complete the job successfully.
   Creation, truncation and append actions occur as one atomic update upon job completion.
   Default value is `WRITE_EMPTY`.
-  Possible values are `WRITE_TRUNCATE`, `WRITE_APPEND`, and `WRITE_EMPTY`.
+  Possible values are: `WRITE_TRUNCATE`, `WRITE_APPEND`, `WRITE_EMPTY`.
 
 * `null_marker` -
   (Optional)
@@ -644,6 +771,12 @@ The following arguments are supported:
   For orc, specify "ORC". [Beta] For Bigtable, specify "BIGTABLE".
   The default value is CSV.
 
+* `json_extension` -
+  (Optional)
+  If sourceFormat is set to newline-delimited JSON, indicates whether it should be processed as a JSON variant such as GeoJSON.
+  For a sourceFormat other than JSON, omit this field. If the sourceFormat is newline-delimited JSON: - for newline-delimited
+  GeoJSON: set to GEOJSON.
+
 * `allow_jagged_rows` -
   (Optional)
   Accept rows that are missing trailing optional columns. The missing values are treated as nulls.
@@ -688,6 +821,11 @@ The following arguments are supported:
   Custom encryption configuration (e.g., Cloud KMS keys)
   Structure is [documented below](#nested_destination_encryption_configuration).
 
+* `parquet_options` -
+  (Optional)
+  Parquet Options for load and make external tables.
+  Structure is [documented below](#nested_parquet_options).
+
 
 <a name="nested_destination_table"></a>The `destination_table` block supports:
 
@@ -729,7 +867,18 @@ The following arguments are supported:
   The BigQuery Service Account associated with your project requires access to this encryption key.
 
 * `kms_key_version` -
+  (Output)
   Describes the Cloud KMS encryption key version used to protect destination BigQuery table.
+
+<a name="nested_parquet_options"></a>The `parquet_options` block supports:
+
+* `enum_as_string` -
+  (Optional)
+  If sourceFormat is set to PARQUET, indicates whether to infer Parquet ENUM logical type as STRING instead of BYTES by default.
+
+* `enable_list_inference` -
+  (Optional)
+  If sourceFormat is set to PARQUET, indicates whether to use schema inference specifically for Parquet LIST logical type.
 
 <a name="nested_copy"></a>The `copy` block supports:
 
@@ -750,7 +899,7 @@ The following arguments are supported:
   CREATE_NEVER: The table must already exist. If it does not, a 'notFound' error is returned in the job result.
   Creation, truncation and append actions occur as one atomic update upon job completion
   Default value is `CREATE_IF_NEEDED`.
-  Possible values are `CREATE_IF_NEEDED` and `CREATE_NEVER`.
+  Possible values are: `CREATE_IF_NEEDED`, `CREATE_NEVER`.
 
 * `write_disposition` -
   (Optional)
@@ -761,7 +910,7 @@ The following arguments are supported:
   Each action is atomic and only occurs if BigQuery is able to complete the job successfully.
   Creation, truncation and append actions occur as one atomic update upon job completion.
   Default value is `WRITE_EMPTY`.
-  Possible values are `WRITE_TRUNCATE`, `WRITE_APPEND`, and `WRITE_EMPTY`.
+  Possible values are: `WRITE_TRUNCATE`, `WRITE_APPEND`, `WRITE_EMPTY`.
 
 * `destination_encryption_configuration` -
   (Optional)
@@ -807,6 +956,7 @@ The following arguments are supported:
   The BigQuery Service Account associated with your project requires access to this encryption key.
 
 * `kms_key_version` -
+  (Output)
   Describes the Cloud KMS encryption key version used to protect destination BigQuery table.
 
 <a name="nested_extract"></a>The `extract` block supports:
@@ -928,6 +1078,7 @@ In addition to the arguments listed above, the following computed attributes are
   Email address of the user who ran the job.
 
 * `job_type` -
+  (Output)
   The type of the job.
 
 * `status` -
@@ -938,16 +1089,19 @@ In addition to the arguments listed above, the following computed attributes are
 <a name="nested_status"></a>The `status` block contains:
 
 * `error_result` -
+  (Output)
   Final error result of the job. If present, indicates that the job has completed and was unsuccessful.
   Structure is [documented below](#nested_error_result).
 
 * `errors` -
+  (Output)
   The first errors encountered during the running of the job. The final message
   includes the number of errors that caused the process to stop. Errors here do
   not necessarily mean that the job has not completed or was unsuccessful.
   Structure is [documented below](#nested_errors).
 
 * `state` -
+  (Output)
   Running state of the job. Valid states include 'PENDING', 'RUNNING', and 'DONE'.
 
 
@@ -982,7 +1136,7 @@ In addition to the arguments listed above, the following computed attributes are
 ## Timeouts
 
 This resource provides the following
-[Timeouts](/docs/configuration/resources.html#timeouts) configuration options:
+[Timeouts](https://developer.hashicorp.com/terraform/plugin/sdkv2/resources/retries-and-customizable-timeouts) configuration options:
 
 - `create` - Default is 20 minutes.
 - `delete` - Default is 20 minutes.
@@ -1003,4 +1157,4 @@ $ terraform import google_bigquery_job.default {{job_id}}
 
 ## User Project Overrides
 
-This resource supports [User Project Overrides](https://www.terraform.io/docs/providers/google/guides/provider_reference.html#user_project_override).
+This resource supports [User Project Overrides](https://registry.terraform.io/providers/hashicorp/google/latest/docs/guides/provider_reference#user_project_override).

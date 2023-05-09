@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
+	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 )
 
-func resourceMLEngineModel() *schema.Resource {
+func ResourceMLEngineModel() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceMLEngineModelCreate,
 		Read:   resourceMLEngineModelRead,
@@ -111,8 +114,8 @@ Currently only one region per model is supported`,
 }
 
 func resourceMLEngineModelCreate(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -161,7 +164,7 @@ func resourceMLEngineModelCreate(d *schema.ResourceData, meta interface{}) error
 		obj["labels"] = labelsProp
 	}
 
-	url, err := replaceVars(d, config, "{{MLEngineBasePath}}projects/{{project}}/models")
+	url, err := ReplaceVars(d, config, "{{MLEngineBasePath}}projects/{{project}}/models")
 	if err != nil {
 		return err
 	}
@@ -180,13 +183,13 @@ func resourceMLEngineModelCreate(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "POST", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutCreate))
 	if err != nil {
 		return fmt.Errorf("Error creating Model: %s", err)
 	}
 
 	// Store the ID now
-	id, err := replaceVars(d, config, "projects/{{project}}/models/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/models/{{name}}")
 	if err != nil {
 		return fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -198,13 +201,13 @@ func resourceMLEngineModelCreate(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceMLEngineModelRead(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
 
-	url, err := replaceVars(d, config, "{{MLEngineBasePath}}projects/{{project}}/models/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MLEngineBasePath}}projects/{{project}}/models/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -222,9 +225,9 @@ func resourceMLEngineModelRead(d *schema.ResourceData, meta interface{}) error {
 		billingProject = bp
 	}
 
-	res, err := sendRequest(config, "GET", billingProject, url, userAgent, nil)
+	res, err := transport_tpg.SendRequest(config, "GET", billingProject, url, userAgent, nil)
 	if err != nil {
-		return handleNotFoundError(err, d, fmt.Sprintf("MLEngineModel %q", d.Id()))
+		return transport_tpg.HandleNotFoundError(err, d, fmt.Sprintf("MLEngineModel %q", d.Id()))
 	}
 
 	if err := d.Set("project", project); err != nil {
@@ -257,8 +260,8 @@ func resourceMLEngineModelRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceMLEngineModelDelete(d *schema.ResourceData, meta interface{}) error {
-	config := meta.(*Config)
-	userAgent, err := generateUserAgentString(d, config.userAgent)
+	config := meta.(*transport_tpg.Config)
+	userAgent, err := generateUserAgentString(d, config.UserAgent)
 	if err != nil {
 		return err
 	}
@@ -271,7 +274,7 @@ func resourceMLEngineModelDelete(d *schema.ResourceData, meta interface{}) error
 	}
 	billingProject = project
 
-	url, err := replaceVars(d, config, "{{MLEngineBasePath}}projects/{{project}}/models/{{name}}")
+	url, err := ReplaceVars(d, config, "{{MLEngineBasePath}}projects/{{project}}/models/{{name}}")
 	if err != nil {
 		return err
 	}
@@ -284,12 +287,12 @@ func resourceMLEngineModelDelete(d *schema.ResourceData, meta interface{}) error
 		billingProject = bp
 	}
 
-	res, err := sendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
+	res, err := transport_tpg.SendRequestWithTimeout(config, "DELETE", billingProject, url, userAgent, obj, d.Timeout(schema.TimeoutDelete))
 	if err != nil {
-		return handleNotFoundError(err, d, "Model")
+		return transport_tpg.HandleNotFoundError(err, d, "Model")
 	}
 
-	err = mLEngineOperationWaitTime(
+	err = MLEngineOperationWaitTime(
 		config, res, project, "Deleting Model", userAgent,
 		d.Timeout(schema.TimeoutDelete))
 
@@ -302,8 +305,8 @@ func resourceMLEngineModelDelete(d *schema.ResourceData, meta interface{}) error
 }
 
 func resourceMLEngineModelImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-	config := meta.(*Config)
-	if err := parseImportId([]string{
+	config := meta.(*transport_tpg.Config)
+	if err := ParseImportId([]string{
 		"projects/(?P<project>[^/]+)/models/(?P<name>[^/]+)",
 		"(?P<project>[^/]+)/(?P<name>[^/]+)",
 		"(?P<name>[^/]+)",
@@ -312,7 +315,7 @@ func resourceMLEngineModelImport(d *schema.ResourceData, meta interface{}) ([]*s
 	}
 
 	// Replace import id for the resource id
-	id, err := replaceVars(d, config, "projects/{{project}}/models/{{name}}")
+	id, err := ReplaceVars(d, config, "projects/{{project}}/models/{{name}}")
 	if err != nil {
 		return nil, fmt.Errorf("Error constructing id: %s", err)
 	}
@@ -321,18 +324,18 @@ func resourceMLEngineModelImport(d *schema.ResourceData, meta interface{}) ([]*s
 	return []*schema.ResourceData{d}, nil
 }
 
-func flattenMLEngineModelName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return v
 	}
-	return NameFromSelfLinkStateFunc(v)
+	return tpgresource.NameFromSelfLinkStateFunc(v)
 }
 
-func flattenMLEngineModelDescription(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelDescription(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMLEngineModelDefaultVersion(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelDefaultVersion(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	if v == nil {
 		return nil
 	}
@@ -345,35 +348,35 @@ func flattenMLEngineModelDefaultVersion(v interface{}, d *schema.ResourceData, c
 		flattenMLEngineModelDefaultVersionName(original["name"], d, config)
 	return []interface{}{transformed}
 }
-func flattenMLEngineModelDefaultVersionName(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelDefaultVersionName(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMLEngineModelRegions(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelRegions(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMLEngineModelOnlinePredictionLogging(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelOnlinePredictionLogging(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMLEngineModelOnlinePredictionConsoleLogging(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelOnlinePredictionConsoleLogging(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func flattenMLEngineModelLabels(v interface{}, d *schema.ResourceData, config *Config) interface{} {
+func flattenMLEngineModelLabels(v interface{}, d *schema.ResourceData, config *transport_tpg.Config) interface{} {
 	return v
 }
 
-func expandMLEngineModelName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMLEngineModelDescription(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelDescription(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMLEngineModelDefaultVersion(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelDefaultVersion(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	l := v.([]interface{})
 	if len(l) == 0 || l[0] == nil {
 		return nil, nil
@@ -392,23 +395,23 @@ func expandMLEngineModelDefaultVersion(v interface{}, d TerraformResourceData, c
 	return transformed, nil
 }
 
-func expandMLEngineModelDefaultVersionName(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelDefaultVersionName(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMLEngineModelRegions(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelRegions(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMLEngineModelOnlinePredictionLogging(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelOnlinePredictionLogging(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMLEngineModelOnlinePredictionConsoleLogging(v interface{}, d TerraformResourceData, config *Config) (interface{}, error) {
+func expandMLEngineModelOnlinePredictionConsoleLogging(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (interface{}, error) {
 	return v, nil
 }
 
-func expandMLEngineModelLabels(v interface{}, d TerraformResourceData, config *Config) (map[string]string, error) {
+func expandMLEngineModelLabels(v interface{}, d TerraformResourceData, config *transport_tpg.Config) (map[string]string, error) {
 	if v == nil {
 		return map[string]string{}, nil
 	}
